@@ -7,10 +7,10 @@ type KaiServer struct {
 	Version string
 }
 
-func (k *KaiServer) InitServer() *server.MCPServer {
+func (k *KaiServer) NewServer() *server.MCPServer {
 	return server.NewMCPServer(
-		"Kubernetes MCP Server",
-		"1.0.0",
+		k.Name,
+		k.Version,
 		server.WithResourceCapabilities(true, true),
 		server.WithLogging(),
 	)
