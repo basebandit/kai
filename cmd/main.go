@@ -1,16 +1,13 @@
 package main
 
 import (
-	"context"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
 
 	"github.com/basebandit/kai"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/tools/clientcmd"
+	"github.com/basebandit/kai/tools"
 )
 
 func main() {
@@ -23,33 +20,18 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-	pods, err := cm.GetPod(context.Background(), "nginx", cm.GetCurrentNamespace())
-	if err != nil {
-		log.Fatalln(err)
+
+	s := kai.NewServer()
+
+	registerAllTools(s, cm)
+
+	fmt.Fprintln(os.Stdout, "Server started")
+	if err := s.Serve(); err != nil {
+		fmt.Fprintf(os.Stderr, "Server error: %v\n", err)
 	}
-	fmt.Println(pods)
+	fmt.Fprintln(os.Stdout, "Server stopped")
 }
 
-func getPods() {
-	kubeconfig := filepath.Join(
-		os.Getenv("HOME"), ".kube", "config",
-	)
-
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		log.Fatal(err)
-	}
-	api := clientset.CoreV1()
-	pods, err := api.Pods("").List(context.Background(), metav1.ListOptions{})
-	if err != nil {
-		log.Fatalln("failed to get pods:", err)
-	}
-	for i, pod := range pods.Items {
-		fmt.Printf("[%d] %s\n", i, pod.GetName())
-	}
+func registerAllTools(s *kai.Server, cm *kai.ClusterManager) {
+	tools.RegisterPodTools(s, cm)
 }
