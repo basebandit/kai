@@ -21,7 +21,7 @@ This Kubernetes MCP server provides a bridge between large language models (LLMs
 To install the Kubernetes MCP server, run:
 
 ```sh
-go install github.com/basebandit/kai@latest
+go install github.com/basebandit/kai/cmd/kai
 ```
 
 ## Integration with Claude for Desktop
