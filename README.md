@@ -34,7 +34,7 @@ Add the server to your **Claude for Desktop** configuration by editing `claude_d
 {
   "mcpServers": {
     "kubernetes": {
-      "command": "/path/to/kubernetes-mcp-server"
+      "command": "/path/to/kubernetes-mcp-server-binary"
     }
   }
 }
