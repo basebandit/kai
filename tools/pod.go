@@ -39,6 +39,20 @@ func RegisterPodTools(s *kai.Server, cm *kai.ClusterManager) {
 	)
 
 	s.AddTool(getPodTool, getPodHandler(cm))
+
+	deletePodTool := mcp.NewTool("delete_pod",
+		mcp.WithDescription("Delete a pod by name"),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Name of the pod to delete"),
+		),
+		mcp.WithString("namespace",
+			mcp.Description("Namespace of the pod (defaults to current namespace)"),
+		),
+		mcp.WithBoolean("force", mcp.Description("Force deletes the pod if set to true")),
+	)
+
+	s.AddTool(deletePodTool, deletePodHandler(cm))
 }
 
 func listPodsHandler(cm *kai.ClusterManager) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -90,6 +104,38 @@ func getPodHandler(cm *kai.ClusterManager) func(ctx context.Context, request mcp
 		}
 
 		resultText, err := cm.GetPod(ctx, name, namespace)
+		if err != nil {
+			return mcp.NewToolResultText(err.Error()), nil
+		}
+
+		return mcp.NewToolResultText(resultText), nil
+	}
+}
+
+func deletePodHandler(cm *kai.ClusterManager) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+
+		nameArg, ok := request.Params.Arguments["name"]
+		if !ok || nameArg == nil {
+			return mcp.NewToolResultText("Required parameter 'name' is missing"), nil
+		}
+
+		name, ok := nameArg.(string)
+		if !ok || name == "" {
+			return mcp.NewToolResultText("Parameter 'name' must be anon-empty string"), nil
+		}
+
+		namespace := cm.GetCurrentNamespace()
+		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+			namespace = namespaceArg
+		}
+
+		var force bool
+		if forceArg, ok := request.Params.Arguments["force"].(bool); ok {
+			force = forceArg
+		}
+
+		resultText, err := cm.DeletePod(ctx, name, namespace, force)
 		if err != nil {
 			return mcp.NewToolResultText(err.Error()), nil
 		}

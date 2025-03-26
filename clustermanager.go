@@ -303,3 +303,40 @@ func (cm *ClusterManager) ListPods(ctx context.Context, limit int64, namespace, 
 
 	return formatPodList(pods, allNamespaces, limit, resultText), nil
 }
+
+func (cm *ClusterManager) DeletePod(ctx context.Context, name, namespace string, force bool) (string, error) {
+	var result string
+
+	client, err := cm.GetCurrentClient()
+	if err != nil {
+		return result, fmt.Errorf("error: %v", err)
+	}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	// verify namespace exists
+	_, err = client.CoreV1().Namespaces().Get(timeoutCtx, namespace, metav1.GetOptions{})
+	if err != nil {
+		return result, fmt.Errorf("namespace %q not found: %v", namespace, err)
+	}
+
+	// verify the pod exists
+	_, err = client.CoreV1().Pods(namespace).Get(timeoutCtx, name, metav1.GetOptions{})
+	if err != nil {
+		return result, fmt.Errorf("pod %q not found in namespace %q", name, namespace)
+	}
+
+	deleteOptions := metav1.DeleteOptions{}
+	if force {
+		gracePeriod := int64(0)
+		deleteOptions.GracePeriodSeconds = &gracePeriod
+	}
+
+	err = client.CoreV1().Pods(namespace).Delete(timeoutCtx, name, deleteOptions)
+	if err != nil {
+		return result, fmt.Errorf("failed to delete pod %q in namespace %q: %v", name, namespace, err)
+	}
+
+	return fmt.Sprintf("Successfully delete pod %q in namespace %q", name, namespace), nil
+}
