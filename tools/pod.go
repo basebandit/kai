@@ -2,6 +2,8 @@ package tools
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/basebandit/kai"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -53,6 +55,31 @@ func RegisterPodTools(s *kai.Server, cm *kai.ClusterManager) {
 	)
 
 	s.AddTool(deletePodTool, deletePodHandler(cm))
+
+	streamLogsTool := mcp.NewTool("stream_logs",
+		mcp.WithDescription("Stream logs from a container in a pod"),
+		mcp.WithString("pod",
+			mcp.Required(),
+			mcp.Description("Name of the pod"),
+		),
+		mcp.WithString("container",
+			mcp.Description("Name of the container (defaults to the first container)"),
+		),
+		mcp.WithString("namespace",
+			mcp.Description("Namespace of the pod (defaults to current namespace)"),
+		),
+		mcp.WithNumber("tail",
+			mcp.Description("Number of lines to show from the end of the logs (defaults to all)"),
+		),
+		mcp.WithBoolean("previous",
+			mcp.Description("Whether to get logs from a previous container instance"),
+		),
+		mcp.WithString("since",
+			mcp.Description("Only return logs newer than a relative duration like 5s, 2m, or 3h"),
+		),
+	)
+
+	s.AddTool(streamLogsTool, streamLogsHandler(cm))
 }
 
 func listPodsHandler(cm *kai.ClusterManager) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -140,6 +167,57 @@ func deletePodHandler(cm *kai.ClusterManager) func(ctx context.Context, request 
 			return mcp.NewToolResultText(err.Error()), nil
 		}
 
+		return mcp.NewToolResultText(resultText), nil
+	}
+}
+
+func streamLogsHandler(cm *kai.ClusterManager) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		podArg, ok := request.Params.Arguments["pod"]
+		if !ok || podArg == nil {
+			return mcp.NewToolResultText("Required parameter 'pod' is missing"), nil
+		}
+
+		podName, ok := podArg.(string)
+		if !ok || podName == "" {
+			return mcp.NewToolResultText("Parameter 'pod' must be a non-empty string"), nil
+		}
+
+		namespace := cm.GetCurrentNamespace()
+		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+			namespace = namespaceArg
+		}
+
+		var containerName string
+		if containerArg, ok := request.Params.Arguments["container"].(string); ok {
+			containerName = containerArg
+		}
+
+		var tailLines int64 // Default to all lines
+		if tailArg, ok := request.Params.Arguments["tail"].(float64); ok {
+			tailLines = int64(tailArg)
+		}
+
+		var previous bool
+		if previousArg, ok := request.Params.Arguments["previous"].(bool); ok {
+			previous = previousArg
+		}
+
+		// var sinceTime *metav1.Time
+		var sinceDuration *time.Duration
+		if sinceArg, ok := request.Params.Arguments["since"].(string); ok && sinceArg != "" {
+			duration, err := time.ParseDuration(sinceArg)
+			if err != nil {
+				return mcp.NewToolResultText(fmt.Sprintf("Failed to parse 'since' parameter: %v", err)), nil
+			}
+			sinceDuration = &duration
+		}
+
+		resultText, err := cm.StreamPodLogs(ctx, tailLines, previous, sinceDuration, podName, containerName, namespace)
+
+		if err != nil {
+			return mcp.NewToolResultText(err.Error()), nil
+		}
 		return mcp.NewToolResultText(resultText), nil
 	}
 }
