@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -263,7 +264,6 @@ func (cm *ClusterManager) ListPods(ctx context.Context, limit int64, namespace, 
 		listOptions.Limit = int64(limit)
 	}
 
-	// Add timeout to context
 	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 
@@ -339,4 +339,142 @@ func (cm *ClusterManager) DeletePod(ctx context.Context, name, namespace string,
 	}
 
 	return fmt.Sprintf("Successfully delete pod %q in namespace %q", name, namespace), nil
+}
+
+func (cm *ClusterManager) StreamPodLogs(ctx context.Context, tailLines int64, previous bool, since *time.Duration, podName, containerName, namespace string) (string, error) {
+	var result string
+
+	client, err := cm.GetCurrentClient()
+	if err != nil {
+		return result, fmt.Errorf("error: %v", err)
+	}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	//verify the namespace exists
+	_, err = client.CoreV1().Namespaces().Get(timeoutCtx, namespace, metav1.GetOptions{})
+	if err != nil {
+		return result, fmt.Errorf("namespace %q not found: %v", namespace, err)
+	}
+
+	// Get the pod to find the container name if not specified and verify pod exists
+	pod, err := client.CoreV1().Pods(namespace).Get(timeoutCtx, podName, metav1.GetOptions{})
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			return result, fmt.Errorf("pod '%s' not found in namespace '%s'", podName, namespace)
+		}
+		return result, fmt.Errorf("failed to get pod '%s' in namespace '%s': %v", podName, namespace, err)
+	}
+
+	// Check if pod is running or has run before
+	if pod.Status.Phase != corev1.PodRunning && pod.Status.Phase != corev1.PodSucceeded && !previous {
+		return result, fmt.Errorf("pod '%s' is in '%s' state. Logs may not be available. Use previous=true for crashed containers",
+			podName, pod.Status.Phase)
+	}
+
+	if len(pod.Spec.Containers) == 0 {
+		return result, fmt.Errorf("no containers found in pod '%s'", podName)
+	}
+
+	// Set default container if not specified
+	if containerName == "" {
+		containerName = pod.Spec.Containers[0].Name
+	}
+
+	// Verify the container exists in the pod
+	containerExists := false
+	for _, container := range pod.Spec.Containers {
+		if container.Name == containerName {
+			containerExists = true
+			break
+		}
+	}
+
+	if !containerExists {
+		// List available containers
+		availableContainers := make([]string, 0, len(pod.Spec.Containers))
+		for _, container := range pod.Spec.Containers {
+			availableContainers = append(availableContainers, container.Name)
+		}
+
+		return result, fmt.Errorf("container '%s' not found in pod '%s'. Available containers: %s",
+			containerName, podName, strings.Join(availableContainers, ", "))
+	}
+
+	// Configure log options
+	logOptions := &corev1.PodLogOptions{
+		Container: containerName,
+		Previous:  previous,
+		Follow:    false, // We don't want to follow logs in this context
+	}
+
+	if tailLines > 0 {
+		logOptions.TailLines = &tailLines
+	}
+
+	if since != nil {
+		logOptions.SinceSeconds = ptr(int64(since.Seconds()))
+	}
+
+	// Get the logs with retry for transient errors
+	var logsStream io.ReadCloser
+	err = retry.OnError(retry.DefaultRetry, func(err error) bool {
+		// Retry on network errors
+		return !strings.Contains(err.Error(), "not found")
+	}, func() error {
+		logsReq := client.CoreV1().Pods(namespace).GetLogs(podName, logOptions)
+		var streamErr error
+		logsStream, streamErr = logsReq.Stream(timeoutCtx)
+		return streamErr
+	})
+
+	if err != nil {
+		return result, fmt.Errorf("failed to stream logs: %v", err)
+	}
+	defer logsStream.Close()
+
+	// Read the logs with a max size limit to prevent excessive output
+	maxSize := 100 * 1024 // Limit to ~100KB of logs
+	logs, err := io.ReadAll(io.LimitReader(logsStream, int64(maxSize)))
+	if err != nil {
+		return result, fmt.Errorf("failed to read logs: %v", err)
+	}
+
+	if len(logs) == 0 {
+		if previous {
+			return result, fmt.Errorf("no previous logs found for container '%s' in pod '%s'", containerName, podName)
+		}
+		return result, fmt.Errorf("no logs found for container '%s' in pod '%s'", containerName, podName)
+	}
+
+	// Build the result
+	options := []string{}
+	if previous {
+		options = append(options, "previous=true")
+	}
+	if tailLines > 0 {
+		options = append(options, fmt.Sprintf("tail=%d", tailLines))
+	}
+	if since != nil {
+		options = append(options, fmt.Sprintf("since=%s", since.String()))
+	}
+
+	result = fmt.Sprintf("Logs from container '%s' in pod '%s/%s'", containerName, namespace, podName)
+	if len(options) > 0 {
+		result += fmt.Sprintf(" (%s)", strings.Join(options, ", "))
+	}
+	result += ":\n\n"
+	result += string(logs)
+
+	// Check if we reached the size limit
+	if len(logs) == maxSize {
+		result += "\n\n[Output truncated due to size limits. Use the 'tail' or 'since' parameters to view specific sections of logs.]"
+	}
+
+	return result, nil
+}
+
+func ptr[T any](v T) *T {
+	return &v
 }
