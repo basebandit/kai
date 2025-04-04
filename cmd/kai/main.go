@@ -49,4 +49,5 @@ func main() {
 
 func registerAllTools(s *kai.Server, cm *kai.ClusterManager) {
 	tools.RegisterPodTools(s, cm)
+	tools.RegisterDeploymentTools(s, cm)
 }
