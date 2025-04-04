@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -107,6 +108,20 @@ func formatPodList(pods *corev1.PodList, allNamespaces bool, limit int64, result
 	resultText += fmt.Sprintf("\nTotal: %d pod(s)", len(pods.Items))
 	if limit > 0 && int64(len(pods.Items)) == limit {
 		resultText += fmt.Sprintf(" (limited to %d results)", limit)
+	}
+
+	return resultText
+}
+
+func formatDeploymentList(deployments *appsv1.DeploymentList) string {
+	var resultText string
+	for _, deployment := range deployments.Items {
+		resultText += fmt.Sprintf("• %s/%s: %d/%d replicas ready - Age: %s\n",
+			deployment.Namespace,
+			deployment.Name,
+			deployment.Status.ReadyReplicas,
+			deployment.Status.Replicas,
+			time.Since(deployment.CreationTimestamp.Time).Round(time.Second).String())
 	}
 
 	return resultText

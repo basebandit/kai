@@ -475,6 +475,51 @@ func (cm *ClusterManager) StreamPodLogs(ctx context.Context, tailLines int64, pr
 	return result, nil
 }
 
+func (cm *ClusterManager) ListDeployments(ctx context.Context, allNamespaces bool, labelSelector, namespace string) (string, error) {
+	var result string
+
+	client, err := cm.GetCurrentClient()
+	if err != nil {
+		return result, fmt.Errorf("error: %v", err)
+	}
+
+	listOptions := metav1.ListOptions{
+		LabelSelector: labelSelector,
+	}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+
+	if allNamespaces {
+		deployments, err := client.AppsV1().Deployments("").List(timeoutCtx, listOptions)
+		if err != nil {
+			return result, fmt.Errorf("failed to list deployments: %v", err)
+		}
+
+		if len(deployments.Items) == 0 {
+			result = "No deployments found across all namespaces"
+			return result, nil
+		}
+		result = "Deployments across all namespaces:\n"
+		result += formatDeploymentList(deployments)
+	} else {
+		deployments, err := client.AppsV1().Deployments(namespace).List(timeoutCtx, listOptions)
+		if err != nil {
+			return result, fmt.Errorf("failed to list deployments: %v", err)
+		}
+
+		if len(deployments.Items) == 0 {
+			result = fmt.Sprintf("No deployments found in namespace %q.", namespace)
+			return result, nil
+		}
+
+		result = fmt.Sprintf("Deployments in namespace %q:\n", namespace)
+		result += formatDeploymentList(deployments)
+	}
+
+	return result, nil
+}
+
 func ptr[T any](v T) *T {
 	return &v
 }
