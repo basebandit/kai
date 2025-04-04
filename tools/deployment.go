@@ -7,7 +7,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func RegisterDeploymentTools(s *kai.Server, cm *kai.ClusterManager) {
+func RegisterDeploymentTools(s kai.ServerInterface, cm kai.ClusterManagerInterface) {
 	listDeploymentTools := mcp.NewTool("list_deployments",
 		mcp.WithDescription("List deployments in the current namespace or across all namespaces"),
 		mcp.WithBoolean("all_namespaces",
@@ -24,7 +24,7 @@ func RegisterDeploymentTools(s *kai.Server, cm *kai.ClusterManager) {
 	s.AddTool(listDeploymentTools, listDeploymentsHandler(cm))
 }
 
-func listDeploymentsHandler(cm *kai.ClusterManager) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func listDeploymentsHandler(cm kai.ClusterManagerInterface) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var allNamespaces bool
 

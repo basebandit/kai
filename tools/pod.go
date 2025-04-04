@@ -9,10 +9,13 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func RegisterPodTools(s *kai.Server, cm *kai.ClusterManager) {
+func RegisterPodTools(s kai.ServerInterface, cm kai.ClusterManagerInterface) {
 
 	listPodTools := mcp.NewTool("list_pods",
 		mcp.WithDescription("List pods in the current namespace or across all namespaces"),
+		mcp.WithBoolean("all_namespaces",
+			mcp.Description("Whether to list pods across all namespaces"),
+		),
 		mcp.WithString("namespace",
 			mcp.Description("Specific namespace to list pods from (defaults to current namespace)"),
 		),
@@ -82,11 +85,21 @@ func RegisterPodTools(s *kai.Server, cm *kai.ClusterManager) {
 	s.AddTool(streamLogsTool, streamLogsHandler(cm))
 }
 
-func listPodsHandler(cm *kai.ClusterManager) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func listPodsHandler(cm kai.ClusterManagerInterface) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
-			namespace = namespaceArg
+		var allNamespaces bool
+
+		if allNamespacesArg, ok := request.Params.Arguments["all_namespaces"].(bool); ok {
+			allNamespaces = allNamespacesArg
+		}
+
+		var namespace string
+		if !allNamespaces {
+			if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok {
+				namespace = namespaceArg
+			} else {
+				namespace = cm.GetCurrentNamespace()
+			}
 		}
 
 		var labelSelector string
@@ -113,7 +126,7 @@ func listPodsHandler(cm *kai.ClusterManager) func(ctx context.Context, request m
 	}
 }
 
-func getPodHandler(cm *kai.ClusterManager) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func getPodHandler(cm kai.ClusterManagerInterface) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
@@ -139,7 +152,7 @@ func getPodHandler(cm *kai.ClusterManager) func(ctx context.Context, request mcp
 	}
 }
 
-func deletePodHandler(cm *kai.ClusterManager) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func deletePodHandler(cm kai.ClusterManagerInterface) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 
 		nameArg, ok := request.Params.Arguments["name"]
@@ -171,7 +184,7 @@ func deletePodHandler(cm *kai.ClusterManager) func(ctx context.Context, request 
 	}
 }
 
-func streamLogsHandler(cm *kai.ClusterManager) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func streamLogsHandler(cm kai.ClusterManagerInterface) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		podArg, ok := request.Params.Arguments["pod"]
 		if !ok || podArg == nil {
