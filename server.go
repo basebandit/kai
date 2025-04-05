@@ -5,7 +5,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 )
 
-// Server wraps the MCP server to provide additional functionality
+// Server wraps the MCP server to provide additional behavior
 type Server struct {
 	mcpServer *server.MCPServer
 }
