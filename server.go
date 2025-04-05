@@ -15,7 +15,7 @@ func NewServer() *Server {
 	// Create the MCP server
 	mcpServer := server.NewMCPServer(
 		"Kubernetes MCP Server",
-		"1.0.0",
+		"0.0.1",
 		server.WithResourceCapabilities(true, true),
 		server.WithLogging(),
 	)
