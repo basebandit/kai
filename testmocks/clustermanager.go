@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/basebandit/kai"
 	"github.com/stretchr/testify/mock"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -113,5 +114,10 @@ func (m *MockClusterManager) StreamPodLogs(ctx context.Context, tailLines int64,
 
 func (m *MockClusterManager) ListDeployments(ctx context.Context, allNamespaces bool, labelSelector, namespace string) (string, error) {
 	args := m.Called(ctx, allNamespaces, labelSelector, namespace)
+	return args.String(0), args.Error(1)
+}
+
+func (m *MockClusterManager) CreateDeployment(ctx context.Context, params kai.DeploymentParams) (string, error) {
+	args := m.Called(ctx, params)
 	return args.String(0), args.Error(1)
 }
