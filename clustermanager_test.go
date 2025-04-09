@@ -599,7 +599,7 @@ func testCreateDeployment(t *testing.T) {
 	assert.Equal(t, deploymentParams.Name, name)
 
 	// Verify replicas
-	replicas, exists, err := unstructured.NestedInt64(deployment.Object, "spec", "replicas")
+	replicas, exists, err := unstructured.NestedFloat64(deployment.Object, "spec", "replicas")
 	assert.NoError(t, err)
 	assert.True(t, exists)
 	assert.Equal(t, deploymentParams.Replicas, replicas)

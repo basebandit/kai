@@ -488,11 +488,6 @@ func (cm *ClusterManager) CreateDeployment(ctx context.Context, deploymentParams
 
 	var result string
 
-	if deploymentParams.Replicas == 0 {
-		// if no replica count was set, set to default (1)
-		deploymentParams.Replicas = 1
-	}
-
 	labels := map[string]interface{}{
 		"app": deploymentParams.Name,
 	}
@@ -606,7 +601,7 @@ func (cm *ClusterManager) CreateDeployment(ctx context.Context, deploymentParams
 		return result, fmt.Errorf("failed to create deployment: %v", err)
 	}
 
-	result = fmt.Sprintf("Deployment %q created successfully in namespace %q with %d replica(s)", deploymentParams.Name, deploymentParams.Namespace, deploymentParams.Replicas)
+	result = fmt.Sprintf("Deployment %q created successfully in namespace %q with %f replica(s)", deploymentParams.Name, deploymentParams.Namespace, deploymentParams.Replicas)
 
 	return result, nil
 }
@@ -715,5 +710,5 @@ type DeploymentParams struct {
 	ImagePullSecrets []interface{}
 	Labels           map[string]interface{}
 	Env              map[string]interface{}
-	Replicas         int64
+	Replicas         float64
 }
