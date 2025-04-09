@@ -31,6 +31,7 @@ type ClusterManagerInterface interface {
 	GetPod(context.Context, string, string) (string, error)
 	ListClusters() []string
 	ListDeployments(context.Context, bool, string, string) (string, error)
+	CreateDeployment(context.Context, DeploymentParams) (string, error)
 	ListPods(context.Context, int64, string, string, string) (string, error)
 	LoadKubeConfig(string, string) error
 	SetCurrentContext(string) error
