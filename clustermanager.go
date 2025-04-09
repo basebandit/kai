@@ -12,6 +12,8 @@ import (
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
@@ -69,91 +71,6 @@ func (cm *ClusterManager) LoadKubeConfig(name, path string) error {
 	}
 
 	// Store the configuration
-	storeConfig(cm, name, resolvedPath, clientset, dynamicClient)
-
-	return nil
-}
-
-// validateInputs checks if the provided inputs are valid
-func validateInputs(name, path string) error {
-	if name == "" {
-		return errors.New("cluster name cannot be empty")
-	}
-	return nil
-}
-
-// resolvePath resolves the kubeconfig path
-func resolvePath(path string) (string, error) {
-	// If path is empty, try to use the default kubeconfig path
-	if path == "" {
-		if home := homedir.HomeDir(); home != "" {
-			return filepath.Join(home, ".kube", "config"), nil
-		} else {
-			return "", errors.New("kubeconfig path not provided and home directory not found")
-		}
-	}
-	return path, nil
-}
-
-// extractContextName reads the kubeconfig file and extracts the current context name
-func extractContextName(path string) (string, error) {
-	kubeconfigBytes, err := os.ReadFile(path)
-	if err != nil {
-		return "", fmt.Errorf("error reading kubeconfig file: %w", err)
-	}
-
-	clientConfig, err := clientcmd.NewClientConfigFromBytes(kubeconfigBytes)
-	if err != nil {
-		return "", fmt.Errorf("error creating client config: %w", err)
-	}
-
-	rawConfig, err := clientConfig.RawConfig()
-	if err != nil {
-		return "", fmt.Errorf("error getting raw config: %w", err)
-	}
-
-	contextName := rawConfig.CurrentContext
-	if contextName == "" {
-		return "", errors.New("no current context found in kubeconfig file")
-	}
-
-	return contextName, nil
-}
-
-// createClients creates Kubernetes clients from the kubeconfig file
-func createClients(path string) (kubernetes.Interface, dynamic.Interface, error) {
-	config, err := clientcmd.BuildConfigFromFlags("", path)
-	if err != nil {
-		return nil, nil, fmt.Errorf("error building config from flags: %w", err)
-	}
-
-	// Increase timeouts for stability
-	config.Timeout = 30 * time.Second
-
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, nil, fmt.Errorf("error creating client: %w", err)
-	}
-
-	dynamicClient, err := dynamic.NewForConfig(config)
-	if err != nil {
-		return nil, nil, fmt.Errorf("error creating dynamic client: %w", err)
-	}
-
-	return clientset, dynamicClient, nil
-}
-
-// testConnection tests the connection to the Kubernetes cluster
-func testConnection(client kubernetes.Interface) error {
-	_, err := client.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{Limit: 1})
-	if err != nil {
-		return fmt.Errorf("failed to connect to cluster: %w", err)
-	}
-	return nil
-}
-
-// storeConfig stores the cluster configuration in the ClusterManager
-func storeConfig(cm *ClusterManager, name, path string, clientset kubernetes.Interface, dynamicClient dynamic.Interface) {
 	// If a context with the same name already exists, remove it first
 	if _, exists := cm.clients[name]; exists {
 		delete(cm.clients, name)
@@ -164,6 +81,8 @@ func storeConfig(cm *ClusterManager, name, path string, clientset kubernetes.Int
 	cm.kubeconfigs[name] = path
 	cm.clients[name] = clientset
 	cm.dynamicClients[name] = dynamicClient
+
+	return nil
 }
 
 // GetClient returns the Kubernetes client for a specific cluster
@@ -565,6 +484,211 @@ func (cm *ClusterManager) ListDeployments(ctx context.Context, allNamespaces boo
 	return result, nil
 }
 
+func (cm *ClusterManager) CreateDeployment(ctx context.Context, deploymentParams DeploymentParams) (string, error) {
+
+	var result string
+
+	if deploymentParams.Replicas == 0 {
+		// if no replica count was set, set to default (1)
+		deploymentParams.Replicas = 1
+	}
+
+	labels := map[string]interface{}{
+		"app": deploymentParams.Name,
+	}
+
+	if deploymentParams.Labels != nil {
+		for k, v := range deploymentParams.Labels {
+			labels[k] = v
+		}
+	}
+	// Container definition
+	container := map[string]interface{}{
+		"name":  deploymentParams.Name,
+		"image": deploymentParams.Image,
+	}
+
+	parts := strings.Split(deploymentParams.ContainerPort, "/")
+	var portVal int64
+	if _, err := fmt.Sscanf(parts[0], "%d", &portVal); err == nil {
+		portDefinition := map[string]interface{}{
+			"containerPort": portVal,
+		}
+
+		// Add protocol if specified
+		if len(parts) > 1 && (parts[1] == "TCP" || parts[1] == "UDP" || parts[1] == "SCTP") {
+			portDefinition["protocol"] = parts[1]
+		}
+
+		container["ports"] = []interface{}{portDefinition}
+	}
+
+	if len(deploymentParams.Env) > 0 {
+		envVars := make([]interface{}, 0, len(deploymentParams.Env))
+		for k, v := range deploymentParams.Env {
+			if strVal, ok := v.(string); ok {
+				envVars = append(envVars, map[string]interface{}{
+					"name":  k,
+					"value": strVal,
+				})
+			}
+		}
+		if len(envVars) > 0 {
+			container["env"] = envVars
+		}
+	}
+
+	if deploymentParams.ImagePullPolicy != "" {
+		validPolicies := map[string]bool{"Always": true, "IfNotPresent": true, "Never": true}
+		if _, ok := validPolicies[deploymentParams.ImagePullPolicy]; ok {
+			container["imagePullPolicy"] = deploymentParams.ImagePullPolicy
+		}
+	}
+
+	podSpec := map[string]interface{}{
+		"containers": []interface{}{container},
+	}
+
+	if len(deploymentParams.ImagePullSecrets) > 0 {
+		pullSecrets := make([]interface{}, 0, len(deploymentParams.ImagePullSecrets))
+		for _, v := range deploymentParams.ImagePullSecrets {
+			if strVal, ok := v.(string); ok && strVal != "" {
+				pullSecrets = append(pullSecrets, map[string]interface{}{
+					"name": strVal,
+				})
+			}
+		}
+		if len(pullSecrets) > 0 {
+			podSpec["imagePullSecrets"] = pullSecrets
+		}
+	}
+
+	deployment := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "apps/v1",
+			"kind":       "Deployment",
+			"metadata": map[string]interface{}{
+				"name":      deploymentParams.Name,
+				"namespace": deploymentParams.Namespace,
+				"labels":    labels,
+			},
+			"spec": map[string]interface{}{
+				"replicas": deploymentParams.Replicas,
+				"selector": map[string]interface{}{
+					"matchLabels": labels,
+				},
+				"template": map[string]interface{}{
+					"metadata": map[string]interface{}{
+						"labels": labels,
+					},
+					"spec": podSpec,
+				},
+			},
+		},
+	}
+
+	gvr := schema.GroupVersionResource{
+		Group:    "apps",
+		Version:  "v1",
+		Resource: "deployments",
+	}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	client, err := cm.GetCurrentDynamicClient()
+	if err != nil {
+		return result, fmt.Errorf("failed to get a dynamic client: %v", err)
+	}
+
+	_, err = client.Resource(gvr).Namespace(deploymentParams.Namespace).Create(timeoutCtx, deployment, metav1.CreateOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to create deployment: %v", err)
+	}
+
+	result = fmt.Sprintf("Deployment %q created successfully in namespace %q with %d replica(s)", deploymentParams.Name, deploymentParams.Namespace, deploymentParams.Replicas)
+
+	return result, nil
+}
+
+// validateInputs checks if the provided inputs are valid
+func validateInputs(name, path string) error {
+	if name == "" {
+		return errors.New("cluster name cannot be empty")
+	}
+	return nil
+}
+
+// resolvePath resolves the kubeconfig path
+func resolvePath(path string) (string, error) {
+	// If path is empty, try to use the default kubeconfig path
+	if path == "" {
+		if home := homedir.HomeDir(); home != "" {
+			return filepath.Join(home, ".kube", "config"), nil
+		} else {
+			return "", errors.New("kubeconfig path not provided and home directory not found")
+		}
+	}
+	return path, nil
+}
+
+// extractContextName reads the kubeconfig file and extracts the current context name
+func extractContextName(path string) (string, error) {
+	kubeconfigBytes, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("error reading kubeconfig file: %w", err)
+	}
+
+	clientConfig, err := clientcmd.NewClientConfigFromBytes(kubeconfigBytes)
+	if err != nil {
+		return "", fmt.Errorf("error creating client config: %w", err)
+	}
+
+	rawConfig, err := clientConfig.RawConfig()
+	if err != nil {
+		return "", fmt.Errorf("error getting raw config: %w", err)
+	}
+
+	contextName := rawConfig.CurrentContext
+	if contextName == "" {
+		return "", errors.New("no current context found in kubeconfig file")
+	}
+
+	return contextName, nil
+}
+
+// createClients creates Kubernetes clients from the kubeconfig file
+func createClients(path string) (kubernetes.Interface, dynamic.Interface, error) {
+	config, err := clientcmd.BuildConfigFromFlags("", path)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error building config from flags: %w", err)
+	}
+
+	// Increase timeouts for stability
+	config.Timeout = 30 * time.Second
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error creating client: %w", err)
+	}
+
+	dynamicClient, err := dynamic.NewForConfig(config)
+	if err != nil {
+		return nil, nil, fmt.Errorf("error creating dynamic client: %w", err)
+	}
+
+	return clientset, dynamicClient, nil
+}
+
+// testConnection tests the connection to the Kubernetes cluster
+func testConnection(client kubernetes.Interface) error {
+	_, err := client.CoreV1().Namespaces().List(context.Background(), metav1.ListOptions{Limit: 1})
+	if err != nil {
+		return fmt.Errorf("failed to connect to cluster: %w", err)
+	}
+	return nil
+}
+
 // validateFile checks if the file exists and is a regular file
 func validateFile(path string) error {
 	fileInfo, err := os.Stat(path)
@@ -579,4 +703,17 @@ func validateFile(path string) error {
 
 func ptr[T any](v T) *T {
 	return &v
+}
+
+// DeploymentParams for creation of dynamic deployments
+type DeploymentParams struct {
+	Name,
+	Image,
+	Namespace,
+	ContainerPort,
+	ImagePullPolicy string
+	ImagePullSecrets []interface{}
+	Labels           map[string]interface{}
+	Env              map[string]interface{}
+	Replicas         int64
 }
