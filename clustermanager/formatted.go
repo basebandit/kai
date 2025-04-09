@@ -1,4 +1,4 @@
-package kai
+package clustermanager
 
 import (
 	"fmt"
