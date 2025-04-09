@@ -88,18 +88,19 @@ func listDeploymentsHandler(cm kai.ClusterManagerInterface) func(ctx context.Con
 
 func createDeploymentHandler(cm kai.ClusterManagerInterface) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		var resultText string
-		var deploymentParams kai.DeploymentParams
+		deploymentParams := kai.DeploymentParams{}
 
 		name, ok := request.Params.Arguments["name"].(string)
 		if !ok || name == "" {
 			return mcp.NewToolResultText("Parameter 'name' must be a non-empty string"), nil
 		}
+		deploymentParams.Name = name
 
 		image, ok := request.Params.Arguments["image"].(string)
 		if !ok || image == "" {
 			return mcp.NewToolResultText("Parameter 'image' must be a non-empty string"), nil
 		}
+		deploymentParams.Image = image
 
 		namespace := cm.GetCurrentNamespace()
 		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
@@ -108,9 +109,11 @@ func createDeploymentHandler(cm kai.ClusterManagerInterface) func(ctx context.Co
 
 		deploymentParams.Namespace = namespace
 
-		if replicasArg, ok := request.Params.Arguments["replicas"].(int); ok {
-			// assign if replica count is greater than 1 otherwise use the default replica count (1)
-			deploymentParams.Replicas = int64(replicasArg)
+		if replicasArg, ok := request.Params.Arguments["replicas"].(float64); ok {
+			deploymentParams.Replicas = replicasArg
+		} else {
+			// if no replica count was set, set default to 1
+			deploymentParams.Replicas = 1
 		}
 
 		if labelsArg, ok := request.Params.Arguments["labels"].(map[string]interface{}); ok {
