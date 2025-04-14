@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/basebandit/kai"
+	"github.com/basebandit/kai/clustermanager"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
@@ -117,7 +118,7 @@ func listPodsHandler(cm kai.ClusterManagerInterface) func(ctx context.Context, r
 			limit = int64(limitArg)
 		}
 
-		resultText, err := cm.ListPods(ctx, limit, namespace, labelSelector, fieldSelector)
+		resultText, err := clustermanager.ListPods(ctx, cm, clustermanager.PodParams{limit, namespace, labelSelector, fieldSelector})
 		if err != nil {
 			return mcp.NewToolResultText(err.Error()), nil
 		}
