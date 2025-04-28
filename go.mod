@@ -3,7 +3,7 @@ module github.com/basebandit/kai
 go 1.24.1
 
 require (
-	github.com/mark3labs/mcp-go v0.22.0
+	github.com/mark3labs/mcp-go v0.23.1
 	github.com/stretchr/testify v1.10.0
 	k8s.io/api v0.32.3
 	k8s.io/apimachinery v0.32.3
