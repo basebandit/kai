@@ -6,12 +6,32 @@ import (
 	"time"
 
 	"github.com/basebandit/kai"
-	"github.com/basebandit/kai/clustermanager"
+	"github.com/basebandit/kai/cluster"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func RegisterPodTools(s kai.ServerInterface, cm kai.ClusterManagerInterface) {
+type PodFactory interface {
+	NewPod(name, namespace, containerName, labelSelector, fieldSelector string) kai.PodOperator
+}
 
+type DefaultPodFactory struct{}
+
+func (f *DefaultPodFactory) NewPod(name, namespace, containerName, labelSelector, fieldSelector string) kai.PodOperator {
+	return &cluster.Pod{
+		Name:          name,
+		Namespace:     namespace,
+		ContainerName: containerName,
+		LabelSelector: labelSelector,
+		FieldSelector: fieldSelector,
+	}
+}
+
+func RegisterPodTools(s kai.ServerInterface, cm kai.ClusterManager) {
+	factory := &DefaultPodFactory{}
+	RegisterPodToolsWithFactory(s, cm, factory)
+}
+
+func RegisterPodToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, factory PodFactory) {
 	listPodTools := mcp.NewTool("list_pods",
 		mcp.WithDescription("List pods in the current namespace or across all namespaces"),
 		mcp.WithBoolean("all_namespaces",
@@ -31,7 +51,7 @@ func RegisterPodTools(s kai.ServerInterface, cm kai.ClusterManagerInterface) {
 		),
 	)
 
-	s.AddTool(listPodTools, listPodsHandler(cm))
+	s.AddTool(listPodTools, listPodsHandler(cm, factory))
 
 	getPodTool := mcp.NewTool("get_pod",
 		mcp.WithDescription("Get detailed information about a specific pod"),
@@ -44,7 +64,7 @@ func RegisterPodTools(s kai.ServerInterface, cm kai.ClusterManagerInterface) {
 		),
 	)
 
-	s.AddTool(getPodTool, getPodHandler(cm))
+	s.AddTool(getPodTool, getPodHandler(cm, factory))
 
 	deletePodTool := mcp.NewTool("delete_pod",
 		mcp.WithDescription("Delete a pod by name"),
@@ -58,7 +78,7 @@ func RegisterPodTools(s kai.ServerInterface, cm kai.ClusterManagerInterface) {
 		mcp.WithBoolean("force", mcp.Description("Force deletes the pod if set to true")),
 	)
 
-	s.AddTool(deletePodTool, deletePodHandler(cm))
+	s.AddTool(deletePodTool, deletePodHandler(cm, factory))
 
 	streamLogsTool := mcp.NewTool("stream_logs",
 		mcp.WithDescription("Stream logs from a container in a pod"),
@@ -83,10 +103,10 @@ func RegisterPodTools(s kai.ServerInterface, cm kai.ClusterManagerInterface) {
 		),
 	)
 
-	s.AddTool(streamLogsTool, streamLogsHandler(cm))
+	s.AddTool(streamLogsTool, streamLogsHandler(cm, factory))
 }
 
-func listPodsHandler(cm kai.ClusterManagerInterface) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func listPodsHandler(cm kai.ClusterManager, factory PodFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var allNamespaces bool
 
@@ -118,7 +138,9 @@ func listPodsHandler(cm kai.ClusterManagerInterface) func(ctx context.Context, r
 			limit = int64(limitArg)
 		}
 
-		resultText, err := clustermanager.ListPods(ctx, cm, clustermanager.PodParams{limit, namespace, labelSelector, fieldSelector})
+		pod := factory.NewPod("", namespace, "", labelSelector, fieldSelector)
+
+		resultText, err := pod.List(ctx, cm, limit)
 		if err != nil {
 			return mcp.NewToolResultText(err.Error()), nil
 		}
@@ -127,7 +149,7 @@ func listPodsHandler(cm kai.ClusterManagerInterface) func(ctx context.Context, r
 	}
 }
 
-func getPodHandler(cm kai.ClusterManagerInterface) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func getPodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
@@ -144,7 +166,9 @@ func getPodHandler(cm kai.ClusterManagerInterface) func(ctx context.Context, req
 			namespace = namespaceArg
 		}
 
-		resultText, err := cm.GetPod(ctx, name, namespace)
+		pod := factory.NewPod(name, namespace, "", "", "")
+
+		resultText, err := pod.Get(ctx, cm)
 		if err != nil {
 			return mcp.NewToolResultText(err.Error()), nil
 		}
@@ -153,7 +177,7 @@ func getPodHandler(cm kai.ClusterManagerInterface) func(ctx context.Context, req
 	}
 }
 
-func deletePodHandler(cm kai.ClusterManagerInterface) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func deletePodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 
 		nameArg, ok := request.Params.Arguments["name"]
@@ -176,7 +200,9 @@ func deletePodHandler(cm kai.ClusterManagerInterface) func(ctx context.Context, 
 			force = forceArg
 		}
 
-		resultText, err := cm.DeletePod(ctx, name, namespace, force)
+		pod := factory.NewPod(name, namespace, "", "", "")
+
+		resultText, err := pod.Delete(ctx, cm, force)
 		if err != nil {
 			return mcp.NewToolResultText(err.Error()), nil
 		}
@@ -185,7 +211,7 @@ func deletePodHandler(cm kai.ClusterManagerInterface) func(ctx context.Context, 
 	}
 }
 
-func streamLogsHandler(cm kai.ClusterManagerInterface) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+func streamLogsHandler(cm kai.ClusterManager, factory PodFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		podArg, ok := request.Params.Arguments["pod"]
 		if !ok || podArg == nil {
@@ -227,7 +253,9 @@ func streamLogsHandler(cm kai.ClusterManagerInterface) func(ctx context.Context,
 			sinceDuration = &duration
 		}
 
-		resultText, err := cm.StreamPodLogs(ctx, tailLines, previous, sinceDuration, podName, containerName, namespace)
+		pod := factory.NewPod(podName, namespace, containerName, "", "")
+
+		resultText, err := pod.StreamLogs(ctx, cm, tailLines, previous, sinceDuration)
 
 		if err != nil {
 			return mcp.NewToolResultText(err.Error()), nil
