@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -9,8 +10,7 @@ import (
 
 	"github.com/basebandit/kai"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
-	"k8s.io/apimachinery/pkg/runtime"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
 )
 
@@ -26,7 +26,7 @@ func (p *Pod) Get(ctx context.Context, cm kai.ClusterManager) (string, error) {
 	var result string
 	client, err := cm.GetCurrentClient()
 	if err != nil {
-		return "", err
+		return result, err
 	}
 
 	// Verify the namespace exists
@@ -60,7 +60,7 @@ func (p *Pod) List(ctx context.Context, cm kai.ClusterManager, limit int64) (str
 	var result string
 	client, err := cm.GetCurrentClient()
 	if err != nil {
-		return "", err
+		return result, nil
 	}
 
 	// Create list options
@@ -69,10 +69,8 @@ func (p *Pod) List(ctx context.Context, cm kai.ClusterManager, limit int64) (str
 		FieldSelector: p.FieldSelector,
 	}
 
-	showNamespace := (params.Namespace == "")
-	resultText := "Pods across all namespaces"
-	if !showNamespace {
-		resultText = fmt.Sprintf("Pods in namespace %q", params.Namespace)
+	if limit > 0 {
+		listOptions.Limit = int64(limit)
 	}
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
@@ -120,7 +118,7 @@ func (p *Pod) Delete(ctx context.Context, cm kai.ClusterManager, force bool) (st
 
 	client, err := cm.GetCurrentClient()
 	if err != nil {
-		return "", fmt.Errorf("failed to delete pod %q in namespace %q: %v", params.Name, params.Namespace, err)
+		return result, fmt.Errorf("error: %v", err)
 	}
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -157,7 +155,7 @@ func (p *Pod) StreamLogs(ctx context.Context, cm kai.ClusterManager, tailLines i
 
 	client, err := cm.GetCurrentClient()
 	if err != nil {
-		return "", err
+		return result, fmt.Errorf("error: %v", err)
 	}
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -213,15 +211,6 @@ func (p *Pod) StreamLogs(ctx context.Context, cm kai.ClusterManager, tailLines i
 			p.ContainerName, p.Name, strings.Join(availableContainers, ", "))
 	}
 
-	// We need the typed client for streaming logs
-	client, err := cm.GetCurrentClient()
-	if err != nil {
-		return "", fmt.Errorf("error getting client: %v", err)
-	}
-
-	timeoutCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
-	defer cancel()
-
 	// Configure log options
 	logOptions := &corev1.PodLogOptions{
 		Container: p.ContainerName,
@@ -229,12 +218,12 @@ func (p *Pod) StreamLogs(ctx context.Context, cm kai.ClusterManager, tailLines i
 		Follow:    false, // We don't want to follow logs in this context
 	}
 
-	if params.Log.TailLines > 0 {
-		logOptions.TailLines = &params.Log.TailLines
+	if tailLines > 0 {
+		logOptions.TailLines = &tailLines
 	}
 
-	if params.Log.Since != nil {
-		logOptions.SinceSeconds = ptr(int64(params.Log.Since.Seconds()))
+	if since != nil {
+		logOptions.SinceSeconds = ptr(int64(since.Seconds()))
 	}
 
 	// Get the logs with retry for transient errors
@@ -250,7 +239,7 @@ func (p *Pod) StreamLogs(ctx context.Context, cm kai.ClusterManager, tailLines i
 	})
 
 	if err != nil {
-		return "", fmt.Errorf("failed to stream logs: %v", err)
+		return result, fmt.Errorf("failed to stream logs: %v", err)
 	}
 	defer logsStream.Close()
 
@@ -258,7 +247,7 @@ func (p *Pod) StreamLogs(ctx context.Context, cm kai.ClusterManager, tailLines i
 	maxSize := 100 * 1024 // Limit to ~100KB of logs
 	logs, err := io.ReadAll(io.LimitReader(logsStream, int64(maxSize)))
 	if err != nil {
-		return "", fmt.Errorf("failed to read logs: %v", err)
+		return result, fmt.Errorf("failed to read logs: %v", err)
 	}
 
 	if len(logs) == 0 {
@@ -268,55 +257,29 @@ func (p *Pod) StreamLogs(ctx context.Context, cm kai.ClusterManager, tailLines i
 		return result, fmt.Errorf("no logs found for container '%s' in pod '%s'", p.ContainerName, p.Name)
 	}
 
-	var result strings.Builder
-
+	// Build the result
 	options := []string{}
-	if params.Log.Previous {
+	if previous {
 		options = append(options, "previous=true")
 	}
-	if params.Log.TailLines > 0 {
-		options = append(options, fmt.Sprintf("tail=%d", params.Log.TailLines))
+	if tailLines > 0 {
+		options = append(options, fmt.Sprintf("tail=%d", tailLines))
 	}
-	if params.Log.Since != nil {
-		options = append(options, fmt.Sprintf("since=%s", params.Log.Since.String()))
+	if since != nil {
+		options = append(options, fmt.Sprintf("since=%s", since.String()))
 	}
 
 	result = fmt.Sprintf("Logs from container '%s' in pod '%s/%s'", p.ContainerName, p.Namespace, p.Name)
 	if len(options) > 0 {
-		result.WriteString(fmt.Sprintf(" (%s)", strings.Join(options, ", ")))
+		result += fmt.Sprintf(" (%s)", strings.Join(options, ", "))
 	}
-	result.WriteString(":\n\n")
-	result.WriteString(string(logs))
+	result += ":\n\n"
+	result += string(logs)
 
 	// Check if we reached the size limit
 	if len(logs) == maxSize {
-		result.WriteString("\n\n[Output truncated due to size limits. Use the 'tail' or 'since' parameters to view specific sections of logs.]")
+		result += "\n\n[Output truncated due to size limits. Use the 'tail' or 'since' parameters to view specific sections of logs.]"
 	}
 
-	return result.String(), nil
-}
-
-// convertToPod converts an unstructured object to a Pod
-func convertToPod(obj *unstructured.Unstructured) (*corev1.Pod, error) {
-	pod := &corev1.Pod{}
-	err := runtime.DefaultUnstructuredConverter.FromUnstructured(obj.Object, pod)
-	return pod, err
-}
-
-// convertToPodList converts an unstructured list to a PodList
-func convertToPodList(list *unstructured.UnstructuredList) (*corev1.PodList, error) {
-	podList := &corev1.PodList{
-		Items: make([]corev1.Pod, len(list.Items)),
-	}
-
-	for i, item := range list.Items {
-		pod := &corev1.Pod{}
-		err := runtime.DefaultUnstructuredConverter.FromUnstructured(item.Object, pod)
-		if err != nil {
-			return nil, err
-		}
-		podList.Items[i] = *pod
-	}
-
-	return podList, nil
+	return result, nil
 }
