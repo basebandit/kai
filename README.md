@@ -1,6 +1,6 @@
 # Kubernetes MCP Server
 
-A Model Context Protocol (MCP) server for managing Kubernetes resources through llms like Claude.
+A Model Context Protocol (MCP) server for managing a Kubernetes cluster through llms like Claude.
 
 ## Overview
 
@@ -8,13 +8,25 @@ This Kubernetes MCP server provides a bridge between large language models (LLMs
 
 ## Features
 
-- **Cluster Management**: Connect to multiple Kubernetes clusters and switch between contexts
-- **Resource Operations**: Create, read, update, and delete Kubernetes resources
-- **Pod Management**: List pods, get pod details, stream logs, and delete pods
-- **Deployment Management**: Create and manage deployments across namespaces
-- **Service Operations**: Interact with Kubernetes services
-- **YAML Support**: Apply Kubernetes manifests directly from YAML
-- **Custom Resource Support**: Work with custom resource definitions (CRDs)
+- [x] Connect to a Kubernetes cluster
+- [x] List all pods
+- [x] List all deployments 
+- [] List all services
+- [] List all nodes
+- [] Create, describe, delete a pod
+- [] List all namespaces, create a namespace
+- [] Create custom pod & deployment configs, 
+- [] update deployment replicas
+- [x] Get logs from a pod for debugging
+- [ ] kubectl explain and kubectl api-resources support
+- [ ] Get Kubernetes events from the cluster
+- [ ] Port forward to a pod or service
+- [ ] Create, list, and decribe cronjobs
+
+## Requirements 
+The server will by default connect to your current context. Make sure you have:  
+
+Access to a Kubernetes cluster configured for kubectl (e.g. minikube, Rancher Desktop,  EKS, GKE, etc.)
 
 ## Installation
 
