@@ -17,24 +17,30 @@ type ServerInterface interface {
 	Serve() error
 }
 
-// ClusterManagerInterface defines the contract for managing Kubernetes clusters.
-// It provides methods for interacting with cluster resources like pods and deployments,
-// as well as managing cluster contexts and configurations.
-type ClusterManagerInterface interface {
-	DeletePod(context.Context, string, string, bool) (string, error)
+// ClusterManager defines the contract for managing Kubernetes clusters.
+type ClusterManager interface {
 	GetClient(string) (kubernetes.Interface, error)
 	GetCurrentClient() (kubernetes.Interface, error)
 	GetCurrentContext() string
 	GetCurrentDynamicClient() (dynamic.Interface, error)
 	GetCurrentNamespace() string
 	GetDynamicClient(string) (dynamic.Interface, error)
-	GetPod(context.Context, string, string) (string, error)
 	ListClusters() []string
-	ListDeployments(context.Context, bool, string, string) (string, error)
-	CreateDeployment(context.Context, DeploymentParams) (string, error)
-	ListPods(context.Context, int64, string, string, string) (string, error)
 	LoadKubeConfig(string, string) error
 	SetCurrentContext(string) error
 	SetCurrentNamespace(string)
-	StreamPodLogs(context.Context, int64, bool, *time.Duration, string, string, string) (string, error)
+}
+
+// PodOperator defines the operations needed for pod management
+type PodOperator interface {
+	Get(ctx context.Context, cm ClusterManager) (string, error)
+	List(ctx context.Context, cm ClusterManager, limit int64) (string, error)
+	Delete(ctx context.Context, cm ClusterManager, force bool) (string, error)
+	StreamLogs(ctx context.Context, cm ClusterManager, tailLines int64, previous bool, since *time.Duration) (string, error)
+}
+
+// DeploymentOperator defines the operations needed for deployment management
+type DeploymentOperator interface {
+	Create(ctx context.Context, cm ClusterManager) (string, error)
+	List(ctx context.Context, cm ClusterManager, allNamespaces bool, labelSelector string) (string, error)
 }
