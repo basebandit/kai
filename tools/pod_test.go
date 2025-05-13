@@ -481,9 +481,9 @@ func TestDeletePodHandler(t *testing.T) {
 			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockPodFactory, mockPod *testmocks.MockPod) {
 				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
 				mockPod.On("Delete", mock.Anything, mockCM, false).
-					Return(fmt.Sprintf("Successfully delete pod %q in namespace %q", nginxPodName, defaultNamespace), nil)
+					Return(fmt.Sprintf(deleteSuccessMsgFmt, nginxPodName, defaultNamespace), nil)
 			},
-			expectedOutput:    fmt.Sprintf("Successfully delete pod %q in namespace %q", nginxPodName, defaultNamespace),
+			expectedOutput:    fmt.Sprintf(deleteSuccessMsgFmt, nginxPodName, defaultNamespace),
 			expectPodCreation: true,
 		},
 		{
@@ -499,9 +499,9 @@ func TestDeletePodHandler(t *testing.T) {
 			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockPodFactory, mockPod *testmocks.MockPod) {
 				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
 				mockPod.On("Delete", mock.Anything, mockCM, true).
-					Return(fmt.Sprintf("Successfully delete pod %q in namespace %q", nginxPodName, defaultNamespace), nil)
+					Return(fmt.Sprintf(deleteSuccessMsgFmt, nginxPodName, defaultNamespace), nil)
 			},
-			expectedOutput:    fmt.Sprintf("Successfully delete pod %q in namespace %q", nginxPodName, defaultNamespace),
+			expectedOutput:    fmt.Sprintf(deleteSuccessMsgFmt, nginxPodName, defaultNamespace),
 			expectPodCreation: true,
 		},
 		{
