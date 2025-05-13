@@ -6,24 +6,408 @@ import (
 	"testing"
 	"time"
 
+	"github.com/basebandit/kai"
 	"github.com/basebandit/kai/testmocks"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
 
+func TestCreatePodHandler_RequiredParams(t *testing.T) {
+	// Setup mock cluster manager
+	mockCM := testmocks.NewMockClusterManager()
+	mockCM.On("GetCurrentNamespace").Return("default")
+
+	// Setup expected parameters
+	expectedParams := kai.PodParams{
+		Name:          "test-pod",
+		Namespace:     "default",
+		Image:         "nginx:latest",
+		ContainerName: "test-pod", // Default to pod name
+		RestartPolicy: "Always",   // Default
+	}
+
+	// Setup mock pod
+	mockPod := testmocks.NewMockPod(expectedParams)
+	mockPod.On("Create", mock.Anything, mockCM).Return("Pod \"test-pod\" created successfully in namespace \"default\"", nil)
+
+	// Setup mock factory
+	mockFactory := new(testmocks.MockPodFactory)
+	mockFactory.On("NewPod", expectedParams).Return(mockPod)
+
+	// Create the handler
+	handler := createPodHandler(mockCM, mockFactory)
+
+	// Create a request with required parameters
+	request := mcp.CallToolRequest{
+		Params: struct {
+			Name      string                 `json:"name"`
+			Arguments map[string]interface{} `json:"arguments,omitempty"`
+			Meta      *struct {
+				ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
+			} `json:"_meta,omitempty"`
+		}{
+			Arguments: map[string]interface{}{
+				"name":  "test-pod",
+				"image": "nginx:latest",
+			},
+		},
+	}
+
+	// Call the handler
+	result, err := handler(context.Background(), request)
+
+	// Verify the result
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Contains(t, result.Content[0].(mcp.TextContent).Text, "Pod \"test-pod\" created successfully")
+
+	// Verify that the expected methods were called
+	mockCM.AssertExpectations(t)
+	mockFactory.AssertExpectations(t)
+	mockPod.AssertExpectations(t)
+}
+
+func TestCreatePodHandler_AllParams(t *testing.T) {
+	// Setup mock cluster manager
+	mockCM := testmocks.NewMockClusterManager()
+	mockCM.On("GetCurrentNamespace").Return("default")
+
+	// Define expected parameters
+	expectedParams := kai.PodParams{
+		Name:               "full-pod",
+		Image:              "nginx:latest",
+		Namespace:          "test-namespace",
+		Command:            []interface{}{"/bin/sh", "-c"},
+		Args:               []interface{}{"echo hello; sleep 3600"},
+		ContainerName:      "custom-container",
+		ContainerPort:      "8080/TCP",
+		Labels:             map[string]interface{}{"app": "web", "env": "test"},
+		Env:                map[string]interface{}{"DEBUG": "true"},
+		ImagePullPolicy:    "Always",
+		ImagePullSecrets:   []interface{}{"registry-secret"},
+		RestartPolicy:      "OnFailure",
+		NodeSelector:       map[string]interface{}{"disktype": "ssd"},
+		ServiceAccountName: "custom-sa",
+	}
+
+	// Setup mock pod
+	mockPod := testmocks.NewMockPod(expectedParams)
+	mockPod.On("Create", mock.Anything, mockCM).Return("Pod \"full-pod\" created successfully in namespace \"test-namespace\"", nil)
+
+	// Setup mock factory
+	mockFactory := new(testmocks.MockPodFactory)
+	mockFactory.On("NewPod", expectedParams).Return(mockPod)
+
+	// Create the handler
+	handler := createPodHandler(mockCM, mockFactory)
+
+	// Create a request with all parameters
+	request := mcp.CallToolRequest{
+		Params: struct {
+			Name      string                 `json:"name"`
+			Arguments map[string]interface{} `json:"arguments,omitempty"`
+			Meta      *struct {
+				ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
+			} `json:"_meta,omitempty"`
+		}{
+			Arguments: map[string]interface{}{
+				"name":               "full-pod",
+				"image":              "nginx:latest",
+				"namespace":          "test-namespace",
+				"command":            []interface{}{"/bin/sh", "-c"},
+				"args":               []interface{}{"echo hello; sleep 3600"},
+				"container_name":     "custom-container",
+				"container_port":     "8080/TCP",
+				"labels":             map[string]interface{}{"app": "web", "env": "test"},
+				"env":                map[string]interface{}{"DEBUG": "true"},
+				"image_pull_policy":  "Always",
+				"image_pull_secrets": []interface{}{"registry-secret"},
+				"restart_policy":     "OnFailure",
+				"node_selector":      map[string]interface{}{"disktype": "ssd"},
+				"service_account":    "custom-sa",
+			},
+		},
+	}
+
+	// Call the handler
+	result, err := handler(context.Background(), request)
+
+	// Verify the result
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Contains(t, result.Content[0].(mcp.TextContent).Text, "Pod \"full-pod\" created successfully")
+
+	// Verify that the expected methods were called
+	mockCM.AssertExpectations(t)
+	mockFactory.AssertExpectations(t)
+	mockPod.AssertExpectations(t)
+}
+
+func TestCreatePodHandler_MissingName(t *testing.T) {
+	// Setup mock cluster manager
+	mockCM := testmocks.NewMockClusterManager()
+
+	// Setup mock factory
+	mockFactory := new(testmocks.MockPodFactory)
+
+	// Create the handler
+	handler := createPodHandler(mockCM, mockFactory)
+
+	// Create a request with missing name
+	request := mcp.CallToolRequest{
+		Params: struct {
+			Name      string                 `json:"name"`
+			Arguments map[string]interface{} `json:"arguments,omitempty"`
+			Meta      *struct {
+				ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
+			} `json:"_meta,omitempty"`
+		}{
+			Arguments: map[string]interface{}{
+				"image": "nginx:latest",
+			},
+		},
+	}
+
+	// Call the handler
+	result, err := handler(context.Background(), request)
+
+	// Verify the result
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Contains(t, result.Content[0].(mcp.TextContent).Text, "Required parameter 'name' is missing")
+
+	// Verify that no pod was created
+	mockFactory.AssertNotCalled(t, "NewPod")
+}
+
+func TestCreatePodHandler_MissingImage(t *testing.T) {
+	// Setup mock cluster manager
+	mockCM := testmocks.NewMockClusterManager()
+
+	// Setup mock factory
+	mockFactory := new(testmocks.MockPodFactory)
+
+	// Create the handler
+	handler := createPodHandler(mockCM, mockFactory)
+
+	// Create a request with missing image
+	request := mcp.CallToolRequest{
+		Params: struct {
+			Name      string                 `json:"name"`
+			Arguments map[string]interface{} `json:"arguments,omitempty"`
+			Meta      *struct {
+				ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
+			} `json:"_meta,omitempty"`
+		}{
+			Arguments: map[string]interface{}{
+				"name": "test-pod",
+			},
+		},
+	}
+
+	// Call the handler
+	result, err := handler(context.Background(), request)
+
+	// Verify the result
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Contains(t, result.Content[0].(mcp.TextContent).Text, "Required parameter 'image' is missing")
+
+	// Verify that no pod was created
+	mockFactory.AssertNotCalled(t, "NewPod")
+}
+
+func TestCreatePodHandler_InvalidImagePullPolicy(t *testing.T) {
+	// Setup mock cluster manager
+	mockCM := testmocks.NewMockClusterManager()
+	mockCM.On("GetCurrentNamespace").Return("default")
+
+	// Setup mock factory
+	mockFactory := new(testmocks.MockPodFactory)
+
+	// Create the handler
+	handler := createPodHandler(mockCM, mockFactory)
+
+	// Create a request with invalid image_pull_policy
+	request := mcp.CallToolRequest{
+		Params: struct {
+			Name      string                 `json:"name"`
+			Arguments map[string]interface{} `json:"arguments,omitempty"`
+			Meta      *struct {
+				ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
+			} `json:"_meta,omitempty"`
+		}{
+			Arguments: map[string]interface{}{
+				"name":              "test-pod",
+				"image":             "nginx:latest",
+				"image_pull_policy": "InvalidPolicy",
+			},
+		},
+	}
+
+	// Call the handler
+	result, err := handler(context.Background(), request)
+
+	// Verify the result
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Contains(t, result.Content[0].(mcp.TextContent).Text, "Invalid image_pull_policy")
+
+	// Verify that no pod was created
+	mockFactory.AssertNotCalled(t, "NewPod")
+}
+
+func TestCreatePodHandler_InvalidRestartPolicy(t *testing.T) {
+	// Setup mock cluster manager
+	mockCM := testmocks.NewMockClusterManager()
+	mockCM.On("GetCurrentNamespace").Return("default")
+
+	// Setup mock factory
+	mockFactory := new(testmocks.MockPodFactory)
+
+	// Create the handler
+	handler := createPodHandler(mockCM, mockFactory)
+
+	// Create a request with invalid restart_policy
+	request := mcp.CallToolRequest{
+		Params: struct {
+			Name      string                 `json:"name"`
+			Arguments map[string]interface{} `json:"arguments,omitempty"`
+			Meta      *struct {
+				ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
+			} `json:"_meta,omitempty"`
+		}{
+			Arguments: map[string]interface{}{
+				"name":           "test-pod",
+				"image":          "nginx:latest",
+				"restart_policy": "InvalidPolicy",
+			},
+		},
+	}
+
+	// Call the handler
+	result, err := handler(context.Background(), request)
+
+	// Verify the result
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Contains(t, result.Content[0].(mcp.TextContent).Text, "Invalid restart_policy")
+
+	// Verify that no pod was created
+	mockFactory.AssertNotCalled(t, "NewPod")
+}
+
+func TestCreatePodHandler_InvalidContainerPort(t *testing.T) {
+	// Setup mock cluster manager
+	mockCM := testmocks.NewMockClusterManager()
+	mockCM.On("GetCurrentNamespace").Return("default")
+
+	// Setup mock factory
+	mockFactory := new(testmocks.MockPodFactory)
+
+	// Create the handler
+	handler := createPodHandler(mockCM, mockFactory)
+
+	// Create a request with invalid container_port
+	request := mcp.CallToolRequest{
+		Params: struct {
+			Name      string                 `json:"name"`
+			Arguments map[string]interface{} `json:"arguments,omitempty"`
+			Meta      *struct {
+				ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
+			} `json:"_meta,omitempty"`
+		}{
+			Arguments: map[string]interface{}{
+				"name":           "test-pod",
+				"image":          "nginx:latest",
+				"container_port": "invalid-port",
+			},
+		},
+	}
+
+	// Call the handler
+	result, err := handler(context.Background(), request)
+
+	// Verify the result
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Contains(t, result.Content[0].(mcp.TextContent).Text, "Port must be a number")
+
+	// Verify that no pod was created
+	mockFactory.AssertNotCalled(t, "NewPod")
+}
+
+func TestCreatePodHandler_Error(t *testing.T) {
+	// Setup mock cluster manager
+	mockCM := testmocks.NewMockClusterManager()
+	mockCM.On("GetCurrentNamespace").Return("default")
+
+	// Setup expected parameters
+	expectedParams := kai.PodParams{
+		Name:          "error-pod",
+		Namespace:     "default",
+		Image:         "nginx:latest",
+		ContainerName: "error-pod", // Default to pod name
+		RestartPolicy: "Always",    // Default
+	}
+
+	// Setup mock pod with error
+	mockPod := testmocks.NewMockPod(expectedParams)
+	mockPod.On("Create", mock.Anything, mockCM).Return("", errors.New("failed to create pod: resource quota exceeded"))
+
+	// Setup mock factory
+	mockFactory := new(testmocks.MockPodFactory)
+	mockFactory.On("NewPod", expectedParams).Return(mockPod)
+
+	// Create the handler
+	handler := createPodHandler(mockCM, mockFactory)
+
+	// Create a request
+	request := mcp.CallToolRequest{
+		Params: struct {
+			Name      string                 `json:"name"`
+			Arguments map[string]interface{} `json:"arguments,omitempty"`
+			Meta      *struct {
+				ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
+			} `json:"_meta,omitempty"`
+		}{
+			Arguments: map[string]interface{}{
+				"name":  "error-pod",
+				"image": "nginx:latest",
+			},
+		},
+	}
+
+	// Call the handler
+	result, err := handler(context.Background(), request)
+
+	// Verify the result
+	assert.NoError(t, err)
+	assert.NotNil(t, result)
+	assert.Contains(t, result.Content[0].(mcp.TextContent).Text, "failed to create pod: resource quota exceeded")
+
+	// Verify that the expected methods were called
+	mockCM.AssertExpectations(t)
+	mockFactory.AssertExpectations(t)
+	mockPod.AssertExpectations(t)
+}
+
 func TestListPodsHandler(t *testing.T) {
 	// Setup mock cluster manager
 	mockCM := testmocks.NewMockClusterManager()
 	mockCM.On("GetCurrentNamespace").Return("default")
 
+	expectedParams := kai.PodParams{
+		Namespace: "default",
+	}
 	// Setup mock pod
-	mockPod := testmocks.NewMockPod()
-	mockPod.On("List", mock.Anything, mockCM, int64(0)).Return("Pods in namespace 'default':\n- pod1\n- pod2", nil)
+	mockPod := testmocks.NewMockPod(expectedParams)
+	mockPod.On("List", mock.Anything, mockCM, int64(0), "", "").Return("Pods in namespace 'default':\n- pod1\n- pod2", nil)
 
 	// Setup mock factory
 	mockFactory := new(testmocks.MockPodFactory)
-	mockFactory.On("NewPod", "", "default", "", "", "").Return(mockPod)
+	mockFactory.On("NewPod", expectedParams).Return(mockPod)
 
 	// Create the handler
 	handler := listPodsHandler(mockCM, mockFactory)
@@ -58,13 +442,14 @@ func TestListPodsHandler_AllNamespaces(t *testing.T) {
 	// Setup mock cluster manager
 	mockCM := testmocks.NewMockClusterManager()
 
+	expectedParams := kai.PodParams{}
 	// Setup mock pod
-	mockPod := testmocks.NewMockPod()
-	mockPod.On("List", mock.Anything, mockCM, int64(0)).Return("Pods across all namespaces:\n- namespace1/pod1\n- namespace2/pod2", nil)
+	mockPod := testmocks.NewMockPod(expectedParams)
+	mockPod.On("List", mock.Anything, mockCM, int64(0), "", "").Return("Pods across all namespaces:\n- namespace1/pod1\n- namespace2/pod2", nil)
 
 	// Setup mock factory
 	mockFactory := new(testmocks.MockPodFactory)
-	mockFactory.On("NewPod", "", "", "", "", "").Return(mockPod)
+	mockFactory.On("NewPod", expectedParams).Return(mockPod)
 
 	// Create the handler
 	handler := listPodsHandler(mockCM, mockFactory)
@@ -102,13 +487,16 @@ func TestListPodsHandler_WithLabelSelector(t *testing.T) {
 	mockCM := testmocks.NewMockClusterManager()
 	mockCM.On("GetCurrentNamespace").Return("default")
 
-	// Setup mock pod
-	mockPod := testmocks.NewMockPod()
-	mockPod.On("List", mock.Anything, mockCM, int64(0)).Return("Pods in namespace 'default' with label 'app=nginx':\n- nginx-pod-1\n- nginx-pod-2", nil)
+	expectedParams := kai.PodParams{
+		Namespace: "default",
+	}
+
+	mockPod := testmocks.NewMockPod(expectedParams)
+	mockPod.On("List", mock.Anything, mockCM, int64(0), "app=nginx", "").Return("Pods in namespace 'default' with label 'app=nginx':\n- nginx-pod-1\n- nginx-pod-2", nil)
 
 	// Setup mock factory
 	mockFactory := new(testmocks.MockPodFactory)
-	mockFactory.On("NewPod", "", "default", "", "app=nginx", "").Return(mockPod)
+	mockFactory.On("NewPod", expectedParams).Return(mockPod)
 
 	// Create the handler
 	handler := listPodsHandler(mockCM, mockFactory)
@@ -146,13 +534,16 @@ func TestListPodsHandler_WithLimit(t *testing.T) {
 	mockCM := testmocks.NewMockClusterManager()
 	mockCM.On("GetCurrentNamespace").Return("default")
 
-	// Setup mock pod
-	mockPod := testmocks.NewMockPod()
-	mockPod.On("List", mock.Anything, mockCM, int64(5)).Return("Pods in namespace 'default' (limited to 5):\n- pod1\n- pod2\n- pod3\n- pod4\n- pod5", nil)
+	expectedParams := kai.PodParams{
+		Namespace: "default",
+	}
+
+	mockPod := testmocks.NewMockPod(expectedParams)
+	mockPod.On("List", mock.Anything, mockCM, int64(5), "", "").Return("Pods in namespace 'default' (limited to 5):\n- pod1\n- pod2\n- pod3\n- pod4\n- pod5", nil)
 
 	// Setup mock factory
 	mockFactory := new(testmocks.MockPodFactory)
-	mockFactory.On("NewPod", "", "default", "", "", "").Return(mockPod)
+	mockFactory.On("NewPod", expectedParams).Return(mockPod)
 
 	// Create the handler
 	handler := listPodsHandler(mockCM, mockFactory)
@@ -190,13 +581,14 @@ func TestListPodsHandler_Error(t *testing.T) {
 	mockCM := testmocks.NewMockClusterManager()
 	mockCM.On("GetCurrentNamespace").Return("default")
 
-	// Setup mock pod
-	mockPod := testmocks.NewMockPod()
-	mockPod.On("List", mock.Anything, mockCM, int64(0)).Return("", errors.New("failed to list pods: connection error"))
+	expectedParams := kai.PodParams{
+		Namespace: "default",
+	}
+	mockPod := testmocks.NewMockPod(expectedParams)
+	mockPod.On("List", mock.Anything, mockCM, int64(0), "", "").Return("", errors.New("failed to list pods: connection error"))
 
-	// Setup mock factory
 	mockFactory := new(testmocks.MockPodFactory)
-	mockFactory.On("NewPod", "", "default", "", "", "").Return(mockPod)
+	mockFactory.On("NewPod", expectedParams).Return(mockPod)
 
 	// Create the handler
 	handler := listPodsHandler(mockCM, mockFactory)
@@ -232,13 +624,16 @@ func TestGetPodHandler(t *testing.T) {
 	mockCM := testmocks.NewMockClusterManager()
 	mockCM.On("GetCurrentNamespace").Return("default")
 
-	// Setup mock pod
-	mockPod := testmocks.NewMockPod()
+	expectedParams := kai.PodParams{
+		Name:      "nginx-pod",
+		Namespace: "default",
+	}
+
+	mockPod := testmocks.NewMockPod(expectedParams)
 	mockPod.On("Get", mock.Anything, mockCM).Return("Pod 'nginx-pod' in namespace 'default':\nStatus: Running\nNode: worker-1\nIP: 192.168.1.10", nil)
 
-	// Setup mock factory
 	mockFactory := new(testmocks.MockPodFactory)
-	mockFactory.On("NewPod", "nginx-pod", "default", "", "", "").Return(mockPod)
+	mockFactory.On("NewPod", expectedParams).Return(mockPod)
 
 	// Create the handler
 	handler := getPodHandler(mockCM, mockFactory)
@@ -348,13 +743,17 @@ func TestGetPodHandler_Error(t *testing.T) {
 	mockCM := testmocks.NewMockClusterManager()
 	mockCM.On("GetCurrentNamespace").Return("default")
 
-	// Setup mock pod
-	mockPod := testmocks.NewMockPod()
+	expectedParams := kai.PodParams{
+		Name:      "non-existent-pod",
+		Namespace: "default",
+	}
+
+	mockPod := testmocks.NewMockPod(expectedParams)
 	mockPod.On("Get", mock.Anything, mockCM).Return("", errors.New("pod 'non-existent-pod' not found in namespace 'default'"))
 
 	// Setup mock factory
 	mockFactory := new(testmocks.MockPodFactory)
-	mockFactory.On("NewPod", "non-existent-pod", "default", "", "", "").Return(mockPod)
+	mockFactory.On("NewPod", expectedParams).Return(mockPod)
 
 	// Create the handler
 	handler := getPodHandler(mockCM, mockFactory)
@@ -392,13 +791,16 @@ func TestDeletePodHandler(t *testing.T) {
 	mockCM := testmocks.NewMockClusterManager()
 	mockCM.On("GetCurrentNamespace").Return("default")
 
-	// Setup mock pod
-	mockPod := testmocks.NewMockPod()
+	expectedParams := kai.PodParams{
+		Name:      "nginx-pod",
+		Namespace: "default",
+	}
+
+	mockPod := testmocks.NewMockPod(expectedParams)
 	mockPod.On("Delete", mock.Anything, mockCM, false).Return("Successfully delete pod \"nginx-pod\" in namespace \"default\"", nil)
 
-	// Setup mock factory
 	mockFactory := new(testmocks.MockPodFactory)
-	mockFactory.On("NewPod", "nginx-pod", "default", "", "", "").Return(mockPod)
+	mockFactory.On("NewPod", expectedParams).Return(mockPod)
 
 	// Create the handler
 	handler := deletePodHandler(mockCM, mockFactory)
@@ -436,13 +838,16 @@ func TestDeletePodHandler_WithForce(t *testing.T) {
 	mockCM := testmocks.NewMockClusterManager()
 	mockCM.On("GetCurrentNamespace").Return("default")
 
-	// Setup mock pod
-	mockPod := testmocks.NewMockPod()
+	expectedParams := kai.PodParams{
+		Name:      "nginx-pod",
+		Namespace: "default",
+	}
+
+	mockPod := testmocks.NewMockPod(expectedParams)
 	mockPod.On("Delete", mock.Anything, mockCM, true).Return("Successfully delete pod \"nginx-pod\" in namespace \"default\"", nil)
 
-	// Setup mock factory
 	mockFactory := new(testmocks.MockPodFactory)
-	mockFactory.On("NewPod", "nginx-pod", "default", "", "", "").Return(mockPod)
+	mockFactory.On("NewPod", expectedParams).Return(mockPod)
 
 	// Create the handler
 	handler := deletePodHandler(mockCM, mockFactory)
@@ -516,13 +921,17 @@ func TestDeletePodHandler_Error(t *testing.T) {
 	mockCM := testmocks.NewMockClusterManager()
 	mockCM.On("GetCurrentNamespace").Return("default")
 
-	// Setup mock pod
-	mockPod := testmocks.NewMockPod()
+	expectedParams := kai.PodParams{
+		Name:      "non-existent-pod",
+		Namespace: "default",
+	}
+
+	mockPod := testmocks.NewMockPod(expectedParams)
 	mockPod.On("Delete", mock.Anything, mockCM, false).Return("", errors.New("failed to delete pod: not found"))
 
 	// Setup mock factory
 	mockFactory := new(testmocks.MockPodFactory)
-	mockFactory.On("NewPod", "non-existent-pod", "default", "", "", "").Return(mockPod)
+	mockFactory.On("NewPod", expectedParams).Return(mockPod)
 
 	// Create the handler
 	handler := deletePodHandler(mockCM, mockFactory)
@@ -560,14 +969,17 @@ func TestStreamLogsHandler(t *testing.T) {
 	mockCM := testmocks.NewMockClusterManager()
 	mockCM.On("GetCurrentNamespace").Return("default")
 
-	// Setup mock pod
-	mockPod := testmocks.NewMockPod()
+	expectedParams := kai.PodParams{
+		Name:      "nginx-pod",
+		Namespace: "default",
+	}
+
+	mockPod := testmocks.NewMockPod(expectedParams)
 	mockPod.On("StreamLogs", mock.Anything, mockCM, int64(0), false, (*time.Duration)(nil)).
 		Return("Logs from container 'nginx' in pod 'default/nginx-pod':\n2023-05-01T12:00:00Z INFO starting nginx\n2023-05-01T12:00:01Z INFO nginx started", nil)
 
-	// Setup mock factory
 	mockFactory := new(testmocks.MockPodFactory)
-	mockFactory.On("NewPod", "nginx-pod", "default", "", "", "").Return(mockPod)
+	mockFactory.On("NewPod", expectedParams).Return(mockPod)
 
 	// Create the handler
 	handler := streamLogsHandler(mockCM, mockFactory)
@@ -605,14 +1017,18 @@ func TestStreamLogsHandler_WithContainer(t *testing.T) {
 	mockCM := testmocks.NewMockClusterManager()
 	mockCM.On("GetCurrentNamespace").Return("default")
 
-	// Setup mock pod
-	mockPod := testmocks.NewMockPod()
+	expectedParams := kai.PodParams{
+		Name:          "nginx-pod",
+		Namespace:     "default",
+		ContainerName: "sidecar",
+	}
+
+	mockPod := testmocks.NewMockPod(expectedParams)
 	mockPod.On("StreamLogs", mock.Anything, mockCM, int64(0), false, (*time.Duration)(nil)).
 		Return("Logs from container 'sidecar' in pod 'default/nginx-pod':\n2023-05-01T12:00:00Z INFO starting sidecar\n2023-05-01T12:00:01Z INFO sidecar started", nil)
 
-	// Setup mock factory
 	mockFactory := new(testmocks.MockPodFactory)
-	mockFactory.On("NewPod", "nginx-pod", "default", "sidecar", "", "").Return(mockPod)
+	mockFactory.On("NewPod", expectedParams).Return(mockPod)
 
 	// Create the handler
 	handler := streamLogsHandler(mockCM, mockFactory)
@@ -726,7 +1142,7 @@ func TestRegisterPodTools(t *testing.T) {
 	mockCM := testmocks.NewMockClusterManager()
 
 	// Expect tool registrations - use the correct type match
-	mockServer.On("AddTool", mock.AnythingOfType("mcp.Tool"), mock.AnythingOfType("server.ToolHandlerFunc")).Return().Times(4)
+	mockServer.On("AddTool", mock.AnythingOfType("mcp.Tool"), mock.AnythingOfType("server.ToolHandlerFunc")).Return().Times(5)
 
 	// Call the function
 	RegisterPodTools(mockServer, mockCM)
@@ -742,7 +1158,7 @@ func TestRegisterPodToolsWithFactory(t *testing.T) {
 	mockFactory := new(testmocks.MockPodFactory)
 
 	// Expect tool registrations - use the correct type match
-	mockServer.On("AddTool", mock.AnythingOfType("mcp.Tool"), mock.AnythingOfType("server.ToolHandlerFunc")).Return().Times(4)
+	mockServer.On("AddTool", mock.AnythingOfType("mcp.Tool"), mock.AnythingOfType("server.ToolHandlerFunc")).Return().Times(5)
 
 	// Call the function
 	RegisterPodToolsWithFactory(mockServer, mockCM, mockFactory)

@@ -11,18 +11,27 @@ import (
 )
 
 type PodFactory interface {
-	NewPod(name, namespace, containerName, labelSelector, fieldSelector string) kai.PodOperator
+	NewPod(params kai.PodParams) kai.PodOperator
 }
 
 type DefaultPodFactory struct{}
 
-func (f *DefaultPodFactory) NewPod(name, namespace, containerName, labelSelector, fieldSelector string) kai.PodOperator {
+func (f *DefaultPodFactory) NewPod(params kai.PodParams) kai.PodOperator {
 	return &cluster.Pod{
-		Name:          name,
-		Namespace:     namespace,
-		ContainerName: containerName,
-		LabelSelector: labelSelector,
-		FieldSelector: fieldSelector,
+		Name:             params.Name,
+		Image:            params.Image,
+		Namespace:        params.Namespace,
+		ContainerName:    params.ContainerName,
+		ContainerPort:    params.ContainerPort,
+		ImagePullPolicy:  params.ImagePullPolicy,
+		ImagePullSecrets: params.ImagePullSecrets,
+		RestartPolicy:    params.RestartPolicy,
+		ServiceAccount:   params.ServiceAccountName,
+		Command:          params.Command,
+		Args:             params.Args,
+		NodeSelector:     params.NodeSelector,
+		Labels:           params.Labels,
+		Env:              params.Env,
 	}
 }
 
@@ -32,6 +41,56 @@ func RegisterPodTools(s kai.ServerInterface, cm kai.ClusterManager) {
 }
 
 func RegisterPodToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, factory PodFactory) {
+	createPodTool := mcp.NewTool("create_pod",
+		mcp.WithDescription("Create a new pod in the current namespace"),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Name of the pod"),
+		),
+		mcp.WithString("namespace",
+			mcp.Description("Namespace for the pod (defaults to current namespace)"),
+		),
+		mcp.WithString("image",
+			mcp.Required(),
+			mcp.Description("Container image to use for the pod"),
+		),
+		mcp.WithArray("command",
+			mcp.Description("Command to run in the container"),
+		),
+		mcp.WithArray("args",
+			mcp.Description("Arguments to the command"),
+		),
+		mcp.WithObject("labels",
+			mcp.Description("Labels to apply to the pod"),
+		),
+		mcp.WithString("container_name",
+			mcp.Description("Name of the container (defaults to pod name)"),
+		),
+		mcp.WithString("container_port",
+			mcp.Description("Container port to expose (format: 'port' or 'port/protocol')"),
+		),
+		mcp.WithObject("env",
+			mcp.Description("Environment variables as key-value pairs"),
+		),
+		mcp.WithArray("image_pull_secrets",
+			mcp.Description("Names of image pull secrets"),
+		),
+		mcp.WithString("image_pull_policy",
+			mcp.Description("Image pull policy (Always, IfNotPresent, Never)"),
+		),
+		mcp.WithString("restart_policy",
+			mcp.Description("Restart policy for the pod (Always, OnFailure, Never)"),
+		),
+		mcp.WithObject("node_selector",
+			mcp.Description("Node selector as key-value pairs"),
+		),
+		mcp.WithString("service_account",
+			mcp.Description("Service account to use for the pod"),
+		),
+	)
+
+	s.AddTool(createPodTool, createPodHandler(cm, factory))
+
 	listPodTools := mcp.NewTool("list_pods",
 		mcp.WithDescription("List pods in the current namespace or across all namespaces"),
 		mcp.WithBoolean("all_namespaces",
@@ -106,6 +165,131 @@ func RegisterPodToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, f
 	s.AddTool(streamLogsTool, streamLogsHandler(cm, factory))
 }
 
+// createPodHandler handles the create_pod tool
+func createPodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		// Initialize params with default values
+		params := kai.PodParams{
+			RestartPolicy: "Always", // Default restart policy
+		}
+
+		// Validate required parameters
+		nameArg, ok := request.Params.Arguments["name"]
+		if !ok || nameArg == nil {
+			return mcp.NewToolResultText("Required parameter 'name' is missing"), nil
+		}
+
+		name, ok := nameArg.(string)
+		if !ok || name == "" {
+			return mcp.NewToolResultText("Parameter 'name' must be a non-empty string"), nil
+		}
+
+		imageArg, ok := request.Params.Arguments["image"]
+		if !ok || imageArg == nil {
+			return mcp.NewToolResultText("Required parameter 'image' is missing"), nil
+		}
+
+		image, ok := imageArg.(string)
+		if !ok || image == "" {
+			return mcp.NewToolResultText("Parameter 'image' must be a non-empty string"), nil
+		}
+
+		// Get namespace (optional with default)
+		namespace := cm.GetCurrentNamespace()
+		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+			namespace = namespaceArg
+		}
+
+		// Set required parameters
+		params.Name = name
+		params.Image = image
+		params.Namespace = namespace
+
+		// Process optional parameters
+		if commandArg, ok := request.Params.Arguments["command"].([]interface{}); ok && len(commandArg) > 0 {
+			params.Command = make([]interface{}, len(commandArg))
+			for i, cmd := range commandArg {
+				if cmdStr, ok := cmd.(string); ok {
+					params.Command[i] = cmdStr
+				}
+			}
+		}
+
+		if argsArg, ok := request.Params.Arguments["args"].([]interface{}); ok && len(argsArg) > 0 {
+			params.Args = make([]interface{}, len(argsArg))
+			for i, arg := range argsArg {
+				if argStr, ok := arg.(string); ok {
+					params.Args[i] = argStr
+				}
+			}
+		}
+
+		if labelsArg, ok := request.Params.Arguments["labels"].(map[string]interface{}); ok {
+			params.Labels = labelsArg
+		}
+
+		if containerNameArg, ok := request.Params.Arguments["container_name"].(string); ok && containerNameArg != "" {
+			params.ContainerName = containerNameArg
+		} else {
+			// Default container name to pod name if not specified
+			params.ContainerName = name
+		}
+
+		if containerPortArg, ok := request.Params.Arguments["container_port"].(string); ok && containerPortArg != "" {
+			if valid, errMsg := validateContainerPort(containerPortArg); valid {
+				params.ContainerPort = containerPortArg
+			} else {
+				return mcp.NewToolResultText(errMsg), nil
+			}
+		}
+
+		if envArg, ok := request.Params.Arguments["env"].(map[string]interface{}); ok {
+			params.Env = envArg
+		}
+
+		if imagePullPolicyArg, ok := request.Params.Arguments["image_pull_policy"].(string); ok && imagePullPolicyArg != "" {
+			validPolicies := map[string]bool{"Always": true, "IfNotPresent": true, "Never": true}
+			if validPolicies[imagePullPolicyArg] {
+				params.ImagePullPolicy = imagePullPolicyArg
+			} else {
+				return mcp.NewToolResultText("Invalid image_pull_policy. Must be one of: Always, IfNotPresent, Never"), nil
+			}
+		}
+
+		if imagePullSecretsArg, ok := request.Params.Arguments["image_pull_secrets"].([]interface{}); ok {
+			params.ImagePullSecrets = imagePullSecretsArg
+		}
+
+		if restartPolicyArg, ok := request.Params.Arguments["restart_policy"].(string); ok && restartPolicyArg != "" {
+			validPolicies := map[string]bool{"Always": true, "OnFailure": true, "Never": true}
+			if validPolicies[restartPolicyArg] {
+				params.RestartPolicy = restartPolicyArg
+			} else {
+				return mcp.NewToolResultText("Invalid restart_policy. Must be one of: Always, OnFailure, Never"), nil
+			}
+		}
+
+		if nodeSelectorArg, ok := request.Params.Arguments["node_selector"].(map[string]interface{}); ok {
+			params.NodeSelector = nodeSelectorArg
+		}
+
+		if serviceAccountArg, ok := request.Params.Arguments["service_account"].(string); ok && serviceAccountArg != "" {
+			params.ServiceAccountName = serviceAccountArg
+		}
+
+		// Create pod using the factory
+		pod := factory.NewPod(params)
+
+		// Create the pod in Kubernetes
+		resultText, err := pod.Create(ctx, cm)
+		if err != nil {
+			return mcp.NewToolResultText(err.Error()), nil
+		}
+
+		return mcp.NewToolResultText(resultText), nil
+	}
+}
+
 func listPodsHandler(cm kai.ClusterManager, factory PodFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var allNamespaces bool
@@ -138,9 +322,12 @@ func listPodsHandler(cm kai.ClusterManager, factory PodFactory) func(ctx context
 			limit = int64(limitArg)
 		}
 
-		pod := factory.NewPod("", namespace, "", labelSelector, fieldSelector)
+		params := kai.PodParams{
+			Namespace: namespace,
+		}
+		pod := factory.NewPod(params)
 
-		resultText, err := pod.List(ctx, cm, limit)
+		resultText, err := pod.List(ctx, cm, limit, labelSelector, fieldSelector)
 		if err != nil {
 			return mcp.NewToolResultText(err.Error()), nil
 		}
@@ -166,7 +353,12 @@ func getPodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx context.C
 			namespace = namespaceArg
 		}
 
-		pod := factory.NewPod(name, namespace, "", "", "")
+		params := kai.PodParams{
+			Name:      name,
+			Namespace: namespace,
+		}
+
+		pod := factory.NewPod(params)
 
 		resultText, err := pod.Get(ctx, cm)
 		if err != nil {
@@ -200,7 +392,12 @@ func deletePodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx contex
 			force = forceArg
 		}
 
-		pod := factory.NewPod(name, namespace, "", "", "")
+		params := kai.PodParams{
+			Name:      name,
+			Namespace: namespace,
+		}
+
+		pod := factory.NewPod(params)
 
 		resultText, err := pod.Delete(ctx, cm, force)
 		if err != nil {
@@ -253,7 +450,13 @@ func streamLogsHandler(cm kai.ClusterManager, factory PodFactory) func(ctx conte
 			sinceDuration = &duration
 		}
 
-		pod := factory.NewPod(podName, namespace, containerName, "", "")
+		params := kai.PodParams{
+			Name:          podName,
+			Namespace:     namespace,
+			ContainerName: containerName,
+		}
+
+		pod := factory.NewPod(params)
 
 		resultText, err := pod.StreamLogs(ctx, cm, tailLines, previous, sinceDuration)
 
