@@ -1,14 +1,34 @@
 package kai
 
-// DeploymentParams for creation of dynamic deployments
+// DeploymentParams holds all possible deployment configuration parameters
 type DeploymentParams struct {
-	Name,
-	Image,
-	Namespace,
-	ContainerPort,
-	ImagePullPolicy string
-	ImagePullSecrets []interface{}
-	Labels           map[string]interface{}
-	Env              map[string]interface{}
+	Name             string
+	Namespace        string
+	Image            string
 	Replicas         float64
+	Labels           map[string]interface{}
+	ContainerPort    string
+	Env              map[string]interface{}
+	ImagePullPolicy  string
+	ImagePullSecrets []interface{}
+}
+
+// PodParams holds all possible pod configuration parameters
+type PodParams struct {
+	Name               string
+	Namespace          string
+	Image              string
+	Command            []string
+	Args               []string
+	Labels             map[string]interface{}
+	ContainerName      string
+	ContainerPort      string
+	Env                map[string]interface{}
+	ImagePullPolicy    string
+	ImagePullSecrets   []interface{}
+	RestartPolicy      string
+	NodeSelector       map[string]interface{}
+	ServiceAccountName string
+	Volumes            []interface{}
+	VolumeMounts       []interface{}
 }

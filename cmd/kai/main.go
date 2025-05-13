@@ -9,7 +9,7 @@ import (
 	"syscall"
 
 	"github.com/basebandit/kai"
-	"github.com/basebandit/kai/clustermanager"
+	"github.com/basebandit/kai/cluster"
 	"github.com/basebandit/kai/tools"
 )
 
@@ -17,7 +17,7 @@ func main() {
 	kubeconfig := filepath.Join(
 		os.Getenv("HOME"), ".kube", "config",
 	)
-	cm := clustermanager.New()
+	cm := cluster.New()
 
 	err := cm.LoadKubeConfig("local", kubeconfig)
 	if err != nil {
@@ -48,7 +48,7 @@ func main() {
 	fmt.Fprintln(os.Stdout, "Server stopped")
 }
 
-func registerAllTools(s *kai.Server, cm *clustermanager.Cluster) {
+func registerAllTools(s *kai.Server, cm *cluster.Cluster) {
 	tools.RegisterPodTools(s, cm)
 	tools.RegisterDeploymentTools(s, cm)
 }

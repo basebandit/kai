@@ -1,4 +1,4 @@
-package clustermanager
+package cluster
 
 import (
 	"context"
@@ -8,12 +8,21 @@ import (
 	"strings"
 	"time"
 
+	"github.com/basebandit/kai"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
 )
 
-func (cm *Cluster) GetPod(ctx context.Context, name, namespace string) (string, error) {
+type Pod struct {
+	Name          string
+	Namespace     string
+	ContainerName string
+	LabelSelector string
+	FieldSelector string
+}
+
+func (p *Pod) Get(ctx context.Context, cm kai.ClusterManager) (string, error) {
 	var result string
 	client, err := cm.GetCurrentClient()
 	if err != nil {
@@ -21,9 +30,9 @@ func (cm *Cluster) GetPod(ctx context.Context, name, namespace string) (string, 
 	}
 
 	// Verify the namespace exists
-	_, err = client.CoreV1().Namespaces().Get(ctx, namespace, metav1.GetOptions{})
+	_, err = client.CoreV1().Namespaces().Get(ctx, p.Namespace, metav1.GetOptions{})
 	if err != nil {
-		return result, fmt.Errorf("namespace '%s' not found: %v", namespace, err)
+		return result, fmt.Errorf("namespace '%s' not found: %v", p.Namespace, err)
 	}
 
 	// Use retry for potential transient issues
@@ -33,21 +42,21 @@ func (cm *Cluster) GetPod(ctx context.Context, name, namespace string) (string, 
 		return !strings.Contains(err.Error(), "not found")
 	}, func() error {
 		var getErr error
-		pod, getErr = client.CoreV1().Pods(namespace).Get(ctx, name, metav1.GetOptions{})
+		pod, getErr = client.CoreV1().Pods(p.Namespace).Get(ctx, p.Name, metav1.GetOptions{})
 		return getErr
 	})
 
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			return result, fmt.Errorf("pod '%s' not found in namespace '%s'", name, namespace)
+			return result, fmt.Errorf("pod '%s' not found in namespace '%s'", p.Name, p.Namespace)
 		}
-		return result, fmt.Errorf("failed to get pod '%s' in namespace '%s': %v", name, namespace, err)
+		return result, fmt.Errorf("failed to get pod '%s' in namespace '%s': %v", p.Name, p.Namespace, err)
 	}
 
 	return formatPod(pod), nil
 }
 
-func (cm *Cluster) ListPods(ctx context.Context, limit int64, namespace, labelSelector, fieldSelector string) (string, error) {
+func (p *Pod) List(ctx context.Context, cm kai.ClusterManager, limit int64) (string, error) {
 	var result string
 	client, err := cm.GetCurrentClient()
 	if err != nil {
@@ -56,8 +65,8 @@ func (cm *Cluster) ListPods(ctx context.Context, limit int64, namespace, labelSe
 
 	// Create list options
 	listOptions := metav1.ListOptions{
-		LabelSelector: labelSelector,
-		FieldSelector: fieldSelector,
+		LabelSelector: p.LabelSelector,
+		FieldSelector: p.FieldSelector,
 	}
 
 	if limit > 0 {
@@ -72,7 +81,7 @@ func (cm *Cluster) ListPods(ctx context.Context, limit int64, namespace, labelSe
 	var listErr error
 	var allNamespaces bool
 
-	if namespace == "" {
+	if p.Namespace == "" {
 		allNamespaces = true
 	}
 
@@ -81,13 +90,13 @@ func (cm *Cluster) ListPods(ctx context.Context, limit int64, namespace, labelSe
 		resultText = "Pods across all namespaces:\n"
 	} else {
 		// First verify the namespace exists
-		_, err = client.CoreV1().Namespaces().Get(timeoutCtx, namespace, metav1.GetOptions{})
+		_, err = client.CoreV1().Namespaces().Get(timeoutCtx, p.Namespace, metav1.GetOptions{})
 		if err != nil {
-			return result, fmt.Errorf("namespace %q not found: %v", namespace, err)
+			return result, fmt.Errorf("namespace %q not found: %v", p.Namespace, err)
 		}
 
-		pods, listErr = client.CoreV1().Pods(namespace).List(timeoutCtx, listOptions)
-		resultText = fmt.Sprintf("Pods in namespace '%s':\n", namespace)
+		pods, listErr = client.CoreV1().Pods(p.Namespace).List(timeoutCtx, listOptions)
+		resultText = fmt.Sprintf("Pods in namespace '%s':\n", p.Namespace)
 	}
 
 	if listErr != nil {
@@ -95,7 +104,7 @@ func (cm *Cluster) ListPods(ctx context.Context, limit int64, namespace, labelSe
 	}
 
 	if len(pods.Items) == 0 {
-		if labelSelector != "" || fieldSelector != "" {
+		if p.LabelSelector != "" || p.FieldSelector != "" {
 			return result, errors.New("no pods found matching the specified selectors")
 		}
 		return result, errors.New("no pods found")
@@ -104,7 +113,7 @@ func (cm *Cluster) ListPods(ctx context.Context, limit int64, namespace, labelSe
 	return formatPodList(pods, allNamespaces, limit, resultText), nil
 }
 
-func (cm *Cluster) DeletePod(ctx context.Context, name, namespace string, force bool) (string, error) {
+func (p *Pod) Delete(ctx context.Context, cm kai.ClusterManager, force bool) (string, error) {
 	var result string
 
 	client, err := cm.GetCurrentClient()
@@ -116,15 +125,15 @@ func (cm *Cluster) DeletePod(ctx context.Context, name, namespace string, force 
 	defer cancel()
 
 	// verify namespace exists
-	_, err = client.CoreV1().Namespaces().Get(timeoutCtx, namespace, metav1.GetOptions{})
+	_, err = client.CoreV1().Namespaces().Get(timeoutCtx, p.Namespace, metav1.GetOptions{})
 	if err != nil {
-		return result, fmt.Errorf("namespace %q not found: %v", namespace, err)
+		return result, fmt.Errorf("namespace %q not found: %v", p.Namespace, err)
 	}
 
 	// verify the pod exists
-	_, err = client.CoreV1().Pods(namespace).Get(timeoutCtx, name, metav1.GetOptions{})
+	_, err = client.CoreV1().Pods(p.Namespace).Get(timeoutCtx, p.Name, metav1.GetOptions{})
 	if err != nil {
-		return result, fmt.Errorf("pod %q not found in namespace %q", name, namespace)
+		return result, fmt.Errorf("pod %q not found in namespace %q", p.Name, p.Namespace)
 	}
 
 	deleteOptions := metav1.DeleteOptions{}
@@ -133,15 +142,15 @@ func (cm *Cluster) DeletePod(ctx context.Context, name, namespace string, force 
 		deleteOptions.GracePeriodSeconds = &gracePeriod
 	}
 
-	err = client.CoreV1().Pods(namespace).Delete(timeoutCtx, name, deleteOptions)
+	err = client.CoreV1().Pods(p.Namespace).Delete(timeoutCtx, p.Name, deleteOptions)
 	if err != nil {
-		return result, fmt.Errorf("failed to delete pod %q in namespace %q: %v", name, namespace, err)
+		return result, fmt.Errorf("failed to delete pod %q in namespace %q: %v", p.Name, p.Namespace, err)
 	}
 
-	return fmt.Sprintf("Successfully delete pod %q in namespace %q", name, namespace), nil
+	return fmt.Sprintf("Successfully delete pod %q in namespace %q", p.Name, p.Namespace), nil
 }
 
-func (cm *Cluster) StreamPodLogs(ctx context.Context, tailLines int64, previous bool, since *time.Duration, podName, containerName, namespace string) (string, error) {
+func (p *Pod) StreamLogs(ctx context.Context, cm kai.ClusterManager, tailLines int64, previous bool, since *time.Duration) (string, error) {
 	var result string
 
 	client, err := cm.GetCurrentClient()
@@ -153,39 +162,39 @@ func (cm *Cluster) StreamPodLogs(ctx context.Context, tailLines int64, previous 
 	defer cancel()
 
 	//verify the namespace exists
-	_, err = client.CoreV1().Namespaces().Get(timeoutCtx, namespace, metav1.GetOptions{})
+	_, err = client.CoreV1().Namespaces().Get(timeoutCtx, p.Namespace, metav1.GetOptions{})
 	if err != nil {
-		return result, fmt.Errorf("namespace %q not found: %v", namespace, err)
+		return result, fmt.Errorf("namespace %q not found: %v", p.Namespace, err)
 	}
 
 	// Get the pod to find the container name if not specified and verify pod exists
-	pod, err := client.CoreV1().Pods(namespace).Get(timeoutCtx, podName, metav1.GetOptions{})
+	pod, err := client.CoreV1().Pods(p.Namespace).Get(timeoutCtx, p.Name, metav1.GetOptions{})
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
-			return result, fmt.Errorf("pod '%s' not found in namespace '%s'", podName, namespace)
+			return result, fmt.Errorf("pod '%s' not found in namespace '%s'", p.Name, p.Namespace)
 		}
-		return result, fmt.Errorf("failed to get pod '%s' in namespace '%s': %v", podName, namespace, err)
+		return result, fmt.Errorf("failed to get pod '%s' in namespace '%s': %v", p.Name, p.Namespace, err)
 	}
 
 	// Check if pod is running or has run before
 	if pod.Status.Phase != corev1.PodRunning && pod.Status.Phase != corev1.PodSucceeded && !previous {
 		return result, fmt.Errorf("pod '%s' is in '%s' state. Logs may not be available. Use previous=true for crashed containers",
-			podName, pod.Status.Phase)
+			p.Name, pod.Status.Phase)
 	}
 
 	if len(pod.Spec.Containers) == 0 {
-		return result, fmt.Errorf("no containers found in pod '%s'", podName)
+		return result, fmt.Errorf("no containers found in pod '%s'", p.Name)
 	}
 
 	// Set default container if not specified
-	if containerName == "" {
-		containerName = pod.Spec.Containers[0].Name
+	if p.ContainerName == "" {
+		p.ContainerName = pod.Spec.Containers[0].Name
 	}
 
 	// Verify the container exists in the pod
 	containerExists := false
 	for _, container := range pod.Spec.Containers {
-		if container.Name == containerName {
+		if container.Name == p.ContainerName {
 			containerExists = true
 			break
 		}
@@ -199,12 +208,12 @@ func (cm *Cluster) StreamPodLogs(ctx context.Context, tailLines int64, previous 
 		}
 
 		return result, fmt.Errorf("container '%s' not found in pod '%s'. Available containers: %s",
-			containerName, podName, strings.Join(availableContainers, ", "))
+			p.ContainerName, p.Name, strings.Join(availableContainers, ", "))
 	}
 
 	// Configure log options
 	logOptions := &corev1.PodLogOptions{
-		Container: containerName,
+		Container: p.ContainerName,
 		Previous:  previous,
 		Follow:    false, // We don't want to follow logs in this context
 	}
@@ -223,7 +232,7 @@ func (cm *Cluster) StreamPodLogs(ctx context.Context, tailLines int64, previous 
 		// Retry on network errors
 		return !strings.Contains(err.Error(), "not found")
 	}, func() error {
-		logsReq := client.CoreV1().Pods(namespace).GetLogs(podName, logOptions)
+		logsReq := client.CoreV1().Pods(p.Namespace).GetLogs(p.Name, logOptions)
 		var streamErr error
 		logsStream, streamErr = logsReq.Stream(timeoutCtx)
 		return streamErr
@@ -243,9 +252,9 @@ func (cm *Cluster) StreamPodLogs(ctx context.Context, tailLines int64, previous 
 
 	if len(logs) == 0 {
 		if previous {
-			return result, fmt.Errorf("no previous logs found for container '%s' in pod '%s'", containerName, podName)
+			return result, fmt.Errorf("no previous logs found for container '%s' in pod '%s'", p.ContainerName, p.Name)
 		}
-		return result, fmt.Errorf("no logs found for container '%s' in pod '%s'", containerName, podName)
+		return result, fmt.Errorf("no logs found for container '%s' in pod '%s'", p.ContainerName, p.Name)
 	}
 
 	// Build the result
@@ -260,7 +269,7 @@ func (cm *Cluster) StreamPodLogs(ctx context.Context, tailLines int64, previous 
 		options = append(options, fmt.Sprintf("since=%s", since.String()))
 	}
 
-	result = fmt.Sprintf("Logs from container '%s' in pod '%s/%s'", containerName, namespace, podName)
+	result = fmt.Sprintf("Logs from container '%s' in pod '%s/%s'", p.ContainerName, p.Namespace, p.Name)
 	if len(options) > 0 {
 		result += fmt.Sprintf(" (%s)", strings.Join(options, ", "))
 	}
