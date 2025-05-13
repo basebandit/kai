@@ -14,19 +14,58 @@ type MockPodFactory struct {
 }
 
 // NewPod returns a mocked PodOperator
-func (m *MockPodFactory) NewPod(name, namespace, containerName, labelSelector, fieldSelector string) kai.PodOperator {
-	args := m.Called(name, namespace, containerName, labelSelector, fieldSelector)
+func (m *MockPodFactory) NewPod(params kai.PodParams) kai.PodOperator {
+	args := m.Called(params)
 	return args.Get(0).(kai.PodOperator)
 }
 
 // MockPod implements the PodOperator interface for testing
 type MockPod struct {
 	mock.Mock
+	Name               string
+	Namespace          string
+	Image              string
+	Command            []interface{}
+	Args               []interface{}
+	Labels             map[string]interface{}
+	ContainerName      string
+	ContainerPort      string
+	Env                map[string]interface{}
+	ImagePullPolicy    string
+	ImagePullSecrets   []interface{}
+	RestartPolicy      string
+	NodeSelector       map[string]interface{}
+	ServiceAccountName string
+	Volumes            []interface{}
+	VolumeMounts       []interface{}
 }
 
 // NewMockPod creates a new MockPod instance
-func NewMockPod() *MockPod {
-	return &MockPod{}
+func NewMockPod(params kai.PodParams) *MockPod {
+	return &MockPod{
+		Name:               params.Name,
+		Namespace:          params.Namespace,
+		Image:              params.Image,
+		Command:            params.Command,
+		Args:               params.Args,
+		Labels:             params.Labels,
+		ContainerName:      params.ContainerName,
+		ContainerPort:      params.ContainerPort,
+		Env:                params.Env,
+		ImagePullPolicy:    params.ImagePullPolicy,
+		ImagePullSecrets:   params.ImagePullSecrets,
+		RestartPolicy:      params.RestartPolicy,
+		NodeSelector:       params.NodeSelector,
+		ServiceAccountName: params.ServiceAccountName,
+		Volumes:            params.Volumes,
+		VolumeMounts:       params.VolumeMounts,
+	}
+}
+
+// Create mocks the Create method
+func (m *MockPod) Create(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	args := m.Called(ctx, cm)
+	return args.String(0), args.Error(1)
 }
 
 // Get mocks the Get method
@@ -36,8 +75,8 @@ func (m *MockPod) Get(ctx context.Context, cm kai.ClusterManager) (string, error
 }
 
 // List mocks the List method
-func (m *MockPod) List(ctx context.Context, cm kai.ClusterManager, limit int64) (string, error) {
-	args := m.Called(ctx, cm, limit)
+func (m *MockPod) List(ctx context.Context, cm kai.ClusterManager, limit int64, labelSelector, fieldSelector string) (string, error) {
+	args := m.Called(ctx, cm, limit, labelSelector, fieldSelector)
 	return args.String(0), args.Error(1)
 }
 
