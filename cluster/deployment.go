@@ -1,4 +1,4 @@
-package clustermanager
+package cluster
 
 import (
 	"context"
@@ -12,43 +12,62 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-func (cm *Cluster) CreateDeployment(ctx context.Context, deploymentParams kai.DeploymentParams) (string, error) {
+// Deployment represents a Kubernetes deployment configuration
+type Deployment struct {
+	Name             string
+	Namespace        string
+	Image            string
+	Replicas         float64
+	Labels           map[string]interface{}
+	ContainerPort    string
+	Env              map[string]interface{}
+	ImagePullPolicy  string
+	ImagePullSecrets []interface{}
+}
 
+// Create creates a new deployment in the cluster
+func (d *Deployment) Create(ctx context.Context, cm kai.ClusterManager) (string, error) {
 	var result string
 
+	// Add default app label if no labels provided
 	labels := map[string]interface{}{
-		"app": deploymentParams.Name,
+		"app": d.Name,
 	}
 
-	if deploymentParams.Labels != nil {
-		for k, v := range deploymentParams.Labels {
+	if d.Labels != nil {
+		for k, v := range d.Labels {
 			labels[k] = v
 		}
 	}
+
 	// Container definition
 	container := map[string]interface{}{
-		"name":  deploymentParams.Name,
-		"image": deploymentParams.Image,
+		"name":  d.Name,
+		"image": d.Image,
 	}
 
-	parts := strings.Split(deploymentParams.ContainerPort, "/")
-	var portVal int64
-	if _, err := fmt.Sscanf(parts[0], "%d", &portVal); err == nil {
-		portDefinition := map[string]interface{}{
-			"containerPort": portVal,
-		}
+	// Process container port if specified
+	if d.ContainerPort != "" {
+		parts := strings.Split(d.ContainerPort, "/")
+		var portVal int64
+		if _, err := fmt.Sscanf(parts[0], "%d", &portVal); err == nil {
+			portDefinition := map[string]interface{}{
+				"containerPort": portVal,
+			}
 
-		// Add protocol if specified
-		if len(parts) > 1 && (parts[1] == "TCP" || parts[1] == "UDP" || parts[1] == "SCTP") {
-			portDefinition["protocol"] = parts[1]
-		}
+			// Add protocol if specified
+			if len(parts) > 1 && (parts[1] == "TCP" || parts[1] == "UDP" || parts[1] == "SCTP") {
+				portDefinition["protocol"] = parts[1]
+			}
 
-		container["ports"] = []interface{}{portDefinition}
+			container["ports"] = []interface{}{portDefinition}
+		}
 	}
 
-	if len(deploymentParams.Env) > 0 {
-		envVars := make([]interface{}, 0, len(deploymentParams.Env))
-		for k, v := range deploymentParams.Env {
+	// Add environment variables if specified
+	if len(d.Env) > 0 {
+		envVars := make([]interface{}, 0, len(d.Env))
+		for k, v := range d.Env {
 			if strVal, ok := v.(string); ok {
 				envVars = append(envVars, map[string]interface{}{
 					"name":  k,
@@ -61,20 +80,23 @@ func (cm *Cluster) CreateDeployment(ctx context.Context, deploymentParams kai.De
 		}
 	}
 
-	if deploymentParams.ImagePullPolicy != "" {
+	// Set image pull policy if specified
+	if d.ImagePullPolicy != "" {
 		validPolicies := map[string]bool{"Always": true, "IfNotPresent": true, "Never": true}
-		if _, ok := validPolicies[deploymentParams.ImagePullPolicy]; ok {
-			container["imagePullPolicy"] = deploymentParams.ImagePullPolicy
+		if _, ok := validPolicies[d.ImagePullPolicy]; ok {
+			container["imagePullPolicy"] = d.ImagePullPolicy
 		}
 	}
 
+	// Create pod spec
 	podSpec := map[string]interface{}{
 		"containers": []interface{}{container},
 	}
 
-	if len(deploymentParams.ImagePullSecrets) > 0 {
-		pullSecrets := make([]interface{}, 0, len(deploymentParams.ImagePullSecrets))
-		for _, v := range deploymentParams.ImagePullSecrets {
+	// Add image pull secrets if specified
+	if len(d.ImagePullSecrets) > 0 {
+		pullSecrets := make([]interface{}, 0, len(d.ImagePullSecrets))
+		for _, v := range d.ImagePullSecrets {
 			if strVal, ok := v.(string); ok && strVal != "" {
 				pullSecrets = append(pullSecrets, map[string]interface{}{
 					"name": strVal,
@@ -86,17 +108,18 @@ func (cm *Cluster) CreateDeployment(ctx context.Context, deploymentParams kai.De
 		}
 	}
 
+	// Create the deployment resource
 	deployment := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "apps/v1",
 			"kind":       "Deployment",
 			"metadata": map[string]interface{}{
-				"name":      deploymentParams.Name,
-				"namespace": deploymentParams.Namespace,
+				"name":      d.Name,
+				"namespace": d.Namespace,
 				"labels":    labels,
 			},
 			"spec": map[string]interface{}{
-				"replicas": deploymentParams.Replicas,
+				"replicas": d.Replicas,
 				"selector": map[string]interface{}{
 					"matchLabels": labels,
 				},
@@ -121,25 +144,26 @@ func (cm *Cluster) CreateDeployment(ctx context.Context, deploymentParams kai.De
 
 	client, err := cm.GetCurrentDynamicClient()
 	if err != nil {
-		return result, fmt.Errorf("failed to get a dynamic client: %v", err)
+		return result, fmt.Errorf("failed to get a dynamic client: %w", err)
 	}
 
-	_, err = client.Resource(gvr).Namespace(deploymentParams.Namespace).Create(timeoutCtx, deployment, metav1.CreateOptions{})
+	_, err = client.Resource(gvr).Namespace(d.Namespace).Create(timeoutCtx, deployment, metav1.CreateOptions{})
 	if err != nil {
-		return result, fmt.Errorf("failed to create deployment: %v", err)
+		return result, fmt.Errorf("failed to create deployment: %w", err)
 	}
 
-	result = fmt.Sprintf("Deployment %q created successfully in namespace %q with %f replica(s)", deploymentParams.Name, deploymentParams.Namespace, deploymentParams.Replicas)
+	result = fmt.Sprintf("Deployment %q created successfully in namespace %q with %g replica(s)", d.Name, d.Namespace, d.Replicas)
 
 	return result, nil
 }
 
-func (cm *Cluster) ListDeployments(ctx context.Context, allNamespaces bool, labelSelector, namespace string) (string, error) {
+// List lists deployments in the specified namespace or across all namespaces
+func (d *Deployment) List(ctx context.Context, cm kai.ClusterManager, allNamespaces bool, labelSelector string) (string, error) {
 	var result string
 
 	client, err := cm.GetCurrentClient()
 	if err != nil {
-		return result, fmt.Errorf("error: %v", err)
+		return result, fmt.Errorf("error getting client: %w", err)
 	}
 
 	listOptions := metav1.ListOptions{
@@ -149,10 +173,16 @@ func (cm *Cluster) ListDeployments(ctx context.Context, allNamespaces bool, labe
 	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 
+	// If namespace is empty but allNamespaces is false, use the current namespace
+	namespace := d.Namespace
+	if namespace == "" && !allNamespaces {
+		namespace = cm.GetCurrentNamespace()
+	}
+
 	if allNamespaces {
 		deployments, err := client.AppsV1().Deployments("").List(timeoutCtx, listOptions)
 		if err != nil {
-			return result, fmt.Errorf("failed to list deployments: %v", err)
+			return result, fmt.Errorf("failed to list deployments: %w", err)
 		}
 
 		if len(deployments.Items) == 0 {
@@ -164,7 +194,7 @@ func (cm *Cluster) ListDeployments(ctx context.Context, allNamespaces bool, labe
 	} else {
 		deployments, err := client.AppsV1().Deployments(namespace).List(timeoutCtx, listOptions)
 		if err != nil {
-			return result, fmt.Errorf("failed to list deployments: %v", err)
+			return result, fmt.Errorf("failed to list deployments: %w", err)
 		}
 
 		if len(deployments.Items) == 0 {
