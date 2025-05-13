@@ -15,11 +15,209 @@ import (
 )
 
 type Pod struct {
-	Name          string
-	Namespace     string
-	ContainerName string
-	LabelSelector string
-	FieldSelector string
+	Name             string
+	Image            string
+	Namespace        string
+	ContainerName    string
+	ContainerPort    string
+	ImagePullPolicy  string
+	RestartPolicy    string
+	ServiceAccount   string
+	Command          []interface{}
+	Args             []interface{}
+	ImagePullSecrets []interface{}
+	NodeSelector     map[string]interface{}
+	Labels           map[string]interface{}
+	Env              map[string]interface{}
+}
+
+// Create creates a new pod in the cluster
+func (p *Pod) Create(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	var result string
+
+	// Validate required fields
+	if p.Image == "" {
+		return result, fmt.Errorf("failed to create pod: image cannot be empty")
+	}
+
+	client, err := cm.GetCurrentClient()
+	if err != nil {
+		return result, fmt.Errorf("error getting client: %w", err)
+	}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	// Verify the namespace exists
+	_, err = client.CoreV1().Namespaces().Get(timeoutCtx, p.Namespace, metav1.GetOptions{})
+	if err != nil {
+		return result, fmt.Errorf("namespace %q not found: %w", p.Namespace, err)
+	}
+
+	// Create the pod object
+	pod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      p.Name,
+			Namespace: p.Namespace,
+		},
+		Spec: corev1.PodSpec{},
+	}
+
+	// Set labels if provided
+	if p.Labels != nil {
+		labels := make(map[string]string)
+		for k, v := range p.Labels {
+			if strVal, ok := v.(string); ok {
+				labels[k] = strVal
+			}
+		}
+		if len(labels) > 0 {
+			pod.ObjectMeta.Labels = labels
+		}
+	}
+
+	// Create container
+	container := corev1.Container{
+		Name:  p.ContainerName,
+		Image: p.Image,
+	}
+
+	// If container name is not provided, use the pod name
+	if container.Name == "" {
+		container.Name = p.Name
+	}
+
+	// Set container port if specified
+	if p.ContainerPort != "" {
+		parts := strings.Split(p.ContainerPort, "/")
+		var portVal int32
+		if _, err := fmt.Sscanf(parts[0], "%d", &portVal); err == nil {
+			portDefinition := corev1.ContainerPort{
+				ContainerPort: portVal,
+			}
+
+			// Add protocol if specified
+			if len(parts) > 1 {
+				protocol := corev1.Protocol(strings.ToUpper(parts[1]))
+				if protocol == corev1.ProtocolTCP || protocol == corev1.ProtocolUDP || protocol == corev1.ProtocolSCTP {
+					portDefinition.Protocol = protocol
+				}
+			}
+
+			container.Ports = []corev1.ContainerPort{portDefinition}
+		}
+	}
+
+	// Set image pull policy if specified
+	if p.ImagePullPolicy != "" {
+		policyMap := map[string]corev1.PullPolicy{
+			"Always":       corev1.PullAlways,
+			"IfNotPresent": corev1.PullIfNotPresent,
+			"Never":        corev1.PullNever,
+		}
+		if policy, ok := policyMap[p.ImagePullPolicy]; ok {
+			container.ImagePullPolicy = policy
+		}
+	}
+
+	// Set command if specified
+	if p.Command != nil {
+		command := make([]string, 0, len(p.Command))
+		for _, cmd := range p.Command {
+			if cmdStr, ok := cmd.(string); ok {
+				command = append(command, cmdStr)
+			}
+		}
+		if len(command) > 0 {
+			container.Command = command
+		}
+	}
+
+	// Set args if specified
+	if p.Args != nil {
+		args := make([]string, 0, len(p.Args))
+		for _, arg := range p.Args {
+			if argStr, ok := arg.(string); ok {
+				args = append(args, argStr)
+			}
+		}
+		if len(args) > 0 {
+			container.Args = args
+		}
+	}
+
+	// Set environment variables if specified
+	if p.Env != nil {
+		envVars := make([]corev1.EnvVar, 0, len(p.Env))
+		for k, v := range p.Env {
+			if strVal, ok := v.(string); ok {
+				envVars = append(envVars, corev1.EnvVar{
+					Name:  k,
+					Value: strVal,
+				})
+			}
+		}
+		if len(envVars) > 0 {
+			container.Env = envVars
+		}
+	}
+
+	// Add the container to the pod
+	pod.Spec.Containers = []corev1.Container{container}
+
+	// Set restart policy if specified
+	if p.RestartPolicy != "" {
+		policyMap := map[string]corev1.RestartPolicy{
+			"Always":    corev1.RestartPolicyAlways,
+			"OnFailure": corev1.RestartPolicyOnFailure,
+			"Never":     corev1.RestartPolicyNever,
+		}
+		if policy, ok := policyMap[p.RestartPolicy]; ok {
+			pod.Spec.RestartPolicy = policy
+		}
+	}
+
+	// Set service account if specified
+	if p.ServiceAccount != "" {
+		pod.Spec.ServiceAccountName = p.ServiceAccount
+	}
+
+	// Set node selector if specified
+	if p.NodeSelector != nil {
+		nodeSelector := make(map[string]string)
+		for k, v := range p.NodeSelector {
+			if strVal, ok := v.(string); ok {
+				nodeSelector[k] = strVal
+			}
+		}
+		if len(nodeSelector) > 0 {
+			pod.Spec.NodeSelector = nodeSelector
+		}
+	}
+
+	// Set image pull secrets if specified
+	if p.ImagePullSecrets != nil {
+		pullSecrets := make([]corev1.LocalObjectReference, 0, len(p.ImagePullSecrets))
+		for _, v := range p.ImagePullSecrets {
+			if strVal, ok := v.(string); ok && strVal != "" {
+				pullSecrets = append(pullSecrets, corev1.LocalObjectReference{
+					Name: strVal,
+				})
+			}
+		}
+		if len(pullSecrets) > 0 {
+			pod.Spec.ImagePullSecrets = pullSecrets
+		}
+	}
+
+	// Create the pod
+	createdPod, err := client.CoreV1().Pods(p.Namespace).Create(timeoutCtx, pod, metav1.CreateOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to create pod: %w", err)
+	}
+
+	result = fmt.Sprintf("Pod %q created successfully in namespace %q", createdPod.Name, createdPod.Namespace)
+	return result, nil
 }
 
 func (p *Pod) Get(ctx context.Context, cm kai.ClusterManager) (string, error) {
@@ -56,7 +254,7 @@ func (p *Pod) Get(ctx context.Context, cm kai.ClusterManager) (string, error) {
 	return formatPod(pod), nil
 }
 
-func (p *Pod) List(ctx context.Context, cm kai.ClusterManager, limit int64) (string, error) {
+func (p *Pod) List(ctx context.Context, cm kai.ClusterManager, limit int64, labelSelector, fieldSelector string) (string, error) {
 	var result string
 	client, err := cm.GetCurrentClient()
 	if err != nil {
@@ -65,8 +263,8 @@ func (p *Pod) List(ctx context.Context, cm kai.ClusterManager, limit int64) (str
 
 	// Create list options
 	listOptions := metav1.ListOptions{
-		LabelSelector: p.LabelSelector,
-		FieldSelector: p.FieldSelector,
+		LabelSelector: labelSelector,
+		FieldSelector: fieldSelector,
 	}
 
 	if limit > 0 {
@@ -104,7 +302,7 @@ func (p *Pod) List(ctx context.Context, cm kai.ClusterManager, limit int64) (str
 	}
 
 	if len(pods.Items) == 0 {
-		if p.LabelSelector != "" || p.FieldSelector != "" {
+		if labelSelector != "" || fieldSelector != "" {
 			return result, errors.New("no pods found matching the specified selectors")
 		}
 		return result, errors.New("no pods found")

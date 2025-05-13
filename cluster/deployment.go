@@ -168,6 +168,7 @@ func (d *Deployment) List(ctx context.Context, cm kai.ClusterManager, allNamespa
 
 	listOptions := metav1.ListOptions{
 		LabelSelector: labelSelector,
+		//TODO: add fieldSelector option as well
 	}
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)

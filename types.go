@@ -18,8 +18,8 @@ type PodParams struct {
 	Name               string
 	Namespace          string
 	Image              string
-	Command            []string
-	Args               []string
+	Command            []interface{}
+	Args               []interface{}
 	Labels             map[string]interface{}
 	ContainerName      string
 	ContainerPort      string
