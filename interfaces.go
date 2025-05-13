@@ -33,8 +33,9 @@ type ClusterManager interface {
 
 // PodOperator defines the operations needed for pod management
 type PodOperator interface {
+	Create(ctx context.Context, cm ClusterManager) (string, error)
 	Get(ctx context.Context, cm ClusterManager) (string, error)
-	List(ctx context.Context, cm ClusterManager, limit int64) (string, error)
+	List(ctx context.Context, cm ClusterManager, limit int64, labelSelector, fieldSelector string) (string, error)
 	Delete(ctx context.Context, cm ClusterManager, force bool) (string, error)
 	StreamLogs(ctx context.Context, cm ClusterManager, tailLines int64, previous bool, since *time.Duration) (string, error)
 }
