@@ -37,14 +37,14 @@ func testCreatePods(t *testing.T) {
 		{
 			name: "Create basic pod",
 			pod: Pod{
-				Name:      "test-pod",
-				Namespace: "test-namespace",
+				Name:      podName,
+				Namespace: testNamespace,
 				Image:     "nginx:latest",
 			},
 			setupObjects: []runtime.Object{
 				&corev1.Namespace{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-namespace",
+						Name: testNamespace,
 					},
 				},
 			},
@@ -55,7 +55,7 @@ func testCreatePods(t *testing.T) {
 			name: "Create pod with all attributes",
 			pod: Pod{
 				Name:            "full-pod",
-				Namespace:       "test-namespace",
+				Namespace:       testNamespace,
 				Image:           "nginx:latest",
 				ContainerName:   "custom-container",
 				ContainerPort:   "8080/TCP",
@@ -80,7 +80,7 @@ func testCreatePods(t *testing.T) {
 			setupObjects: []runtime.Object{
 				&corev1.Namespace{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-namespace",
+						Name: testNamespace,
 					},
 				},
 			},
@@ -90,8 +90,8 @@ func testCreatePods(t *testing.T) {
 		{
 			name: "Namespace not found",
 			pod: Pod{
-				Name:      "test-pod",
-				Namespace: "nonexistent-namespace",
+				Name:      podName,
+				Namespace: nonexistentNS,
 				Image:     "nginx:latest",
 			},
 			setupObjects: []runtime.Object{},
@@ -102,13 +102,13 @@ func testCreatePods(t *testing.T) {
 			name: "Missing image",
 			pod: Pod{
 				Name:      "no-image-pod",
-				Namespace: "test-namespace",
+				Namespace: testNamespace,
 				Image:     "", // Empty image
 			},
 			setupObjects: []runtime.Object{
 				&corev1.Namespace{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-namespace",
+						Name: testNamespace,
 					},
 				},
 			},
@@ -203,17 +203,17 @@ func testGetPod(t *testing.T) {
 	// Create test pods and namespaces
 	testPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-pod",
-			Namespace: "test-namespace",
+			Name:      podName,
+			Namespace: testNamespace,
 		},
 		Status: corev1.PodStatus{
 			Phase: corev1.PodRunning,
 		},
 	}
 
-	testNamespace := &corev1.Namespace{
+	_testNamespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-namespace",
+			Name: testNamespace,
 		},
 	}
 
@@ -227,16 +227,16 @@ func testGetPod(t *testing.T) {
 		{
 			name: "Get existing pod",
 			pod: Pod{
-				Name:      "test-pod",
-				Namespace: "test-namespace",
+				Name:      podName,
+				Namespace: testNamespace,
 			},
 			expectError: false,
 		},
 		{
 			name: "Pod not found",
 			pod: Pod{
-				Name:      "nonexistent-pod",
-				Namespace: "test-namespace",
+				Name:      nonexistentPodName,
+				Namespace: testNamespace,
 			},
 			expectError: true,
 			errorMsg:    "not found",
@@ -244,8 +244,8 @@ func testGetPod(t *testing.T) {
 		{
 			name: "Namespace not found",
 			pod: Pod{
-				Name:      "test-pod",
-				Namespace: "nonexistent-namespace",
+				Name:      podName,
+				Namespace: nonexistentNS,
 			},
 			expectError: true,
 			errorMsg:    "not found",
@@ -256,7 +256,7 @@ func testGetPod(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 
 			cm := New()
-			fakeClient := fake.NewSimpleClientset(testPod, testNamespace)
+			fakeClient := fake.NewSimpleClientset(testPod, _testNamespace)
 			cm.clients["test-cluster"] = fakeClient
 			cm.currentContext = "test-cluster"
 
@@ -269,7 +269,7 @@ func testGetPod(t *testing.T) {
 				}
 			} else {
 				assert.NoError(t, err)
-				assert.Contains(t, result, "test-pod")
+				assert.Contains(t, result, podName)
 			}
 		})
 	}
@@ -283,14 +283,14 @@ func testListPods(t *testing.T) {
 		&corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "pod1",
-				Namespace: "test-namespace",
+				Namespace: testNamespace,
 				Labels:    map[string]string{"app": "test"},
 			},
 		},
 		&corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "pod2",
-				Namespace: "test-namespace",
+				Namespace: testNamespace,
 				Labels:    map[string]string{"app": "test"},
 			},
 		},
@@ -302,7 +302,7 @@ func testListPods(t *testing.T) {
 		},
 		&corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "test-namespace",
+				Name: testNamespace,
 			},
 		},
 		&corev1.Namespace{
@@ -326,7 +326,7 @@ func testListPods(t *testing.T) {
 		{
 			name: "List pods in namespace",
 			pod: Pod{
-				Namespace: "test-namespace",
+				Namespace: testNamespace,
 			},
 			limit:             10,
 			expectError:       false,
@@ -336,7 +336,7 @@ func testListPods(t *testing.T) {
 		{
 			name: "List pods with label selector",
 			pod: Pod{
-				Namespace: "test-namespace",
+				Namespace: testNamespace,
 			},
 			labelSelector:     "app=test",
 			limit:             10,
@@ -356,7 +356,7 @@ func testListPods(t *testing.T) {
 		{
 			name: "List pods in non-existent namespace",
 			pod: Pod{
-				Namespace: "nonexistent-namespace",
+				Namespace: nonexistentNS,
 			},
 			limit:       10,
 			expectError: true,
@@ -365,7 +365,7 @@ func testListPods(t *testing.T) {
 		{
 			name: "No pods found with label selector",
 			pod: Pod{
-				Namespace: "test-namespace",
+				Namespace: testNamespace,
 			},
 			labelSelector: "app=nonexistent",
 			limit:         10,
@@ -419,20 +419,20 @@ func testDeletePod(t *testing.T) {
 		{
 			name: "Delete existing pod",
 			pod: Pod{
-				Name:      "test-pod",
-				Namespace: "test-namespace",
+				Name:      podName,
+				Namespace: testNamespace,
 			},
 			force: false,
 			setupObjects: []runtime.Object{
 				&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
-						Name:      "test-pod",
-						Namespace: "test-namespace",
+						Name:      podName,
+						Namespace: testNamespace,
 					},
 				},
 				&corev1.Namespace{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-namespace",
+						Name: testNamespace,
 					},
 				},
 			},
@@ -442,19 +442,19 @@ func testDeletePod(t *testing.T) {
 			name: "Force delete pod",
 			pod: Pod{
 				Name:      "force-pod",
-				Namespace: "test-namespace",
+				Namespace: testNamespace,
 			},
 			force: true,
 			setupObjects: []runtime.Object{
 				&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "force-pod",
-						Namespace: "test-namespace",
+						Namespace: testNamespace,
 					},
 				},
 				&corev1.Namespace{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-namespace",
+						Name: testNamespace,
 					},
 				},
 			},
@@ -463,14 +463,14 @@ func testDeletePod(t *testing.T) {
 		{
 			name: "Pod not found",
 			pod: Pod{
-				Name:      "nonexistent-pod",
-				Namespace: "test-namespace",
+				Name:      nonexistentPodName,
+				Namespace: testNamespace,
 			},
 			force: false,
 			setupObjects: []runtime.Object{
 				&corev1.Namespace{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "test-namespace",
+						Name: testNamespace,
 					},
 				},
 			},
@@ -480,8 +480,8 @@ func testDeletePod(t *testing.T) {
 		{
 			name: "Namespace not found",
 			pod: Pod{
-				Name:      "test-pod",
-				Namespace: "nonexistent-namespace",
+				Name:      podName,
+				Namespace: nonexistentNS,
 			},
 			force:        false,
 			setupObjects: []runtime.Object{},
@@ -523,13 +523,13 @@ func testStreamPodLogs(t *testing.T) {
 	// Create test pods for reuse
 	runningPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-pod",
-			Namespace: "test-namespace",
+			Name:      podName,
+			Namespace: testNamespace,
 		},
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
 				{
-					Name: "test-container",
+					Name: containerName,
 				},
 			},
 		},
@@ -540,13 +540,13 @@ func testStreamPodLogs(t *testing.T) {
 
 	pendingPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "pending-pod",
-			Namespace: "test-namespace",
+			Name:      pendingPodName,
+			Namespace: testNamespace,
 		},
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
 				{
-					Name: "test-container",
+					Name: containerName,
 				},
 			},
 		},
@@ -555,9 +555,9 @@ func testStreamPodLogs(t *testing.T) {
 		},
 	}
 
-	testNamespace := &corev1.Namespace{
+	_testNamespace := &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "test-namespace",
+			Name: testNamespace,
 		},
 	}
 
@@ -575,42 +575,42 @@ func testStreamPodLogs(t *testing.T) {
 		{
 			name: "Container not found",
 			pod: Pod{
-				Name:          "test-pod",
-				Namespace:     "test-namespace",
-				ContainerName: "nonexistent-container",
+				Name:          podName,
+				Namespace:     testNamespace,
+				ContainerName: nonexistentContainer,
 			},
-			setupObjects:  []runtime.Object{runningPod, testNamespace},
+			setupObjects:  []runtime.Object{runningPod, _testNamespace},
 			expectError:   true,
 			errorContains: "container 'nonexistent-container' not found",
 		},
 		{
 			name: "Pod not running",
 			pod: Pod{
-				Name:          "pending-pod",
-				Namespace:     "test-namespace",
-				ContainerName: "test-container",
+				Name:          pendingPodName,
+				Namespace:     testNamespace,
+				ContainerName: containerName,
 			},
-			setupObjects:  []runtime.Object{pendingPod, testNamespace},
+			setupObjects:  []runtime.Object{pendingPod, _testNamespace},
 			expectError:   true,
 			errorContains: "pod 'pending-pod' is in 'Pending' state",
 		},
 		{
 			name: "Pod not found",
 			pod: Pod{
-				Name:          "nonexistent-pod",
-				Namespace:     "test-namespace",
-				ContainerName: "test-container",
+				Name:          nonexistentPodName,
+				Namespace:     testNamespace,
+				ContainerName: containerName,
 			},
-			setupObjects:  []runtime.Object{testNamespace},
+			setupObjects:  []runtime.Object{_testNamespace},
 			expectError:   true,
 			errorContains: "pod 'nonexistent-pod' not found",
 		},
 		{
 			name: "Namespace not found",
 			pod: Pod{
-				Name:          "test-pod",
-				Namespace:     "nonexistent-namespace",
-				ContainerName: "test-container",
+				Name:          podName,
+				Namespace:     nonexistentNS,
+				ContainerName: containerName,
 			},
 			setupObjects:  []runtime.Object{},
 			expectError:   true,
@@ -619,11 +619,11 @@ func testStreamPodLogs(t *testing.T) {
 		{
 			name: "Previous logs for non-running pod",
 			pod: Pod{
-				Name:          "pending-pod",
-				Namespace:     "test-namespace",
-				ContainerName: "test-container",
+				Name:          pendingPodName,
+				Namespace:     testNamespace,
+				ContainerName: containerName,
 			},
-			setupObjects: []runtime.Object{pendingPod, testNamespace},
+			setupObjects: []runtime.Object{pendingPod, _testNamespace},
 			previous:     true,  // Should bypass running state check
 			expectError:  false, // No error in validation, but will fail in the fake client
 		},

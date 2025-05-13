@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/basebandit/kai"
@@ -11,6 +12,24 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
+
+// Test case structs for table-driven tests
+type listDeploymentsTestCase struct {
+	name           string
+	args           map[string]interface{}
+	expectedParams kai.DeploymentParams
+	mockSetup      func(*testmocks.MockClusterManager, *testmocks.MockDeploymentFactory, *testmocks.MockDeployment)
+	expectedOutput string
+}
+
+type createDeploymentTestCase struct {
+	name                string
+	args                map[string]interface{}
+	expectedParams      kai.DeploymentParams
+	mockSetup           func(*testmocks.MockClusterManager, *testmocks.MockDeploymentFactory, *testmocks.MockDeployment)
+	expectedOutput      string
+	expectDeployCreated bool
+}
 
 func TestRegisterDeploymentTools(t *testing.T) {
 	// Setup mock server and cluster manager
@@ -43,571 +62,281 @@ func TestRegisterDeploymentToolsWithFactory(t *testing.T) {
 	mockServer.AssertExpectations(t)
 }
 
-func TestListDeploymentsHandler_DefaultNamespace(t *testing.T) {
-	// Setup mock cluster manager
-	mockCM := testmocks.NewMockClusterManager()
-	mockCM.On("GetCurrentNamespace").Return("default")
-
-	// Define the expected parameters that the handler will create
-	expectedParams := kai.DeploymentParams{
-		Namespace: "default",
-	}
-
-	// Setup mock deployment
-	mockDeployment := testmocks.NewMockDeployment(expectedParams)
-	mockDeployment.On("List", mock.Anything, mockCM, false, "").Return("Deployments in namespace 'default':\n- deployment1\n- deployment2", nil)
-
-	// Setup mock factory with the exact same expected params
-	mockFactory := testmocks.NewMockDeploymentFactory()
-	mockFactory.On("NewDeployment", expectedParams).Return(mockDeployment)
-
-	// Create the handler
-	handler := listDeploymentsHandler(mockCM, mockFactory)
-
-	// Create a request
-	request := mcp.CallToolRequest{
-		Params: struct {
-			Name      string                 `json:"name"`
-			Arguments map[string]interface{} `json:"arguments,omitempty"`
-			Meta      *struct {
-				ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
-			} `json:"_meta,omitempty"`
-		}{
-			Arguments: map[string]interface{}{},
+func TestListDeploymentsHandler(t *testing.T) {
+	testCases := []listDeploymentsTestCase{
+		{
+			name: "DefaultNamespace",
+			args: map[string]interface{}{},
+			expectedParams: kai.DeploymentParams{
+				Namespace: defaultNamespace,
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockDeployment.On("List", mock.Anything, mockCM, false, "").
+					Return(fmt.Sprintf("Deployments in namespace %q:\n- deployment1\n- deployment2", defaultNamespace), nil)
+			},
+			expectedOutput: fmt.Sprintf("Deployments in namespace %q:", defaultNamespace),
 		},
-	}
-
-	// Call the handler
-	result, err := handler(context.Background(), request)
-
-	// Verify the result
-	assert.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.Contains(t, result.Content[0].(mcp.TextContent).Text, "Deployments in namespace 'default':")
-
-	// Verify that the expected methods were called
-	mockCM.AssertExpectations(t)
-	mockFactory.AssertExpectations(t)
-	mockDeployment.AssertExpectations(t)
-}
-
-func TestListDeploymentsHandler_AllNamespaces(t *testing.T) {
-	// Setup mock cluster manager
-	mockCM := testmocks.NewMockClusterManager()
-	// Don't expect GetCurrentNamespace since it's not called when all_namespaces is true
-
-	// Setup mock deployment
-	mockDeployment := testmocks.NewMockDeployment(kai.DeploymentParams{})
-	mockDeployment.On("List", mock.Anything, mockCM, true, "").Return("Deployments across all namespaces:\n- ns1/deployment1\n- ns2/deployment2", nil)
-
-	// Setup mock factory with DeploymentParams
-	mockFactory := testmocks.NewMockDeploymentFactory()
-	params := kai.DeploymentParams{} // Empty params for all namespaces
-	mockFactory.On("NewDeployment", params).Return(mockDeployment)
-
-	// Create the handler
-	handler := listDeploymentsHandler(mockCM, mockFactory)
-
-	// Create a request with all_namespaces=true
-	request := mcp.CallToolRequest{
-		Params: struct {
-			Name      string                 `json:"name"`
-			Arguments map[string]interface{} `json:"arguments,omitempty"`
-			Meta      *struct {
-				ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
-			} `json:"_meta,omitempty"`
-		}{
-			Arguments: map[string]interface{}{
+		{
+			name: "AllNamespaces",
+			args: map[string]interface{}{
 				"all_namespaces": true,
 			},
-		},
-	}
-
-	// Call the handler
-	result, err := handler(context.Background(), request)
-
-	// Verify the result
-	assert.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.Contains(t, result.Content[0].(mcp.TextContent).Text, "Deployments across all namespaces:")
-
-	// Verify that the expected methods were called
-	mockCM.AssertExpectations(t)
-	mockFactory.AssertExpectations(t)
-	mockDeployment.AssertExpectations(t)
-}
-
-func TestListDeploymentsHandler_SpecificNamespace(t *testing.T) {
-	// Setup mock cluster manager
-	mockCM := testmocks.NewMockClusterManager()
-	// Don't expect GetCurrentNamespace since a specific namespace is provided
-
-	// Setup mock deployment
-	mockDeployment := testmocks.NewMockDeployment(kai.DeploymentParams{
-		Namespace: "test-namespace",
-	})
-	mockDeployment.On("List", mock.Anything, mockCM, false, "").Return("Deployments in namespace 'test-namespace':\n- deployment1", nil)
-
-	// Setup mock factory with DeploymentParams
-	mockFactory := testmocks.NewMockDeploymentFactory()
-	params := kai.DeploymentParams{
-		Namespace: "test-namespace",
-	}
-	mockFactory.On("NewDeployment", params).Return(mockDeployment)
-
-	// Create the handler
-	handler := listDeploymentsHandler(mockCM, mockFactory)
-
-	// Create a request with specific namespace
-	request := mcp.CallToolRequest{
-		Params: struct {
-			Name      string                 `json:"name"`
-			Arguments map[string]interface{} `json:"arguments,omitempty"`
-			Meta      *struct {
-				ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
-			} `json:"_meta,omitempty"`
-		}{
-			Arguments: map[string]interface{}{
-				"namespace": "test-namespace",
+			expectedParams: kai.DeploymentParams{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				mockDeployment.On("List", mock.Anything, mockCM, true, "").
+					Return("Deployments across all namespaces:\n- ns1/deployment1\n- ns2/deployment2", nil)
 			},
+			expectedOutput: "Deployments across all namespaces:",
 		},
-	}
-
-	// Call the handler
-	result, err := handler(context.Background(), request)
-
-	// Verify the result
-	assert.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.Contains(t, result.Content[0].(mcp.TextContent).Text, "Deployments in namespace 'test-namespace':")
-
-	// Verify that the expected methods were called
-	mockCM.AssertExpectations(t)
-	mockFactory.AssertExpectations(t)
-	mockDeployment.AssertExpectations(t)
-}
-
-func TestListDeploymentsHandler_WithLabelSelector(t *testing.T) {
-	// Setup mock cluster manager
-	mockCM := testmocks.NewMockClusterManager()
-	mockCM.On("GetCurrentNamespace").Return("default")
-
-	// Setup mock deployment
-	mockDeployment := testmocks.NewMockDeployment(kai.DeploymentParams{
-		Namespace: "default",
-	})
-	mockDeployment.On("List", mock.Anything, mockCM, false, "app=backend").Return("Deployments in namespace 'default' with label 'app=backend':\n- backend-deployment", nil)
-
-	// Setup mock factory with DeploymentParams
-	mockFactory := testmocks.NewMockDeploymentFactory()
-	params := kai.DeploymentParams{
-		Namespace: "default",
-	}
-	mockFactory.On("NewDeployment", params).Return(mockDeployment)
-
-	// Create the handler
-	handler := listDeploymentsHandler(mockCM, mockFactory)
-
-	// Create a request with label selector
-	request := mcp.CallToolRequest{
-		Params: struct {
-			Name      string                 `json:"name"`
-			Arguments map[string]interface{} `json:"arguments,omitempty"`
-			Meta      *struct {
-				ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
-			} `json:"_meta,omitempty"`
-		}{
-			Arguments: map[string]interface{}{
+		{
+			name: "SpecificNamespace",
+			args: map[string]interface{}{
+				"namespace": testNamespace,
+			},
+			expectedParams: kai.DeploymentParams{
+				Namespace: testNamespace,
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				mockDeployment.On("List", mock.Anything, mockCM, false, "").
+					Return(fmt.Sprintf("Deployments in namespace %q:\n- deployment1", testNamespace), nil)
+			},
+			expectedOutput: fmt.Sprintf("Deployments in namespace %q:", testNamespace),
+		},
+		{
+			name: "WithLabelSelector",
+			args: map[string]interface{}{
 				"label_selector": "app=backend",
 			},
-		},
-	}
-
-	// Call the handler
-	result, err := handler(context.Background(), request)
-
-	// Verify the result
-	assert.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.Contains(t, result.Content[0].(mcp.TextContent).Text, "Deployments in namespace 'default' with label 'app=backend':")
-
-	// Verify that the expected methods were called
-	mockCM.AssertExpectations(t)
-	mockFactory.AssertExpectations(t)
-	mockDeployment.AssertExpectations(t)
-}
-
-func TestListDeploymentsHandler_Error(t *testing.T) {
-	// Setup mock cluster manager
-	mockCM := testmocks.NewMockClusterManager()
-	mockCM.On("GetCurrentNamespace").Return("default")
-
-	// Setup mock deployment
-	mockDeployment := testmocks.NewMockDeployment(kai.DeploymentParams{
-		Namespace: "default",
-	})
-	mockDeployment.On("List", mock.Anything, mockCM, false, "").Return("", errors.New("connection failed"))
-
-	// Setup mock factory with DeploymentParams
-	mockFactory := testmocks.NewMockDeploymentFactory()
-	params := kai.DeploymentParams{
-		Namespace: "default",
-	}
-	mockFactory.On("NewDeployment", params).Return(mockDeployment)
-
-	// Create the handler
-	handler := listDeploymentsHandler(mockCM, mockFactory)
-
-	// Create a request
-	request := mcp.CallToolRequest{
-		Params: struct {
-			Name      string                 `json:"name"`
-			Arguments map[string]interface{} `json:"arguments,omitempty"`
-			Meta      *struct {
-				ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
-			} `json:"_meta,omitempty"`
-		}{
-			Arguments: map[string]interface{}{},
-		},
-	}
-
-	// Call the handler
-	result, err := handler(context.Background(), request)
-
-	// Verify the result
-	assert.NoError(t, err) // Handler doesn't return error, it returns a result with error text
-	assert.NotNil(t, result)
-	assert.Contains(t, result.Content[0].(mcp.TextContent).Text, "connection failed")
-
-	// Verify that the expected methods were called
-	mockCM.AssertExpectations(t)
-	mockFactory.AssertExpectations(t)
-	mockDeployment.AssertExpectations(t)
-}
-
-func TestCreateDeploymentHandler_RequiredParams(t *testing.T) {
-	// Setup mock cluster manager
-	mockCM := testmocks.NewMockClusterManager()
-	mockCM.On("GetCurrentNamespace").Return("default")
-
-	// Setup mock deployment
-	mockDeployment := testmocks.NewMockDeployment(kai.DeploymentParams{
-		Name:      "test-deployment",
-		Image:     "nginx:latest",
-		Namespace: "default",
-		Replicas:  1,
-	})
-	mockDeployment.On("Create", mock.Anything, mockCM).Return("Deployment \"test-deployment\" created successfully in namespace \"default\" with 1 replica(s)", nil)
-
-	// Setup mock factory with DeploymentParams
-	mockFactory := testmocks.NewMockDeploymentFactory()
-	params := kai.DeploymentParams{
-		Name:      "test-deployment",
-		Image:     "nginx:latest",
-		Namespace: "default",
-		Replicas:  1, // Default value
-	}
-	mockFactory.On("NewDeployment", params).Return(mockDeployment)
-
-	// Create the handler
-	handler := createDeploymentHandler(mockCM, mockFactory)
-
-	// Create a request with required parameters
-	request := mcp.CallToolRequest{
-		Params: struct {
-			Name      string                 `json:"name"`
-			Arguments map[string]interface{} `json:"arguments,omitempty"`
-			Meta      *struct {
-				ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
-			} `json:"_meta,omitempty"`
-		}{
-			Arguments: map[string]interface{}{
-				"name":  "test-deployment",
-				"image": "nginx:latest",
+			expectedParams: kai.DeploymentParams{
+				Namespace: defaultNamespace,
 			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockDeployment.On("List", mock.Anything, mockCM, false, "app=backend").
+					Return(fmt.Sprintf("Deployments in namespace %q with label 'app=backend':\n- backend-deployment", defaultNamespace), nil)
+			},
+			expectedOutput: fmt.Sprintf("Deployments in namespace %q with label 'app=backend':", defaultNamespace),
+		},
+		{
+			name: "Error",
+			args: map[string]interface{}{},
+			expectedParams: kai.DeploymentParams{
+				Namespace: defaultNamespace,
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockDeployment.On("List", mock.Anything, mockCM, false, "").
+					Return("", errors.New(connectionFailedError))
+			},
+			expectedOutput: connectionFailedError,
 		},
 	}
 
-	// Call the handler
-	result, err := handler(context.Background(), request)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockCM := testmocks.NewMockClusterManager()
+			mockFactory := testmocks.NewMockDeploymentFactory()
+			mockDeployment := testmocks.NewMockDeployment(tc.expectedParams)
 
-	// Verify the result
-	assert.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.Contains(t, result.Content[0].(mcp.TextContent).Text, "Deployment \"test-deployment\" created successfully")
+			mockFactory.On("NewDeployment", tc.expectedParams).Return(mockDeployment)
+			tc.mockSetup(mockCM, mockFactory, mockDeployment)
 
-	// Verify that the expected methods were called
-	mockCM.AssertExpectations(t)
-	mockFactory.AssertExpectations(t)
-	mockDeployment.AssertExpectations(t)
+			handler := listDeploymentsHandler(mockCM, mockFactory)
+
+			request := mcp.CallToolRequest{
+				Params: struct {
+					Name      string                 `json:"name"`
+					Arguments map[string]interface{} `json:"arguments,omitempty"`
+					Meta      *struct {
+						ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
+					} `json:"_meta,omitempty"`
+				}{
+					Arguments: tc.args,
+				},
+			}
+
+			result, err := handler(context.Background(), request)
+			assert.NoError(t, err)
+			assert.NotNil(t, result)
+			assert.Contains(t, result.Content[0].(mcp.TextContent).Text, tc.expectedOutput)
+
+			mockCM.AssertExpectations(t)
+			mockFactory.AssertExpectations(t)
+			mockDeployment.AssertExpectations(t)
+		})
+	}
 }
 
-func TestCreateDeploymentHandler_AllParams(t *testing.T) {
-	// Setup mock cluster manager
-	mockCM := testmocks.NewMockClusterManager()
-	mockCM.On("GetCurrentNamespace").Return("default")
+func TestCreateDeploymentHandler(t *testing.T) {
+	// Define common test data
+	testDeployName := "test-deployment"
+	fullDeployName := "full-deployment"
+	errorDeployName := "error-deployment"
+	defaultReplicas := 1.0
 
-	// Define expected parameters
-	expectedParams := kai.DeploymentParams{
-		Name:             "full-deployment",
-		Image:            "myapp:v1.2.3",
-		Namespace:        "test-namespace",
-		Replicas:         3.0,
-		Labels:           map[string]interface{}{"app": "myapp", "env": "test"},
-		ContainerPort:    "8080/TCP",
-		Env:              map[string]interface{}{"DEBUG": "true"},
-		ImagePullPolicy:  "Always",
-		ImagePullSecrets: []interface{}{"registry-secret"},
-	}
-
-	// Setup mock deployment
-	mockDeployment := testmocks.NewMockDeployment(expectedParams)
-	mockDeployment.On("Create", mock.Anything, mockCM).Return("Deployment \"full-deployment\" created successfully in namespace \"test-namespace\" with 3 replica(s)", nil)
-
-	// Setup mock factory with full DeploymentParams
-	mockFactory := testmocks.NewMockDeploymentFactory()
-	mockFactory.On("NewDeployment", expectedParams).Return(mockDeployment)
-
-	// Create the handler
-	handler := createDeploymentHandler(mockCM, mockFactory)
-
-	// Create a request with all parameters
-	request := mcp.CallToolRequest{
-		Params: struct {
-			Name      string                 `json:"name"`
-			Arguments map[string]interface{} `json:"arguments,omitempty"`
-			Meta      *struct {
-				ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
-			} `json:"_meta,omitempty"`
-		}{
-			Arguments: map[string]interface{}{
-				"name":               "full-deployment",
-				"image":              "myapp:v1.2.3",
-				"namespace":          "test-namespace",
+	testCases := []createDeploymentTestCase{
+		{
+			name: "RequiredParams",
+			args: map[string]interface{}{
+				"name":  testDeployName,
+				"image": nginxImage,
+			},
+			expectedParams: kai.DeploymentParams{
+				Name:      testDeployName,
+				Image:     nginxImage,
+				Namespace: defaultNamespace,
+				Replicas:  defaultReplicas,
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockDeployment.On("Create", mock.Anything, mockCM).
+					Return(fmt.Sprintf(deploymentCreatedFmt, testDeployName, defaultNamespace, int(defaultReplicas)), nil)
+			},
+			expectedOutput:      fmt.Sprintf("Deployment %q created successfully", testDeployName),
+			expectDeployCreated: true,
+		},
+		{
+			name: "AllParams",
+			args: map[string]interface{}{
+				"name":               fullDeployName,
+				"image":              myAppImage,
+				"namespace":          testNamespace,
 				"replicas":           float64(3),
 				"labels":             map[string]interface{}{"app": "myapp", "env": "test"},
-				"container_port":     "8080/TCP",
+				"container_port":     defaultContainerPort,
 				"env":                map[string]interface{}{"DEBUG": "true"},
-				"image_pull_policy":  "Always",
-				"image_pull_secrets": []interface{}{"registry-secret"},
+				"image_pull_policy":  alwaysImagePullPolicy,
+				"image_pull_secrets": []interface{}{registrySecretName},
 			},
-		},
-	}
-
-	// Call the handler
-	result, err := handler(context.Background(), request)
-
-	// Verify the result
-	assert.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.Contains(t, result.Content[0].(mcp.TextContent).Text, "Deployment \"full-deployment\" created successfully")
-
-	// Verify that the expected methods were called
-	mockCM.AssertExpectations(t)
-	mockFactory.AssertExpectations(t)
-	mockDeployment.AssertExpectations(t)
-}
-
-func TestCreateDeploymentHandler_MissingName(t *testing.T) {
-	// Setup mock cluster manager
-	mockCM := testmocks.NewMockClusterManager()
-
-	// Setup mock factory
-	mockFactory := testmocks.NewMockDeploymentFactory()
-
-	// Create the handler
-	handler := createDeploymentHandler(mockCM, mockFactory)
-
-	// Create a request with missing name
-	request := mcp.CallToolRequest{
-		Params: struct {
-			Name      string                 `json:"name"`
-			Arguments map[string]interface{} `json:"arguments,omitempty"`
-			Meta      *struct {
-				ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
-			} `json:"_meta,omitempty"`
-		}{
-			Arguments: map[string]interface{}{
-				"image": "nginx:latest",
+			expectedParams: kai.DeploymentParams{
+				Name:             fullDeployName,
+				Image:            myAppImage,
+				Namespace:        testNamespace,
+				Replicas:         3.0,
+				Labels:           map[string]interface{}{"app": "myapp", "env": "test"},
+				ContainerPort:    defaultContainerPort,
+				Env:              map[string]interface{}{"DEBUG": "true"},
+				ImagePullPolicy:  alwaysImagePullPolicy,
+				ImagePullSecrets: []interface{}{registrySecretName},
 			},
-		},
-	}
-
-	// Call the handler
-	result, err := handler(context.Background(), request)
-
-	// Verify the result
-	assert.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.Contains(t, result.Content[0].(mcp.TextContent).Text, "Required parameter 'name' is missing")
-
-	// Verify that no deployment was created
-	mockFactory.AssertNotCalled(t, "NewDeployment")
-}
-
-func TestCreateDeploymentHandler_MissingImage(t *testing.T) {
-	// Setup mock cluster manager
-	mockCM := testmocks.NewMockClusterManager()
-
-	// Setup mock factory
-	mockFactory := testmocks.NewMockDeploymentFactory()
-
-	// Create the handler
-	handler := createDeploymentHandler(mockCM, mockFactory)
-
-	// Create a request with missing image
-	request := mcp.CallToolRequest{
-		Params: struct {
-			Name      string                 `json:"name"`
-			Arguments map[string]interface{} `json:"arguments,omitempty"`
-			Meta      *struct {
-				ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
-			} `json:"_meta,omitempty"`
-		}{
-			Arguments: map[string]interface{}{
-				"name": "test-deployment",
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockDeployment.On("Create", mock.Anything, mockCM).
+					Return(fmt.Sprintf(deploymentCreatedFmt, fullDeployName, testNamespace, 3), nil)
 			},
+			expectedOutput:      fmt.Sprintf("Deployment %q created successfully", fullDeployName),
+			expectDeployCreated: true,
 		},
-	}
-
-	// Call the handler
-	result, err := handler(context.Background(), request)
-
-	// Verify the result
-	assert.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.Contains(t, result.Content[0].(mcp.TextContent).Text, "Required parameter 'image' is missing")
-
-	// Verify that no deployment was created
-	mockFactory.AssertNotCalled(t, "NewDeployment")
-}
-
-func TestCreateDeploymentHandler_EmptyName(t *testing.T) {
-	// Setup mock cluster manager
-	mockCM := testmocks.NewMockClusterManager()
-
-	// Setup mock factory
-	mockFactory := testmocks.NewMockDeploymentFactory()
-
-	// Create the handler
-	handler := createDeploymentHandler(mockCM, mockFactory)
-
-	// Create a request with empty name
-	request := mcp.CallToolRequest{
-		Params: struct {
-			Name      string                 `json:"name"`
-			Arguments map[string]interface{} `json:"arguments,omitempty"`
-			Meta      *struct {
-				ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
-			} `json:"_meta,omitempty"`
-		}{
-			Arguments: map[string]interface{}{
+		{
+			name: "MissingName",
+			args: map[string]interface{}{
+				"image": nginxImage,
+			},
+			expectedParams: kai.DeploymentParams{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				// No setup needed
+			},
+			expectedOutput:      missingNameError,
+			expectDeployCreated: false,
+		},
+		{
+			name: "MissingImage",
+			args: map[string]interface{}{
+				"name": testDeployName,
+			},
+			expectedParams: kai.DeploymentParams{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				// No setup needed
+			},
+			expectedOutput:      missingImageError,
+			expectDeployCreated: false,
+		},
+		{
+			name: "EmptyName",
+			args: map[string]interface{}{
 				"name":  "",
-				"image": "nginx:latest",
+				"image": nginxImage,
 			},
+			expectedParams: kai.DeploymentParams{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				// No setup needed
+			},
+			expectedOutput:      emptyNameError,
+			expectDeployCreated: false,
 		},
-	}
-
-	// Call the handler
-	result, err := handler(context.Background(), request)
-
-	// Verify the result
-	assert.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.Contains(t, result.Content[0].(mcp.TextContent).Text, "Parameter 'name' must be a non-empty string")
-
-	// Verify that no deployment was created
-	mockFactory.AssertNotCalled(t, "NewDeployment")
-}
-
-func TestCreateDeploymentHandler_EmptyImage(t *testing.T) {
-	// Setup mock cluster manager
-	mockCM := testmocks.NewMockClusterManager()
-
-	// Setup mock factory
-	mockFactory := testmocks.NewMockDeploymentFactory()
-
-	// Create the handler
-	handler := createDeploymentHandler(mockCM, mockFactory)
-
-	// Create a request with empty image
-	request := mcp.CallToolRequest{
-		Params: struct {
-			Name      string                 `json:"name"`
-			Arguments map[string]interface{} `json:"arguments,omitempty"`
-			Meta      *struct {
-				ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
-			} `json:"_meta,omitempty"`
-		}{
-			Arguments: map[string]interface{}{
-				"name":  "test-deployment",
+		{
+			name: "EmptyImage",
+			args: map[string]interface{}{
+				"name":  testDeployName,
 				"image": "",
 			},
-		},
-	}
-
-	// Call the handler
-	result, err := handler(context.Background(), request)
-
-	// Verify the result
-	assert.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.Contains(t, result.Content[0].(mcp.TextContent).Text, "Parameter 'image' must be a non-empty string")
-
-	// Verify that no deployment was created
-	mockFactory.AssertNotCalled(t, "NewDeployment")
-}
-
-func TestCreateDeploymentHandler_Error(t *testing.T) {
-	// Setup mock cluster manager
-	mockCM := testmocks.NewMockClusterManager()
-	mockCM.On("GetCurrentNamespace").Return("default")
-
-	// Define expected parameters
-	expectedParams := kai.DeploymentParams{
-		Name:      "error-deployment",
-		Image:     "nginx:latest",
-		Namespace: "default",
-		Replicas:  1,
-	}
-
-	// Setup mock deployment with an error on Create
-	mockDeployment := testmocks.NewMockDeployment(expectedParams)
-	mockDeployment.On("Create", mock.Anything, mockCM).Return("", errors.New("failed to create deployment: resource quota exceeded"))
-
-	// Setup mock factory with DeploymentParams
-	mockFactory := testmocks.NewMockDeploymentFactory()
-	mockFactory.On("NewDeployment", expectedParams).Return(mockDeployment)
-
-	// Create the handler
-	handler := createDeploymentHandler(mockCM, mockFactory)
-
-	// Create a request
-	request := mcp.CallToolRequest{
-		Params: struct {
-			Name      string                 `json:"name"`
-			Arguments map[string]interface{} `json:"arguments,omitempty"`
-			Meta      *struct {
-				ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
-			} `json:"_meta,omitempty"`
-		}{
-			Arguments: map[string]interface{}{
-				"name":  "error-deployment",
-				"image": "nginx:latest",
+			expectedParams: kai.DeploymentParams{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				// No setup needed
 			},
+			expectedOutput:      emptyImageError,
+			expectDeployCreated: false,
+		},
+		{
+			name: "Error",
+			args: map[string]interface{}{
+				"name":  errorDeployName,
+				"image": nginxImage,
+			},
+			expectedParams: kai.DeploymentParams{
+				Name:      errorDeployName,
+				Image:     nginxImage,
+				Namespace: defaultNamespace,
+				Replicas:  defaultReplicas,
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockDeployment.On("Create", mock.Anything, mockCM).
+					Return("", errors.New(quotaExceededError))
+			},
+			expectedOutput:      quotaExceededError,
+			expectDeployCreated: true,
 		},
 	}
 
-	// Call the handler
-	result, err := handler(context.Background(), request)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockCM := testmocks.NewMockClusterManager()
+			mockFactory := testmocks.NewMockDeploymentFactory()
 
-	// Verify the result
-	assert.NoError(t, err)
-	assert.NotNil(t, result)
-	assert.Contains(t, result.Content[0].(mcp.TextContent).Text, "failed to create deployment: resource quota exceeded")
+			var mockDeployment *testmocks.MockDeployment
+			if tc.expectDeployCreated {
+				mockDeployment = testmocks.NewMockDeployment(tc.expectedParams)
+				mockFactory.On("NewDeployment", tc.expectedParams).Return(mockDeployment)
+			}
 
-	// Verify that the expected methods were called
-	mockCM.AssertExpectations(t)
-	mockFactory.AssertExpectations(t)
-	mockDeployment.AssertExpectations(t)
+			tc.mockSetup(mockCM, mockFactory, mockDeployment)
+
+			handler := createDeploymentHandler(mockCM, mockFactory)
+
+			request := mcp.CallToolRequest{
+				Params: struct {
+					Name      string                 `json:"name"`
+					Arguments map[string]interface{} `json:"arguments,omitempty"`
+					Meta      *struct {
+						ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
+					} `json:"_meta,omitempty"`
+				}{
+					Arguments: tc.args,
+				},
+			}
+
+			result, err := handler(context.Background(), request)
+			assert.NoError(t, err)
+			assert.NotNil(t, result)
+			assert.Contains(t, result.Content[0].(mcp.TextContent).Text, tc.expectedOutput)
+
+			mockCM.AssertExpectations(t)
+			mockFactory.AssertExpectations(t)
+			if mockDeployment != nil {
+				mockDeployment.AssertExpectations(t)
+			}
+		})
+	}
 }

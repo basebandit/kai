@@ -14,12 +14,6 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-const (
-	testPodName      = "test-pod"
-	defaultNamespace = "default"
-	nginxLatestImage = "nginx:latest"
-)
-
 // Test case structs for table-driven tests
 type createPodTestCase struct {
 	name              string
@@ -77,12 +71,12 @@ func TestCreatePodHandler(t *testing.T) {
 			name: "RequiredParams",
 			args: map[string]interface{}{
 				"name":  testPodName,
-				"image": nginxLatestImage,
+				"image": nginxImage,
 			},
 			expectedParams: kai.PodParams{
 				Name:          testPodName,
 				Namespace:     defaultNamespace,
-				Image:         nginxLatestImage,
+				Image:         nginxImage,
 				ContainerName: testPodName,          // Default to pod name
 				RestartPolicy: defaultRestartPolicy, // Default
 			},
@@ -97,7 +91,7 @@ func TestCreatePodHandler(t *testing.T) {
 			name: "AllParams",
 			args: map[string]interface{}{
 				"name":               podName,
-				"image":              nginxLatestImage,
+				"image":              nginxImage,
 				"namespace":          testNamespace,
 				"command":            []interface{}{"/bin/sh", "-c"},
 				"args":               []interface{}{"echo hello; sleep 3600"},
@@ -113,7 +107,7 @@ func TestCreatePodHandler(t *testing.T) {
 			},
 			expectedParams: kai.PodParams{
 				Name:               podName,
-				Image:              nginxLatestImage,
+				Image:              nginxImage,
 				Namespace:          testNamespace,
 				Command:            []interface{}{"/bin/sh", "-c"},
 				Args:               []interface{}{"echo hello; sleep 3600"},
@@ -129,15 +123,15 @@ func TestCreatePodHandler(t *testing.T) {
 			},
 			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockPodFactory, mockPod *testmocks.MockPod) {
 				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
-				mockPod.On("Create", mock.Anything, mockCM).Return("Pod \"full-pod\" created successfully in namespace \"test-namespace\"", nil)
+				mockPod.On("Create", mock.Anything, mockCM).Return(fmt.Sprintf("Pod %q created successfully in namespace %q", podName, testNamespace), nil)
 			},
-			expectedOutput:    "Pod \"full-pod\" created successfully",
+			expectedOutput:    fmt.Sprintf("Pod %q created successfully", podName),
 			expectPodCreation: true,
 		},
 		{
 			name: "MissingName",
 			args: map[string]interface{}{
-				"image": nginxLatestImage,
+				"image": nginxImage,
 			},
 			expectedParams: kai.PodParams{},
 			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockPodFactory, mockPod *testmocks.MockPod) {
@@ -162,7 +156,7 @@ func TestCreatePodHandler(t *testing.T) {
 			name: "InvalidImagePullPolicy",
 			args: map[string]interface{}{
 				"name":              testPodName,
-				"image":             nginxLatestImage,
+				"image":             nginxImage,
 				"image_pull_policy": "InvalidPolicy",
 			},
 			expectedParams: kai.PodParams{},
@@ -176,7 +170,7 @@ func TestCreatePodHandler(t *testing.T) {
 			name: "InvalidRestartPolicy",
 			args: map[string]interface{}{
 				"name":           testPodName,
-				"image":          nginxLatestImage,
+				"image":          nginxImage,
 				"restart_policy": "InvalidPolicy",
 			},
 			expectedParams: kai.PodParams{},
@@ -190,7 +184,7 @@ func TestCreatePodHandler(t *testing.T) {
 			name: "InvalidContainerPort",
 			args: map[string]interface{}{
 				"name":           testPodName,
-				"image":          nginxLatestImage,
+				"image":          nginxImage,
 				"container_port": "invalid-port",
 			},
 			expectedParams: kai.PodParams{},
@@ -204,12 +198,12 @@ func TestCreatePodHandler(t *testing.T) {
 			name: "Error",
 			args: map[string]interface{}{
 				"name":  "error-pod",
-				"image": nginxLatestImage,
+				"image": nginxImage,
 			},
 			expectedParams: kai.PodParams{
 				Name:          "error-pod",
 				Namespace:     defaultNamespace,
-				Image:         nginxLatestImage,
+				Image:         nginxImage,
 				ContainerName: "error-pod",          // Default to pod name
 				RestartPolicy: defaultRestartPolicy, // Default
 			},
@@ -264,6 +258,8 @@ func TestCreatePodHandler(t *testing.T) {
 }
 
 func TestListPodsHandler(t *testing.T) {
+	labelSelector := "app=nginx"
+
 	testCases := []listPodsTestCase{
 		{
 			name: "DefaultNamespace",
@@ -274,9 +270,9 @@ func TestListPodsHandler(t *testing.T) {
 			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockPodFactory, mockPod *testmocks.MockPod) {
 				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
 				mockPod.On("List", mock.Anything, mockCM, int64(0), "", "").
-					Return("Pods in namespace 'default':\n- pod1\n- pod2", nil)
+					Return(fmt.Sprintf("Pods in namespace %q:\n- pod1\n- pod2", defaultNamespace), nil)
 			},
-			expectedOutput: "Pods in namespace 'default':",
+			expectedOutput: fmt.Sprintf("Pods in namespace %q:", defaultNamespace),
 		},
 		{
 			name: "AllNamespaces",
@@ -293,17 +289,17 @@ func TestListPodsHandler(t *testing.T) {
 		{
 			name: "WithLabelSelector",
 			args: map[string]interface{}{
-				"label_selector": "app=nginx",
+				"label_selector": labelSelector,
 			},
 			expectedParams: kai.PodParams{
 				Namespace: defaultNamespace,
 			},
 			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockPodFactory, mockPod *testmocks.MockPod) {
 				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
-				mockPod.On("List", mock.Anything, mockCM, int64(0), "app=nginx", "").
-					Return("Pods in namespace 'default' with label 'app=nginx':\n- nginx-pod-1\n- nginx-pod-2", nil)
+				mockPod.On("List", mock.Anything, mockCM, int64(0), labelSelector, "").
+					Return(fmt.Sprintf("Pods in namespace %q with label %q:\n- nginx-pod-1\n- nginx-pod-2", defaultNamespace, labelSelector), nil)
 			},
-			expectedOutput: "Pods in namespace 'default' with label 'app=nginx':",
+			expectedOutput: fmt.Sprintf("Pods in namespace %q with label %q:", defaultNamespace, labelSelector),
 		},
 		{
 			name: "WithLimit",
@@ -316,9 +312,9 @@ func TestListPodsHandler(t *testing.T) {
 			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockPodFactory, mockPod *testmocks.MockPod) {
 				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
 				mockPod.On("List", mock.Anything, mockCM, int64(5), "", "").
-					Return("Pods in namespace 'default' (limited to 5):\n- pod1\n- pod2\n- pod3\n- pod4\n- pod5", nil)
+					Return(fmt.Sprintf("Pods in namespace %q (limited to 5):\n- pod1\n- pod2\n- pod3\n- pod4\n- pod5", defaultNamespace), nil)
 			},
-			expectedOutput: "Pods in namespace 'default' (limited to 5):",
+			expectedOutput: fmt.Sprintf("Pods in namespace %q (limited to 5):", defaultNamespace),
 		},
 		{
 			name: "Error",
@@ -375,18 +371,18 @@ func TestGetPodHandler(t *testing.T) {
 		{
 			name: "Success",
 			args: map[string]interface{}{
-				"name": "nginx-pod",
+				"name": nginxPodName,
 			},
 			expectedParams: kai.PodParams{
-				Name:      "nginx-pod",
+				Name:      nginxPodName,
 				Namespace: defaultNamespace,
 			},
 			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockPodFactory, mockPod *testmocks.MockPod) {
 				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
 				mockPod.On("Get", mock.Anything, mockCM).
-					Return("Pod 'nginx-pod' in namespace 'default':\nStatus: Running\nNode: worker-1\nIP: 192.168.1.10", nil)
+					Return(fmt.Sprintf("Pod %q in namespace %q:\nStatus: Running\nNode: worker-1\nIP: 192.168.1.10", nginxPodName, defaultNamespace), nil)
 			},
-			expectedOutput:    "Pod 'nginx-pod' in namespace 'default':",
+			expectedOutput:    fmt.Sprintf("Pod %q in namespace %q:", nginxPodName, defaultNamespace),
 			expectPodCreation: true,
 		},
 		{
@@ -414,18 +410,18 @@ func TestGetPodHandler(t *testing.T) {
 		{
 			name: "Error",
 			args: map[string]interface{}{
-				"name": "non-existent-pod",
+				"name": nonexistentPodName,
 			},
 			expectedParams: kai.PodParams{
-				Name:      "non-existent-pod",
+				Name:      nonexistentPodName,
 				Namespace: defaultNamespace,
 			},
 			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockPodFactory, mockPod *testmocks.MockPod) {
 				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
 				mockPod.On("Get", mock.Anything, mockCM).
-					Return("", errors.New("pod 'non-existent-pod' not found in namespace 'default'"))
+					Return("", fmt.Errorf("pod %q not found in namespace %q", nonexistentPodName, defaultNamespace))
 			},
-			expectedOutput:    "pod 'non-existent-pod' not found in namespace 'default'",
+			expectedOutput:    fmt.Sprintf("pod %q not found in namespace %q", nonexistentPodName, defaultNamespace),
 			expectPodCreation: true,
 		},
 	}
@@ -476,36 +472,36 @@ func TestDeletePodHandler(t *testing.T) {
 		{
 			name: "Success",
 			args: map[string]interface{}{
-				"name": "nginx-pod",
+				"name": nginxPodName,
 			},
 			expectedParams: kai.PodParams{
-				Name:      "nginx-pod",
+				Name:      nginxPodName,
 				Namespace: defaultNamespace,
 			},
 			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockPodFactory, mockPod *testmocks.MockPod) {
 				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
 				mockPod.On("Delete", mock.Anything, mockCM, false).
-					Return("Successfully delete pod \"nginx-pod\" in namespace \"default\"", nil)
+					Return(fmt.Sprintf("Successfully delete pod %q in namespace %q", nginxPodName, defaultNamespace), nil)
 			},
-			expectedOutput:    "Successfully delete pod \"nginx-pod\" in namespace \"default\"",
+			expectedOutput:    fmt.Sprintf("Successfully delete pod %q in namespace %q", nginxPodName, defaultNamespace),
 			expectPodCreation: true,
 		},
 		{
 			name: "WithForce",
 			args: map[string]interface{}{
-				"name":  "nginx-pod",
+				"name":  nginxPodName,
 				"force": true,
 			},
 			expectedParams: kai.PodParams{
-				Name:      "nginx-pod",
+				Name:      nginxPodName,
 				Namespace: defaultNamespace,
 			},
 			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockPodFactory, mockPod *testmocks.MockPod) {
 				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
 				mockPod.On("Delete", mock.Anything, mockCM, true).
-					Return("Successfully delete pod \"nginx-pod\" in namespace \"default\"", nil)
+					Return(fmt.Sprintf("Successfully delete pod %q in namespace %q", nginxPodName, defaultNamespace), nil)
 			},
-			expectedOutput:    "Successfully delete pod \"nginx-pod\" in namespace \"default\"",
+			expectedOutput:    fmt.Sprintf("Successfully delete pod %q in namespace %q", nginxPodName, defaultNamespace),
 			expectPodCreation: true,
 		},
 		{
@@ -521,10 +517,10 @@ func TestDeletePodHandler(t *testing.T) {
 		{
 			name: "Error",
 			args: map[string]interface{}{
-				"name": "non-existent-pod",
+				"name": nonexistentPodName,
 			},
 			expectedParams: kai.PodParams{
-				Name:      "non-existent-pod",
+				Name:      nonexistentPodName,
 				Namespace: defaultNamespace,
 			},
 			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockPodFactory, mockPod *testmocks.MockPod) {
@@ -583,43 +579,43 @@ func TestStreamLogsHandler(t *testing.T) {
 		{
 			name: "BasicLogs",
 			args: map[string]interface{}{
-				"pod": "nginx-pod",
+				"pod": nginxPodName,
 			},
 			expectedParams: kai.PodParams{
-				Name:      "nginx-pod",
+				Name:      nginxPodName,
 				Namespace: defaultNamespace,
 			},
 			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockPodFactory, mockPod *testmocks.MockPod) {
 				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
 				mockPod.On("StreamLogs", mock.Anything, mockCM, int64(0), false, (*time.Duration)(nil)).
-					Return("Logs from container 'nginx' in pod 'default/nginx-pod':\n2023-05-01T12:00:00Z INFO starting nginx\n2023-05-01T12:00:01Z INFO nginx started", nil)
+					Return(fmt.Sprintf("Logs from container 'nginx' in pod '%s/%s':\n2023-05-01T12:00:00Z INFO starting nginx\n2023-05-01T12:00:01Z INFO nginx started", defaultNamespace, nginxPodName), nil)
 			},
-			expectedOutput:    "Logs from container 'nginx' in pod 'default/nginx-pod':",
+			expectedOutput:    fmt.Sprintf("Logs from container 'nginx' in pod '%s/%s':", defaultNamespace, nginxPodName),
 			expectPodCreation: true,
 		},
 		{
 			name: "WithContainer",
 			args: map[string]interface{}{
-				"pod":       "nginx-pod",
+				"pod":       nginxPodName,
 				"container": "sidecar",
 			},
 			expectedParams: kai.PodParams{
-				Name:          "nginx-pod",
+				Name:          nginxPodName,
 				Namespace:     defaultNamespace,
 				ContainerName: "sidecar",
 			},
 			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockPodFactory, mockPod *testmocks.MockPod) {
 				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
 				mockPod.On("StreamLogs", mock.Anything, mockCM, int64(0), false, (*time.Duration)(nil)).
-					Return("Logs from container 'sidecar' in pod 'default/nginx-pod':\n2023-05-01T12:00:00Z INFO starting sidecar\n2023-05-01T12:00:01Z INFO sidecar started", nil)
+					Return(fmt.Sprintf("Logs from container 'sidecar' in pod '%s/%s':\n2023-05-01T12:00:00Z INFO starting sidecar\n2023-05-01T12:00:01Z INFO sidecar started", defaultNamespace, nginxPodName), nil)
 			},
-			expectedOutput:    "Logs from container 'sidecar' in pod 'default/nginx-pod':",
+			expectedOutput:    fmt.Sprintf("Logs from container 'sidecar' in pod '%s/%s':", defaultNamespace, nginxPodName),
 			expectPodCreation: true,
 		},
 		{
 			name: "InvalidSince",
 			args: map[string]interface{}{
-				"pod":   "nginx-pod",
+				"pod":   nginxPodName,
 				"since": "invalid",
 			},
 			expectedParams: kai.PodParams{},
@@ -683,32 +679,24 @@ func TestStreamLogsHandler(t *testing.T) {
 }
 
 func TestRegisterPodTools(t *testing.T) {
-	// Setup mock server and cluster manager
 	mockServer := new(testmocks.MockServer)
 	mockCM := testmocks.NewMockClusterManager()
 
-	// Expect tool registrations - use the correct type match
 	mockServer.On("AddTool", mock.AnythingOfType("mcp.Tool"), mock.AnythingOfType("server.ToolHandlerFunc")).Return().Times(5)
 
-	// Call the function
 	RegisterPodTools(mockServer, mockCM)
 
-	// Verify that the expected methods were called
 	mockServer.AssertExpectations(t)
 }
 
 func TestRegisterPodToolsWithFactory(t *testing.T) {
-	// Setup mock server and cluster manager
 	mockServer := new(testmocks.MockServer)
 	mockCM := testmocks.NewMockClusterManager()
 	mockFactory := new(testmocks.MockPodFactory)
 
-	// Expect tool registrations - use the correct type match
 	mockServer.On("AddTool", mock.AnythingOfType("mcp.Tool"), mock.AnythingOfType("server.ToolHandlerFunc")).Return().Times(5)
 
-	// Call the function
 	RegisterPodToolsWithFactory(mockServer, mockCM, mockFactory)
 
-	// Verify that the expected methods were called
 	mockServer.AssertExpectations(t)
 }
