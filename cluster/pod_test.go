@@ -1,10 +1,12 @@
-package clustermanager
+package cluster
 
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -20,54 +22,89 @@ func TestPodOperations(t *testing.T) {
 }
 
 // Pod Operations Tests
-
 func testGetPod(t *testing.T) {
-	cm := New()
 	ctx := context.Background()
 
-	// Create a fake client with a test pod
-	fakeClient := fake.NewSimpleClientset(
-		&corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
+	// Create test pods and namespaces
+	testPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod",
+			Namespace: "test-namespace",
+		},
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+		},
+	}
+
+	testNamespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-namespace",
+		},
+	}
+
+	// Define test cases
+	testCases := []struct {
+		name        string
+		pod         Pod
+		expectError bool
+		errorMsg    string
+	}{
+		{
+			name: "Get existing pod",
+			pod: Pod{
 				Name:      "test-pod",
 				Namespace: "test-namespace",
 			},
-			Status: corev1.PodStatus{
-				Phase: corev1.PodRunning,
-			},
+			expectError: false,
 		},
-		&corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "test-namespace",
+		{
+			name: "Pod not found",
+			pod: Pod{
+				Name:      "nonexistent-pod",
+				Namespace: "test-namespace",
 			},
+			expectError: true,
+			errorMsg:    "not found",
 		},
-	)
+		{
+			name: "Namespace not found",
+			pod: Pod{
+				Name:      "test-pod",
+				Namespace: "nonexistent-namespace",
+			},
+			expectError: true,
+			errorMsg:    "not found",
+		},
+	}
 
-	cm.clients["test-cluster"] = fakeClient
-	cm.currentContext = "test-cluster"
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
 
-	// Test getting an existing pod
-	pod, err := cm.GetPod(ctx, "test-pod", "test-namespace")
-	assert.NoError(t, err)
-	assert.Contains(t, pod, "test-pod")
+			cm := New()
+			fakeClient := fake.NewSimpleClientset(testPod, testNamespace)
+			cm.clients["test-cluster"] = fakeClient
+			cm.currentContext = "test-cluster"
 
-	// Test getting a non-existent pod
-	_, err = cm.GetPod(ctx, "nonexistent-pod", "test-namespace")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
+			result, err := tc.pod.Get(ctx, cm)
 
-	// Test getting a pod in a non-existent namespace
-	_, err = cm.GetPod(ctx, "test-pod", "nonexistent-namespace")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
+			if tc.expectError {
+				assert.Error(t, err)
+				if tc.errorMsg != "" {
+					assert.Contains(t, err.Error(), tc.errorMsg)
+				}
+			} else {
+				assert.NoError(t, err)
+				assert.Contains(t, result, "test-pod")
+			}
+		})
+	}
 }
 
 func testListPods(t *testing.T) {
-	cm := New()
 	ctx := context.Background()
 
 	// Create test pods
-	objects := []runtime.Object{
+	testPods := []runtime.Object{
 		&corev1.Pod{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "pod1",
@@ -100,158 +137,345 @@ func testListPods(t *testing.T) {
 		},
 	}
 
-	fakeClient := fake.NewSimpleClientset(objects...)
-	cm.clients["test-cluster"] = fakeClient
-	cm.currentContext = "test-cluster"
+	// Define test cases
+	testCases := []struct {
+		name              string
+		pod               Pod
+		limit             int64
+		expectError       bool
+		errorMsg          string
+		expectedContent   []string
+		unexpectedContent []string
+	}{
+		{
+			name: "List pods in namespace",
+			pod: Pod{
+				Namespace: "test-namespace",
+			},
+			limit:             10,
+			expectError:       false,
+			expectedContent:   []string{"pod1", "pod2"},
+			unexpectedContent: []string{"pod3"},
+		},
+		{
+			name: "List pods with label selector",
+			pod: Pod{
+				Namespace:     "test-namespace",
+				LabelSelector: "app=test",
+			},
+			limit:             10,
+			expectError:       false,
+			expectedContent:   []string{"pod1", "pod2"},
+			unexpectedContent: []string{"pod3"},
+		},
+		{
+			name: "List pods in all namespaces",
+			pod: Pod{
+				Namespace: "",
+			},
+			limit:           10,
+			expectError:     false,
+			expectedContent: []string{"pod1", "pod2", "pod3"},
+		},
+		{
+			name: "List pods in non-existent namespace",
+			pod: Pod{
+				Namespace: "nonexistent-namespace",
+			},
+			limit:       10,
+			expectError: true,
+			errorMsg:    "not found",
+		},
+		{
+			name: "No pods found with label selector",
+			pod: Pod{
+				Namespace:     "test-namespace",
+				LabelSelector: "app=nonexistent",
+			},
+			limit:       10,
+			expectError: true,
+			errorMsg:    "no pods found",
+		},
+	}
 
-	// Test listing pods in a specific namespace
-	result, err := cm.ListPods(ctx, 10, "test-namespace", "", "")
-	assert.NoError(t, err)
-	assert.Contains(t, result, "pod1")
-	assert.Contains(t, result, "pod2")
-	assert.NotContains(t, result, "pod3")
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cm := New()
+			fakeClient := fake.NewSimpleClientset(testPods...)
+			cm.clients["test-cluster"] = fakeClient
+			cm.currentContext = "test-cluster"
 
-	// Test listing pods with a label selector
-	result, err = cm.ListPods(ctx, 10, "test-namespace", "app=test", "")
-	assert.NoError(t, err)
-	assert.Contains(t, result, "pod1")
-	assert.Contains(t, result, "pod2")
+			result, err := tc.pod.List(ctx, cm, tc.limit)
 
-	// Test listing pods in all namespaces
-	result, err = cm.ListPods(ctx, 10, "", "", "")
-	assert.NoError(t, err)
-	assert.Contains(t, result, "pod1")
-	assert.Contains(t, result, "pod2")
-	assert.Contains(t, result, "pod3")
+			if tc.expectError {
+				assert.Error(t, err)
+				if tc.errorMsg != "" {
+					assert.Contains(t, err.Error(), tc.errorMsg)
+				}
+			} else {
+				assert.NoError(t, err)
 
-	// Test listing pods in a non-existent namespace
-	_, err = cm.ListPods(ctx, 10, "nonexistent-namespace", "", "")
-	assert.Error(t, err)
+				// Check for expected content
+				for _, expected := range tc.expectedContent {
+					assert.Contains(t, result, expected)
+				}
+
+				// Check for unexpected content
+				for _, unexpected := range tc.unexpectedContent {
+					assert.NotContains(t, result, unexpected)
+				}
+			}
+		})
+	}
 }
 
 func testDeletePod(t *testing.T) {
-	cm := New()
 	ctx := context.Background()
 
-	// Create a fake client with a test pod
-	fakeClient := fake.NewSimpleClientset(
-		&corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
+	testCases := []struct {
+		name         string
+		pod          Pod
+		force        bool
+		setupObjects []runtime.Object
+		expectError  bool
+		errorMsg     string
+	}{
+		{
+			name: "Delete existing pod",
+			pod: Pod{
 				Name:      "test-pod",
 				Namespace: "test-namespace",
 			},
-		},
-		&corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "test-namespace",
-			},
-		},
-	)
-
-	cm.clients["test-cluster"] = fakeClient
-	cm.currentContext = "test-cluster"
-
-	// Test deleting an existing pod
-	result, err := cm.DeletePod(ctx, "test-pod", "test-namespace", false)
-	assert.NoError(t, err)
-	assert.Contains(t, result, "Successfully delete pod")
-
-	// Verify the pod was deleted
-	_, err = fakeClient.CoreV1().Pods("test-namespace").Get(ctx, "test-pod", metav1.GetOptions{})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
-
-	// Test deleting a non-existent pod
-	_, err = cm.DeletePod(ctx, "nonexistent-pod", "test-namespace", false)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "not found")
-
-	// Test deleting a pod with force option
-	fakeClient = fake.NewSimpleClientset(
-		&corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "force-pod",
-				Namespace: "test-namespace",
-			},
-		},
-		&corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "test-namespace",
-			},
-		},
-	)
-	cm.clients["test-cluster"] = fakeClient
-
-	result, err = cm.DeletePod(ctx, "force-pod", "test-namespace", true)
-	assert.NoError(t, err)
-	assert.Contains(t, result, "Successfully delete pod")
-}
-
-func testStreamPodLogs(t *testing.T) {
-	// NOTE: This would require a more sophisticated mock to test properly
-	// as the fake client doesn't support streaming logs
-	// For now, we just test the error cases with a basic fake client
-
-	cm := New()
-	ctx := context.Background()
-
-	// Create a fake client with a test pod
-	fakeClient := fake.NewSimpleClientset(
-		&corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-pod",
-				Namespace: "test-namespace",
-			},
-			Spec: corev1.PodSpec{
-				Containers: []corev1.Container{
-					{
-						Name: "test-container",
+			force: false,
+			setupObjects: []runtime.Object{
+				&corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-pod",
+						Namespace: "test-namespace",
+					},
+				},
+				&corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-namespace",
 					},
 				},
 			},
-			Status: corev1.PodStatus{
-				Phase: corev1.PodRunning,
+			expectError: false,
+		},
+		{
+			name: "Force delete pod",
+			pod: Pod{
+				Name:      "force-pod",
+				Namespace: "test-namespace",
+			},
+			force: true,
+			setupObjects: []runtime.Object{
+				&corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "force-pod",
+						Namespace: "test-namespace",
+					},
+				},
+				&corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-namespace",
+					},
+				},
+			},
+			expectError: false,
+		},
+		{
+			name: "Pod not found",
+			pod: Pod{
+				Name:      "nonexistent-pod",
+				Namespace: "test-namespace",
+			},
+			force: false,
+			setupObjects: []runtime.Object{
+				&corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "test-namespace",
+					},
+				},
+			},
+			expectError: true,
+			errorMsg:    "not found",
+		},
+		{
+			name: "Namespace not found",
+			pod: Pod{
+				Name:      "test-pod",
+				Namespace: "nonexistent-namespace",
+			},
+			force:        false,
+			setupObjects: []runtime.Object{},
+			expectError:  true,
+			errorMsg:     "not found",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cm := New()
+			fakeClient := fake.NewSimpleClientset(tc.setupObjects...)
+			cm.clients["test-cluster"] = fakeClient
+			cm.currentContext = "test-cluster"
+
+			result, err := tc.pod.Delete(ctx, cm, tc.force)
+
+			if tc.expectError {
+				assert.Error(t, err)
+				if tc.errorMsg != "" {
+					assert.Contains(t, err.Error(), tc.errorMsg)
+				}
+			} else {
+				assert.NoError(t, err)
+				assert.Contains(t, result, "Successfully delete pod")
+
+				// Verify the pod was deleted
+				_, err = fakeClient.CoreV1().Pods(tc.pod.Namespace).Get(ctx, tc.pod.Name, metav1.GetOptions{})
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), "not found")
+			}
+		})
+	}
+}
+
+func testStreamPodLogs(t *testing.T) {
+	ctx := context.Background()
+
+	// Create test pods for reuse
+	runningPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pod",
+			Namespace: "test-namespace",
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name: "test-container",
+				},
 			},
 		},
-		&corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "test-namespace",
+		Status: corev1.PodStatus{
+			Phase: corev1.PodRunning,
+		},
+	}
+
+	pendingPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "pending-pod",
+			Namespace: "test-namespace",
+		},
+		Spec: corev1.PodSpec{
+			Containers: []corev1.Container{
+				{
+					Name: "test-container",
+				},
 			},
 		},
-	)
+		Status: corev1.PodStatus{
+			Phase: corev1.PodPending,
+		},
+	}
 
-	cm.clients["test-cluster"] = fakeClient
-	cm.currentContext = "test-cluster"
+	testNamespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-namespace",
+		},
+	}
 
-	// Test with non-existent namespace
-	_, err := cm.StreamPodLogs(ctx, 10, false, nil, "test-pod", "test-container", "nonexistent-namespace")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "namespace")
+	// Define test cases
+	testCases := []struct {
+		name          string
+		pod           Pod
+		setupObjects  []runtime.Object
+		tailLines     int64
+		previous      bool
+		since         *time.Duration
+		expectError   bool
+		errorContains string
+	}{
+		{
+			name: "Container not found",
+			pod: Pod{
+				Name:          "test-pod",
+				Namespace:     "test-namespace",
+				ContainerName: "nonexistent-container",
+			},
+			setupObjects:  []runtime.Object{runningPod, testNamespace},
+			expectError:   true,
+			errorContains: "container 'nonexistent-container' not found",
+		},
+		{
+			name: "Pod not running",
+			pod: Pod{
+				Name:          "pending-pod",
+				Namespace:     "test-namespace",
+				ContainerName: "test-container",
+			},
+			setupObjects:  []runtime.Object{pendingPod, testNamespace},
+			expectError:   true,
+			errorContains: "pod 'pending-pod' is in 'Pending' state",
+		},
+		{
+			name: "Pod not found",
+			pod: Pod{
+				Name:          "nonexistent-pod",
+				Namespace:     "test-namespace",
+				ContainerName: "test-container",
+			},
+			setupObjects:  []runtime.Object{testNamespace},
+			expectError:   true,
+			errorContains: "pod 'nonexistent-pod' not found",
+		},
+		{
+			name: "Namespace not found",
+			pod: Pod{
+				Name:          "test-pod",
+				Namespace:     "nonexistent-namespace",
+				ContainerName: "test-container",
+			},
+			setupObjects:  []runtime.Object{},
+			expectError:   true,
+			errorContains: "namespace",
+		},
+		{
+			name: "Previous logs for non-running pod",
+			pod: Pod{
+				Name:          "pending-pod",
+				Namespace:     "test-namespace",
+				ContainerName: "test-container",
+			},
+			setupObjects: []runtime.Object{pendingPod, testNamespace},
+			previous:     true,  // Should bypass running state check
+			expectError:  false, // No error in validation, but will fail in the fake client
+		},
+	}
 
-	// Test with non-existent pod
-	_, err = cm.StreamPodLogs(ctx, 10, false, nil, "nonexistent-pod", "test-container", "test-namespace")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "pod")
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
 
-	// Test with non-existent container
-	_, err = cm.StreamPodLogs(ctx, 10, false, nil, "test-pod", "nonexistent-container", "test-namespace")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "container")
+			cm := New()
+			fakeClient := fake.NewSimpleClientset(tc.setupObjects...)
+			cm.clients["test-cluster"] = fakeClient
+			cm.currentContext = "test-cluster"
 
-	// Note: We can't fully test the streaming logs functionality with the fake client
-}
+			_, err := tc.pod.StreamLogs(ctx, cm, tc.tailLines, tc.previous, tc.since)
 
-// Helper for mocking the stream logs functionality
-// This would be used to properly test the log streaming feature
-type mockPodLogStream struct {
-	content string
-}
-
-func (m *mockPodLogStream) Read(p []byte) (n int, err error) {
-	copy(p, []byte(m.content))
-	return len(m.content), nil
-}
-
-func (m *mockPodLogStream) Close() error {
-	return nil
+			// Note that with fake client, the actual streaming will fail
+			// so we're mainly testing the validation logic
+			if tc.expectError {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tc.errorContains)
+			} else if tc.name == "Previous logs for non-running pod" {
+				// This will likely fail with fake client during streaming
+				// but it should pass the state validation check
+				if err != nil {
+					// Ensure it's not failing due to pod state
+					assert.NotContains(t, err.Error(), "is in 'Pending' state")
+				}
+			}
+		})
+	}
 }
