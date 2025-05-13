@@ -1,7 +1,8 @@
-package clustermanager
+package cluster
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -75,16 +76,16 @@ func formatPodList(pods *corev1.PodList, allNamespaces bool, limit int64, result
 			total = fmt.Sprintf("%d", len(pod.Status.ContainerStatuses))
 		}
 
-		age := time.Since(pod.CreationTimestamp.Time).Round(time.Second).String()
+		age := time.Since(pod.CreationTimestamp.Time).Round(time.Second)
 
 		// Format the pod info
 		podInfo := ""
 		if allNamespaces {
 			podInfo = fmt.Sprintf("• %s/%s: %s (%s/%s) - IP: %s - Age: %s",
-				pod.Namespace, pod.Name, status, ready, total, pod.Status.PodIP, age)
+				pod.Namespace, pod.Name, status, ready, total, pod.Status.PodIP, formatDuration(age))
 		} else {
 			podInfo = fmt.Sprintf("• %s: %s (%s/%s) - IP: %s - Age: %s",
-				pod.Name, status, ready, total, pod.Status.PodIP, age)
+				pod.Name, status, ready, total, pod.Status.PodIP, formatDuration(age))
 		}
 
 		// Add node info if available
@@ -116,13 +117,99 @@ func formatPodList(pods *corev1.PodList, allNamespaces bool, limit int64, result
 func formatDeploymentList(deployments *appsv1.DeploymentList) string {
 	var resultText string
 	for _, deployment := range deployments.Items {
+
+		age := time.Since(deployment.CreationTimestamp.Time).Round(time.Second)
+
 		resultText += fmt.Sprintf("• %s/%s: %d/%d replicas ready - Age: %s\n",
 			deployment.Namespace,
 			deployment.Name,
 			deployment.Status.ReadyReplicas,
 			deployment.Status.Replicas,
-			time.Since(deployment.CreationTimestamp.Time).Round(time.Second).String())
+			formatDuration(age),
+		)
 	}
 
 	return resultText
+}
+
+// formatService formats a service for display
+func formatService(sb *strings.Builder, svc corev1.Service, includeNamespace bool) {
+	// Get service type
+	serviceType := string(svc.Spec.Type)
+
+	// Get cluster IP
+	clusterIP := svc.Spec.ClusterIP
+	if clusterIP == "" {
+		clusterIP = "<none>"
+	}
+
+	// Get external IP
+	externalIP := "<none>"
+	if len(svc.Status.LoadBalancer.Ingress) > 0 {
+		ips := []string{}
+		for _, ingress := range svc.Status.LoadBalancer.Ingress {
+			if ingress.IP != "" {
+				ips = append(ips, ingress.IP)
+			} else if ingress.Hostname != "" {
+				ips = append(ips, ingress.Hostname)
+			}
+		}
+		if len(ips) > 0 {
+			externalIP = strings.Join(ips, ",")
+		}
+	} else if len(svc.Spec.ExternalIPs) > 0 {
+		externalIP = strings.Join(svc.Spec.ExternalIPs, ",")
+	}
+
+	// Get port(s)
+	ports := []string{}
+	for _, port := range svc.Spec.Ports {
+		if port.NodePort > 0 {
+			ports = append(ports, fmt.Sprintf("%d:%d/%s", port.Port, port.NodePort, port.Protocol))
+		} else {
+			ports = append(ports, fmt.Sprintf("%d/%s", port.Port, port.Protocol))
+		}
+	}
+	portsStr := "<none>"
+	if len(ports) > 0 {
+		portsStr = strings.Join(ports, ",")
+	}
+
+	// Get age
+	age := time.Since(svc.CreationTimestamp.Time).Round(time.Second)
+
+	if includeNamespace {
+		sb.WriteString(fmt.Sprintf("%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+			svc.Namespace,
+			svc.Name,
+			serviceType,
+			clusterIP,
+			externalIP,
+			portsStr,
+			formatDuration(age),
+		))
+	} else {
+		sb.WriteString(fmt.Sprintf("%s\t%s\t%s\t%s\t%s\t%s\n",
+			svc.Name,
+			serviceType,
+			clusterIP,
+			externalIP,
+			portsStr,
+			formatDuration(age),
+		))
+	}
+}
+
+// formatDuration formats a time.Duration in a human-readable way similar to kubectl
+func formatDuration(d time.Duration) string {
+	if d < time.Minute {
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	} else if d < time.Hour {
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	} else if d < 24*time.Hour {
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	} else {
+		days := int(d.Hours() / 24)
+		return fmt.Sprintf("%dd", days)
+	}
 }
