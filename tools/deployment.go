@@ -2,12 +2,50 @@ package tools
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/basebandit/kai"
+	"github.com/basebandit/kai/cluster"
 	"github.com/mark3labs/mcp-go/mcp"
 )
 
-func RegisterDeploymentTools(s kai.ServerInterface, cm kai.ClusterManagerInterface) {
+// DeploymentFactory is an interface for creating deployment operators
+type DeploymentFactory interface {
+	NewDeployment(params kai.DeploymentParams) kai.DeploymentOperator
+}
+
+// DefaultDeploymentFactory implements the DeploymentFactory interface
+type DefaultDeploymentFactory struct{}
+
+// NewDefaultDeploymentFactory creates a new DefaultDeploymentFactory
+func NewDefaultDeploymentFactory() *DefaultDeploymentFactory {
+	return &DefaultDeploymentFactory{}
+}
+
+// NewDeployment creates a new deployment operator
+func (f *DefaultDeploymentFactory) NewDeployment(params kai.DeploymentParams) kai.DeploymentOperator {
+	return &cluster.Deployment{
+		Name:             params.Name,
+		Image:            params.Image,
+		Namespace:        params.Namespace,
+		Replicas:         params.Replicas,
+		Labels:           params.Labels,
+		ContainerPort:    params.ContainerPort,
+		Env:              params.Env,
+		ImagePullPolicy:  params.ImagePullPolicy,
+		ImagePullSecrets: params.ImagePullSecrets,
+	}
+}
+
+// RegisterDeploymentTools registers all deployment-related tools with the server
+func RegisterDeploymentTools(s kai.ServerInterface, cm kai.ClusterManager) {
+	factory := NewDefaultDeploymentFactory()
+	RegisterDeploymentToolsWithFactory(s, cm, factory)
+}
+
+// RegisterDeploymentToolsWithFactory registers all deployment-related tools with the server using the provided factory
+func RegisterDeploymentToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, factory DeploymentFactory) {
 	listDeploymentTool := mcp.NewTool("list_deployments",
 		mcp.WithDescription("List deployments in the current namespace or across all namespaces"),
 		mcp.WithBoolean("all_namespaces",
@@ -21,7 +59,7 @@ func RegisterDeploymentTools(s kai.ServerInterface, cm kai.ClusterManagerInterfa
 		),
 	)
 
-	s.AddTool(listDeploymentTool, listDeploymentsHandler(cm))
+	s.AddTool(listDeploymentTool, listDeploymentsHandler(cm, factory))
 
 	createDeploymentTool := mcp.NewTool("create_deployment",
 		mcp.WithDescription("Create a new deployment in the current namespace"),
@@ -56,10 +94,11 @@ func RegisterDeploymentTools(s kai.ServerInterface, cm kai.ClusterManagerInterfa
 		),
 	)
 
-	s.AddTool(createDeploymentTool, createDeploymentHandler(cm))
+	s.AddTool(createDeploymentTool, createDeploymentHandler(cm, factory))
 }
 
-func listDeploymentsHandler(cm kai.ClusterManagerInterface) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+// listDeploymentsHandler handles the list_deployments tool
+func listDeploymentsHandler(cm kai.ClusterManager, factory DeploymentFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		var allNamespaces bool
 
@@ -67,9 +106,13 @@ func listDeploymentsHandler(cm kai.ClusterManagerInterface) func(ctx context.Con
 			allNamespaces = allNamespacesArg
 		}
 
-		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
-			namespace = namespaceArg
+		var namespace string
+		if !allNamespaces {
+			if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+				namespace = namespaceArg
+			} else {
+				namespace = cm.GetCurrentNamespace()
+			}
 		}
 
 		var labelSelector string
@@ -77,7 +120,13 @@ func listDeploymentsHandler(cm kai.ClusterManagerInterface) func(ctx context.Con
 			labelSelector = labelSelectorArg
 		}
 
-		resultText, err := cm.ListDeployments(ctx, allNamespaces, labelSelector, namespace)
+		params := kai.DeploymentParams{
+			Namespace: namespace, // will be used if allNamespaces is false
+		}
+		deployment := factory.NewDeployment(params)
+
+		// List deployments
+		resultText, err := deployment.List(ctx, cm, allNamespaces, labelSelector)
 		if err != nil {
 			return mcp.NewToolResultText(err.Error()), nil
 		}
@@ -86,60 +135,108 @@ func listDeploymentsHandler(cm kai.ClusterManagerInterface) func(ctx context.Con
 	}
 }
 
-func createDeploymentHandler(cm kai.ClusterManagerInterface) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+// createDeploymentHandler handles the create_deployment tool
+func createDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		deploymentParams := kai.DeploymentParams{}
+		// Initialize params with default values
+		params := kai.DeploymentParams{
+			Replicas: 1, // Set default replica count to 1
+		}
 
-		name, ok := request.Params.Arguments["name"].(string)
+		nameArg, ok := request.Params.Arguments["name"]
+		if !ok || nameArg == nil {
+			return mcp.NewToolResultText("Required parameter 'name' is missing"), nil
+		}
+
+		name, ok := nameArg.(string)
 		if !ok || name == "" {
 			return mcp.NewToolResultText("Parameter 'name' must be a non-empty string"), nil
 		}
-		deploymentParams.Name = name
 
-		image, ok := request.Params.Arguments["image"].(string)
+		imageArg, ok := request.Params.Arguments["image"]
+		if !ok || imageArg == nil {
+			return mcp.NewToolResultText("Required parameter 'image' is missing"), nil
+		}
+
+		image, ok := imageArg.(string)
 		if !ok || image == "" {
 			return mcp.NewToolResultText("Parameter 'image' must be a non-empty string"), nil
 		}
-		deploymentParams.Image = image
 
+		// Process optional parameters
+		if replicasArg, ok := request.Params.Arguments["replicas"].(float64); ok {
+			params.Replicas = replicasArg
+		}
+
+		if labelsArg, ok := request.Params.Arguments["labels"].(map[string]interface{}); ok {
+			params.Labels = labelsArg
+		}
+
+		if containerPortArg, ok := request.Params.Arguments["container_port"].(string); ok && containerPortArg != "" {
+			if valid, errMsg := validateContainerPort(containerPortArg); valid {
+				params.ContainerPort = containerPortArg
+			} else {
+				return mcp.NewToolResultText(errMsg), nil
+			}
+		}
+
+		if envArg, ok := request.Params.Arguments["env"].(map[string]interface{}); ok {
+			params.Env = envArg
+		}
+
+		if imagePullSecretsArg, ok := request.Params.Arguments["image_pull_secrets"].([]interface{}); ok {
+			params.ImagePullSecrets = imagePullSecretsArg
+		}
+
+		if imagePullPolicyArg, ok := request.Params.Arguments["image_pull_policy"].(string); ok {
+			params.ImagePullPolicy = imagePullPolicyArg
+		}
+
+		// Get namespace (optional with default)
 		namespace := cm.GetCurrentNamespace()
 		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 
-		deploymentParams.Namespace = namespace
+		params.Namespace = namespace
+		params.Image = image
+		params.Name = name
 
-		if replicasArg, ok := request.Params.Arguments["replicas"].(float64); ok {
-			deploymentParams.Replicas = replicasArg
-		} else {
-			// if no replica count was set, set default to 1
-			deploymentParams.Replicas = 1
-		}
+		deployment := factory.NewDeployment(params)
 
-		if labelsArg, ok := request.Params.Arguments["labels"].(map[string]interface{}); ok {
-			deploymentParams.Labels = labelsArg
-		}
-
-		if portArg, ok := request.Params.Arguments["container_port"].(string); ok && portArg != "" {
-			deploymentParams.ContainerPort = portArg
-		}
-
-		if envArg, ok := request.Params.Arguments["env"].(map[string]interface{}); ok {
-			deploymentParams.Env = envArg
-		}
-
-		if pullPolicyArg, ok := request.Params.Arguments["image_pull_policy"].(string); ok {
-			deploymentParams.ImagePullPolicy = pullPolicyArg
-		}
-
-		if pullSecretsArg, ok := request.Params.Arguments["image_pull_secrets"].([]interface{}); ok {
-			deploymentParams.ImagePullSecrets = pullSecretsArg
-		}
-
-		resultText, err := cm.CreateDeployment(ctx, deploymentParams)
+		resultText, err := deployment.Create(ctx, cm)
 		if err != nil {
 			return mcp.NewToolResultText(err.Error()), nil
 		}
+
 		return mcp.NewToolResultText(resultText), nil
 	}
+}
+
+// validateContainerPort checks if the containerPort string has the correct format
+// Returns true if valid, false if invalid
+func validateContainerPort(portStr string) (bool, string) {
+	parts := strings.Split(portStr, "/")
+
+	// Check basic format: should be "port" or "port/protocol"
+	if len(parts) != 1 && len(parts) != 2 {
+		return false, "Container port should be in format 'port' or 'port/protocol'"
+	}
+
+	// Validate port part is a number
+	var port int
+	if _, err := fmt.Sscanf(parts[0], "%d", &port); err != nil {
+		return false, "Port must be a number"
+	}
+
+	// Validate protocol if provided
+	if len(parts) == 2 {
+		protocol := strings.ToUpper(parts[1])
+		validProtocols := map[string]bool{"TCP": true, "UDP": true, "SCTP": true}
+		if !validProtocols[protocol] {
+			return false, fmt.Sprintf("Protocol %s is not valid. Must be one of: TCP, UDP, SCTP", parts[1])
+		}
+	}
+
+	return true, ""
 }
