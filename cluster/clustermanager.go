@@ -1,4 +1,4 @@
-package clustermanager
+package cluster
 
 import (
 	"context"
