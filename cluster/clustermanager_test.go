@@ -160,12 +160,12 @@ func testValidateFile(t *testing.T) {
 	// Create a temporary file
 	tempDir := t.TempDir()
 	filePath := filepath.Join(tempDir, "config")
-	err := os.WriteFile(filePath, []byte("test"), 0644)
+	err := os.WriteFile(filePath, []byte("test"), 0600)
 	require.NoError(t, err)
 
 	// Create a directory
 	dirPath := filepath.Join(tempDir, "configdir")
-	err = os.Mkdir(dirPath, 0755)
+	err = os.Mkdir(dirPath, 0700)
 	require.NoError(t, err)
 
 	// Test with non-existent file
@@ -207,7 +207,7 @@ users:
   user:
     token: test-token
 `
-	err := os.WriteFile(kubeconfigPath, []byte(kubeconfigContent), 0644)
+	err := os.WriteFile(kubeconfigPath, []byte(kubeconfigContent), 0600)
 	require.NoError(t, err)
 
 	t.Run("EmptyClusterName", func(t *testing.T) {

@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"log"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -21,7 +21,8 @@ func main() {
 
 	err := cm.LoadKubeConfig("local", kubeconfig)
 	if err != nil {
-		log.Fatalln(err)
+		log(os.Stderr, "config error: %v\n", err)
+		os.Exit(1)
 	}
 
 	s := kai.NewServer()
@@ -33,19 +34,23 @@ func main() {
 
 	errChan := make(chan error, 1)
 	go func() {
-		fmt.Fprintln(os.Stdout, "Server started")
+		log(os.Stdout, "Server started\n")
 		errChan <- s.Serve()
 	}()
 
 	select {
 	case err := <-errChan:
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Server error: %v\n", err)
+			log(os.Stderr, "Server error: %v\n", err)
 		}
 	case sig := <-sigChan:
-		fmt.Fprintf(os.Stderr, "Received signal %v, shutting down...\n", sig)
+		log(os.Stderr, "Received signal %v, shutting down...\n", sig)
 	}
-	fmt.Fprintln(os.Stdout, "Server stopped")
+	log(os.Stdout, "Server stopped\n")
+}
+
+func log(w io.Writer, format string, a ...any) {
+	_, _ = fmt.Fprintf(w, format, a...)
 }
 
 func registerAllTools(s *kai.Server, cm *cluster.Cluster) {

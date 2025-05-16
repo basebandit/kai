@@ -363,7 +363,7 @@ func (cm *Cluster) isResourceNamespaced(ctx context.Context, gvr *schema.GroupVe
 		schema.GroupVersion{Group: gvr.Group, Version: gvr.Version}.String(),
 	)
 	if err != nil {
-		return false, fmt.Errorf("failed to get resources for %s/%s: %v:", gvr.Group, gvr.Version, err)
+		return false, fmt.Errorf("failed to get resources for %s/%s: %v", gvr.Group, gvr.Version, err)
 	}
 
 	// Look for our resource
@@ -410,7 +410,9 @@ func resolvePath(path string) (string, error) {
 
 // extractContextName reads the kubeconfig file and extracts the current context name
 func extractContextName(path string) (string, error) {
-	kubeconfigBytes, err := os.ReadFile(path)
+	cleanPath := filepath.Clean(path)
+
+	kubeconfigBytes, err := os.ReadFile(cleanPath)
 	if err != nil {
 		return "", fmt.Errorf("error reading kubeconfig file: %w", err)
 	}
@@ -467,7 +469,12 @@ func testConnection(client kubernetes.Interface) error {
 
 // validateFile checks if the file exists and is a regular file
 func validateFile(path string) error {
-	fileInfo, err := os.Stat(path)
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return fmt.Errorf("error resolving absolute path: %w", err)
+	}
+
+	fileInfo, err := os.Stat(absPath)
 	if err != nil {
 		return fmt.Errorf("error accessing file: %w", err)
 	}

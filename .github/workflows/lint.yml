@@ -1,8 +1,8 @@
 name: Lint
 
-on: 
+on:
   push:
-  pull_request: 
+  pull_request:
 
 permissions:
   contents: read
@@ -10,33 +10,28 @@ permissions:
 jobs:
   lint:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  
 
-      - name: Set up go
+      - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: 'go.mod' 
-          
+          go-version-file: 'go.mod'
+
       - name: Verify dependencies
         run: |
-          go mod verify && go mod download
+          go mod verify
+          go mod download
 
-      - name: Install golangci-lint
-        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-      
-      - name: Run golangci-lint
+          LINT_VERSION=2.1.6
+          curl -fsSL https://github.com/golangci/golangci-lint/releases/download/v${LINT_VERSION}/golangci-lint-${LINT_VERSION}-linux-amd64.tar.gz | \
+            tar xz --strip-components 1 --wildcards \*/golangci-lint
+          mkdir -p bin && mv golangci-lint bin/
+
+      - name: Run lint
         run: |
-          # For PR, check only new code
-          if [ $GITHUB_EVENT_NAME == 'pull_request' ]; then
-            BASE_SHA=$(git merge-base HEAD ${{ github.event.pull_request.base.sha }})
-            echo "Running golangci-lint on changes since $BASE_SHA"
-            golangci-lint run --timeout=3m --new-from-rev=$BASE_SHA
-          else
-            echo "Running golangci-lint on entire codebase"
-            golangci-lint run --timeout=3m
-          fi
+          STATUS=0
+          bin/golangci-lint run --timeout=3m || STATUS=$?
+          exit $STATUS
+
