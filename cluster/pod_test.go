@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -13,6 +14,26 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
+const (
+	testClusterName = "test-cluster"
+)
+
+var (
+	shellCommand = []interface{}{"/bin/sh", "-c"}
+	sleepArgs    = []interface{}{"echo hello; sleep 3600"}
+	testLabels   = map[string]interface{}{
+		"app": "test",
+		"env": "dev",
+	}
+	testEnv = map[string]interface{}{
+		"DEBUG": "true",
+		"ENV":   "test",
+	}
+	ssdNodeSelector = map[string]interface{}{
+		"disktype": "ssd",
+	}
+)
+
 // TestPodOperations groups all pod-related operations tests
 func TestPodOperations(t *testing.T) {
 	t.Run("CreatePod", testCreatePods)
@@ -20,6 +41,58 @@ func TestPodOperations(t *testing.T) {
 	t.Run("ListPods", testListPods)
 	t.Run("DeletePod", testDeletePod)
 	t.Run("StreamPodLogs", testStreamPodLogs)
+}
+
+// createNamespace creates a namespace object for testing
+func createNamespace(name string) *corev1.Namespace {
+	return &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+	}
+}
+
+// createPod creates a pod object for testing
+func createPod(name, namespace string, phase corev1.PodPhase, containers ...string) *corev1.Pod {
+	containerList := make([]corev1.Container, 0, len(containers))
+	for _, c := range containers {
+		containerList = append(containerList, corev1.Container{
+			Name: c,
+		})
+	}
+
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+		},
+		Spec: corev1.PodSpec{
+			Containers: containerList,
+		},
+		Status: corev1.PodStatus{
+			Phase: phase,
+		},
+	}
+}
+
+// createPodWithLabels creates a pod with labels for testing
+func createPodWithLabels(name, namespace string, labels map[string]string) *corev1.Pod {
+	return &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: namespace,
+			Labels:    labels,
+		},
+	}
+}
+
+// setupTestCluster creates a test cluster manager with the given objects
+func setupTestCluster(objects ...runtime.Object) *Cluster {
+	cm := New()
+	fakeClient := fake.NewSimpleClientset(objects...)
+	cm.clients[testClusterName] = fakeClient
+	cm.currentContext = testClusterName
+	return cm
 }
 
 // Pod Operations Tests
@@ -39,52 +112,36 @@ func testCreatePods(t *testing.T) {
 			pod: Pod{
 				Name:      podName,
 				Namespace: testNamespace,
-				Image:     "nginx:latest",
+				Image:     nginxImage,
 			},
 			setupObjects: []runtime.Object{
-				&corev1.Namespace{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: testNamespace,
-					},
-				},
+				createNamespace(testNamespace),
 			},
-			expectedText: "Pod \"test-pod\" created successfully",
+			expectedText: fmt.Sprintf(podCreatedFmt, podName),
 			expectError:  false,
 		},
 		{
 			name: "Create pod with all attributes",
 			pod: Pod{
-				Name:            "full-pod",
-				Namespace:       testNamespace,
-				Image:           "nginx:latest",
-				ContainerName:   "custom-container",
-				ContainerPort:   "8080/TCP",
-				ImagePullPolicy: "Always",
-				RestartPolicy:   "OnFailure",
-				ServiceAccount:  "test-sa",
-				Command:         []interface{}{"/bin/sh", "-c"},
-				Args:            []interface{}{"echo hello; sleep 3600"},
-				Labels: map[string]interface{}{
-					"app": "test",
-					"env": "dev",
-				},
-				Env: map[string]interface{}{
-					"DEBUG": "true",
-					"ENV":   "test",
-				},
-				NodeSelector: map[string]interface{}{
-					"disktype": "ssd",
-				},
-				ImagePullSecrets: []interface{}{"registry-secret"},
+				Name:             fullPodName,
+				Namespace:        testNamespace,
+				Image:            nginxImage,
+				ContainerName:    customContainer,
+				ContainerPort:    "8080/TCP",
+				ImagePullPolicy:  alwaysPullPolicy,
+				RestartPolicy:    onFailurePolicy,
+				ServiceAccount:   testServiceAccount,
+				Command:          shellCommand,
+				Args:             sleepArgs,
+				Labels:           testLabels,
+				Env:              testEnv,
+				NodeSelector:     ssdNodeSelector,
+				ImagePullSecrets: []interface{}{registrySecret},
 			},
 			setupObjects: []runtime.Object{
-				&corev1.Namespace{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: testNamespace,
-					},
-				},
+				createNamespace(testNamespace),
 			},
-			expectedText: "Pod \"full-pod\" created successfully",
+			expectedText: fmt.Sprintf(podCreatedFmt, fullPodName),
 			expectError:  false,
 		},
 		{
@@ -92,25 +149,21 @@ func testCreatePods(t *testing.T) {
 			pod: Pod{
 				Name:      podName,
 				Namespace: nonexistentNS,
-				Image:     "nginx:latest",
+				Image:     nginxImage,
 			},
 			setupObjects: []runtime.Object{},
 			expectError:  true,
-			errorMsg:     "namespace \"nonexistent-namespace\" not found",
+			errorMsg:     fmt.Sprintf("namespace %q not found", nonexistentNS),
 		},
 		{
 			name: "Missing image",
 			pod: Pod{
-				Name:      "no-image-pod",
+				Name:      noImagePodName,
 				Namespace: testNamespace,
 				Image:     "", // Empty image
 			},
 			setupObjects: []runtime.Object{
-				&corev1.Namespace{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: testNamespace,
-					},
-				},
+				createNamespace(testNamespace),
 			},
 			expectError: true,
 			errorMsg:    "failed to create pod", // The actual error would come from the k8s API
@@ -120,10 +173,7 @@ func testCreatePods(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			// Setup
-			cm := New()
-			fakeClient := fake.NewSimpleClientset(tc.setupObjects...)
-			cm.clients["test-cluster"] = fakeClient
-			cm.currentContext = "test-cluster"
+			cm := setupTestCluster(tc.setupObjects...)
 
 			// Execute
 			result, err := tc.pod.Create(ctx, cm)
@@ -139,6 +189,7 @@ func testCreatePods(t *testing.T) {
 				assert.Contains(t, result, tc.expectedText)
 
 				// Verify pod was created
+				fakeClient := cm.clients[testClusterName]
 				pod, err := fakeClient.CoreV1().Pods(tc.pod.Namespace).Get(ctx, tc.pod.Name, metav1.GetOptions{})
 				require.NoError(t, err)
 				assert.Equal(t, tc.pod.Name, pod.Name)
@@ -178,12 +229,12 @@ func testCreatePods(t *testing.T) {
 
 				// Check pod level details
 				if tc.pod.RestartPolicy != "" {
-					expectedPolicy := "Always" // Default
+					expectedPolicy := string(corev1.RestartPolicyAlways) // Default
 					switch tc.pod.RestartPolicy {
-					case "OnFailure":
-						expectedPolicy = "OnFailure"
-					case "Never":
-						expectedPolicy = "Never"
+					case onFailurePolicy:
+						expectedPolicy = string(corev1.RestartPolicyOnFailure)
+					case neverPolicy:
+						expectedPolicy = string(corev1.RestartPolicyNever)
 					}
 					assert.Equal(t, expectedPolicy, string(pod.Spec.RestartPolicy))
 				}
@@ -200,22 +251,9 @@ func testCreatePods(t *testing.T) {
 func testGetPod(t *testing.T) {
 	ctx := context.Background()
 
-	// Create test pods and namespaces
-	testPod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      podName,
-			Namespace: testNamespace,
-		},
-		Status: corev1.PodStatus{
-			Phase: corev1.PodRunning,
-		},
-	}
-
-	_testNamespace := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: testNamespace,
-		},
-	}
+	// Create common test objects
+	runningPod := createPod(podName, testNamespace, corev1.PodRunning)
+	testNamespaceObj := createNamespace(testNamespace)
 
 	// Define test cases
 	testCases := []struct {
@@ -239,7 +277,7 @@ func testGetPod(t *testing.T) {
 				Namespace: testNamespace,
 			},
 			expectError: true,
-			errorMsg:    "not found",
+			errorMsg:    notFoundErrMsg,
 		},
 		{
 			name: "Namespace not found",
@@ -248,17 +286,13 @@ func testGetPod(t *testing.T) {
 				Namespace: nonexistentNS,
 			},
 			expectError: true,
-			errorMsg:    "not found",
+			errorMsg:    notFoundErrMsg,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-
-			cm := New()
-			fakeClient := fake.NewSimpleClientset(testPod, _testNamespace)
-			cm.clients["test-cluster"] = fakeClient
-			cm.currentContext = "test-cluster"
+			cm := setupTestCluster(runningPod, testNamespaceObj)
 
 			result, err := tc.pod.Get(ctx, cm)
 
@@ -278,38 +312,20 @@ func testGetPod(t *testing.T) {
 func testListPods(t *testing.T) {
 	ctx := context.Background()
 
-	// Create test pods
+	// Create test objects
+	pod1WithLabel := createPodWithLabels(pod1Name, testNamespace, map[string]string{"app": "test"})
+	pod2WithLabel := createPodWithLabels(pod2Name, testNamespace, map[string]string{"app": "test"})
+	pod3DiffNS := createPodWithLabels(pod3Name, otherNamespace, nil)
+	testNamespaceObj := createNamespace(testNamespace)
+	otherNamespaceObj := createNamespace(otherNamespace)
+
+	// Create test pods collection
 	testPods := []runtime.Object{
-		&corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "pod1",
-				Namespace: testNamespace,
-				Labels:    map[string]string{"app": "test"},
-			},
-		},
-		&corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "pod2",
-				Namespace: testNamespace,
-				Labels:    map[string]string{"app": "test"},
-			},
-		},
-		&corev1.Pod{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      "pod3",
-				Namespace: "other-namespace",
-			},
-		},
-		&corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: testNamespace,
-			},
-		},
-		&corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "other-namespace",
-			},
-		},
+		pod1WithLabel,
+		pod2WithLabel,
+		pod3DiffNS,
+		testNamespaceObj,
+		otherNamespaceObj,
 	}
 
 	// Define test cases
@@ -330,8 +346,8 @@ func testListPods(t *testing.T) {
 			},
 			limit:             10,
 			expectError:       false,
-			expectedContent:   []string{"pod1", "pod2"},
-			unexpectedContent: []string{"pod3"},
+			expectedContent:   []string{pod1Name, pod2Name},
+			unexpectedContent: []string{pod3Name},
 		},
 		{
 			name: "List pods with label selector",
@@ -341,8 +357,8 @@ func testListPods(t *testing.T) {
 			labelSelector:     "app=test",
 			limit:             10,
 			expectError:       false,
-			expectedContent:   []string{"pod1", "pod2"},
-			unexpectedContent: []string{"pod3"},
+			expectedContent:   []string{pod1Name, pod2Name},
+			unexpectedContent: []string{pod3Name},
 		},
 		{
 			name: "List pods in all namespaces",
@@ -351,7 +367,7 @@ func testListPods(t *testing.T) {
 			},
 			limit:           10,
 			expectError:     false,
-			expectedContent: []string{"pod1", "pod2", "pod3"},
+			expectedContent: []string{pod1Name, pod2Name, pod3Name},
 		},
 		{
 			name: "List pods in non-existent namespace",
@@ -360,7 +376,7 @@ func testListPods(t *testing.T) {
 			},
 			limit:       10,
 			expectError: true,
-			errorMsg:    "not found",
+			errorMsg:    notFoundErrMsg,
 		},
 		{
 			name: "No pods found with label selector",
@@ -370,16 +386,13 @@ func testListPods(t *testing.T) {
 			labelSelector: "app=nonexistent",
 			limit:         10,
 			expectError:   true,
-			errorMsg:      "no pods found",
+			errorMsg:      noPodsFoundMsg,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			cm := New()
-			fakeClient := fake.NewSimpleClientset(testPods...)
-			cm.clients["test-cluster"] = fakeClient
-			cm.currentContext = "test-cluster"
+			cm := setupTestCluster(testPods...)
 
 			result, err := tc.pod.List(ctx, cm, tc.limit, tc.labelSelector, "")
 
@@ -424,39 +437,21 @@ func testDeletePod(t *testing.T) {
 			},
 			force: false,
 			setupObjects: []runtime.Object{
-				&corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      podName,
-						Namespace: testNamespace,
-					},
-				},
-				&corev1.Namespace{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: testNamespace,
-					},
-				},
+				createPod(podName, testNamespace, corev1.PodRunning),
+				createNamespace(testNamespace),
 			},
 			expectError: false,
 		},
 		{
 			name: "Force delete pod",
 			pod: Pod{
-				Name:      "force-pod",
+				Name:      forcePodName,
 				Namespace: testNamespace,
 			},
 			force: true,
 			setupObjects: []runtime.Object{
-				&corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "force-pod",
-						Namespace: testNamespace,
-					},
-				},
-				&corev1.Namespace{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: testNamespace,
-					},
-				},
+				createPod(forcePodName, testNamespace, corev1.PodRunning),
+				createNamespace(testNamespace),
 			},
 			expectError: false,
 		},
@@ -468,14 +463,10 @@ func testDeletePod(t *testing.T) {
 			},
 			force: false,
 			setupObjects: []runtime.Object{
-				&corev1.Namespace{
-					ObjectMeta: metav1.ObjectMeta{
-						Name: testNamespace,
-					},
-				},
+				createNamespace(testNamespace),
 			},
 			expectError: true,
-			errorMsg:    "not found",
+			errorMsg:    notFoundErrMsg,
 		},
 		{
 			name: "Namespace not found",
@@ -486,16 +477,14 @@ func testDeletePod(t *testing.T) {
 			force:        false,
 			setupObjects: []runtime.Object{},
 			expectError:  true,
-			errorMsg:     "not found",
+			errorMsg:     notFoundErrMsg,
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			cm := New()
-			fakeClient := fake.NewSimpleClientset(tc.setupObjects...)
-			cm.clients["test-cluster"] = fakeClient
-			cm.currentContext = "test-cluster"
+			cm := setupTestCluster(tc.setupObjects...)
+			fakeClient := cm.clients[testClusterName]
 
 			result, err := tc.pod.Delete(ctx, cm, tc.force)
 
@@ -506,12 +495,12 @@ func testDeletePod(t *testing.T) {
 				}
 			} else {
 				assert.NoError(t, err)
-				assert.Contains(t, result, "Successfully delete pod")
+				assert.Contains(t, result, deleteSuccessMsg)
 
 				// Verify the pod was deleted
 				_, err = fakeClient.CoreV1().Pods(tc.pod.Namespace).Get(ctx, tc.pod.Name, metav1.GetOptions{})
 				assert.Error(t, err)
-				assert.Contains(t, err.Error(), "not found")
+				assert.Contains(t, err.Error(), notFoundErrMsg)
 			}
 		})
 	}
@@ -520,46 +509,10 @@ func testDeletePod(t *testing.T) {
 func testStreamPodLogs(t *testing.T) {
 	ctx := context.Background()
 
-	// Create test pods for reuse
-	runningPod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      podName,
-			Namespace: testNamespace,
-		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{
-					Name: containerName,
-				},
-			},
-		},
-		Status: corev1.PodStatus{
-			Phase: corev1.PodRunning,
-		},
-	}
-
-	pendingPod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      pendingPodName,
-			Namespace: testNamespace,
-		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{
-					Name: containerName,
-				},
-			},
-		},
-		Status: corev1.PodStatus{
-			Phase: corev1.PodPending,
-		},
-	}
-
-	_testNamespace := &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: testNamespace,
-		},
-	}
+	// Create test objects
+	runningPod := createPod(podName, testNamespace, corev1.PodRunning, containerName)
+	pendingPod := createPod(pendingPodName, testNamespace, corev1.PodPending, containerName)
+	testNamespaceObj := createNamespace(testNamespace)
 
 	// Define test cases
 	testCases := []struct {
@@ -579,9 +532,9 @@ func testStreamPodLogs(t *testing.T) {
 				Namespace:     testNamespace,
 				ContainerName: nonexistentContainer,
 			},
-			setupObjects:  []runtime.Object{runningPod, _testNamespace},
+			setupObjects:  []runtime.Object{runningPod, testNamespaceObj},
 			expectError:   true,
-			errorContains: "container 'nonexistent-container' not found",
+			errorContains: fmt.Sprintf("container '%s' not found", nonexistentContainer),
 		},
 		{
 			name: "Pod not running",
@@ -590,9 +543,9 @@ func testStreamPodLogs(t *testing.T) {
 				Namespace:     testNamespace,
 				ContainerName: containerName,
 			},
-			setupObjects:  []runtime.Object{pendingPod, _testNamespace},
+			setupObjects:  []runtime.Object{pendingPod, testNamespaceObj},
 			expectError:   true,
-			errorContains: "pod 'pending-pod' is in 'Pending' state",
+			errorContains: fmt.Sprintf("pod '%s' is in 'Pending' state", pendingPodName),
 		},
 		{
 			name: "Pod not found",
@@ -601,9 +554,9 @@ func testStreamPodLogs(t *testing.T) {
 				Namespace:     testNamespace,
 				ContainerName: containerName,
 			},
-			setupObjects:  []runtime.Object{_testNamespace},
+			setupObjects:  []runtime.Object{testNamespaceObj},
 			expectError:   true,
-			errorContains: "pod 'nonexistent-pod' not found",
+			errorContains: fmt.Sprintf("pod '%s' not found", nonexistentPodName),
 		},
 		{
 			name: "Namespace not found",
@@ -623,7 +576,7 @@ func testStreamPodLogs(t *testing.T) {
 				Namespace:     testNamespace,
 				ContainerName: containerName,
 			},
-			setupObjects: []runtime.Object{pendingPod, _testNamespace},
+			setupObjects: []runtime.Object{pendingPod, testNamespaceObj},
 			previous:     true,  // Should bypass running state check
 			expectError:  false, // No error in validation, but will fail in the fake client
 		},
@@ -631,11 +584,7 @@ func testStreamPodLogs(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-
-			cm := New()
-			fakeClient := fake.NewSimpleClientset(tc.setupObjects...)
-			cm.clients["test-cluster"] = fakeClient
-			cm.currentContext = "test-cluster"
+			cm := setupTestCluster(tc.setupObjects...)
 
 			_, err := tc.pod.StreamLogs(ctx, cm, tc.tailLines, tc.previous, tc.since)
 
