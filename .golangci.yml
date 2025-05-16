@@ -1,0 +1,12 @@
+linters:
+  enable:
+    - gofmt
+    - golint
+    - govet
+    - gosimple
+    - ineffassign
+    - errcheck
+    - staticcheck
+
+run:
+  deadline: 5m
