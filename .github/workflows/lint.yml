@@ -2,13 +2,7 @@ name: Lint
 
 on: 
   push:
-    branches:
-      - main
-      - playground
   pull_request: 
-    branches:
-      - main
-      - playground
 
 permissions:
   contents: read
@@ -26,8 +20,7 @@ jobs:
       - name: Set up go
         uses: actions/setup-go@v5
         with:
-          go-version-file: 'go.mod'
-          cache: true  
+          go-version-file: 'go.mod' 
           
       - name: Verify dependencies
         run: |
@@ -42,8 +35,8 @@ jobs:
           if [ $GITHUB_EVENT_NAME == 'pull_request' ]; then
             BASE_SHA=$(git merge-base HEAD ${{ github.event.pull_request.base.sha }})
             echo "Running golangci-lint on changes since $BASE_SHA"
-            golangci-lint run --config=.golangci.yml --timeout=5m --new-from-rev=$BASE_SHA
+            golangci-lint run --timeout=3m --new-from-rev=$BASE_SHA
           else
             echo "Running golangci-lint on entire codebase"
-            golangci-lint run --config=.golangci.yml --timeout=5m
+            golangci-lint run --timeout=3m
           fi
