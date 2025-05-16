@@ -20,29 +20,30 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  
 
       - name: Set up go
         uses: actions/setup-go@v5
         with:
           go-version-file: 'go.mod'
-
+          cache: true  
+          
       - name: Verify dependencies
         run: |
           go mod verify && go mod download
+
+      - name: Install golangci-lint
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
       
-      - name: Run lint
-        uses: actions/golangci-lint-action@v5
-        with:
-          version: v1.55.2
-          only-new-issues: true
-          args: --timeout-5m  --config=.golangci.yml
-          problem-matchers: true
-          skip-cache: false
-          skip-save-cache: false
-          cache-invalidation-interval: 7 # every 7 days
-
-
-
-
-  
-
+      - name: Run golangci-lint
+        run: |
+          # For PR, check only new code
+          if [ $GITHUB_EVENT_NAME == 'pull_request' ]; then
+            BASE_SHA=$(git merge-base HEAD ${{ github.event.pull_request.base.sha }})
+            echo "Running golangci-lint on changes since $BASE_SHA"
+            golangci-lint run --config=.golangci.yml --timeout=5m --new-from-rev=$BASE_SHA
+          else
+            echo "Running golangci-lint on entire codebase"
+            golangci-lint run --config=.golangci.yml --timeout=5m
+          fi
