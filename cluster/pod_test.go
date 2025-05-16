@@ -205,7 +205,7 @@ func testCreatePods(t *testing.T) {
 					}
 
 					// Verify command if set
-					if tc.pod.Command != nil && len(tc.pod.Command) > 0 {
+					if len(tc.pod.Command) > 0 {
 						expectedCmd := make([]string, 0)
 						for _, cmd := range tc.pod.Command {
 							if cmdStr, ok := cmd.(string); ok {
@@ -216,7 +216,7 @@ func testCreatePods(t *testing.T) {
 					}
 
 					// Verify args if set
-					if tc.pod.Args != nil && len(tc.pod.Args) > 0 {
+					if len(tc.pod.Args) > 0 {
 						expectedArgs := make([]string, 0)
 						for _, arg := range tc.pod.Args {
 							if argStr, ok := arg.(string); ok {

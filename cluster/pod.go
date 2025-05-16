@@ -359,7 +359,7 @@ func (p *Pod) StreamLogs(ctx context.Context, cm kai.ClusterManager, tailLines i
 	timeoutCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	//verify the namespace exists
+	// verify the namespace exists
 	_, err = client.CoreV1().Namespaces().Get(timeoutCtx, p.Namespace, metav1.GetOptions{})
 	if err != nil {
 		return result, fmt.Errorf("namespace %q not found: %v", p.Namespace, err)
@@ -439,7 +439,7 @@ func (p *Pod) StreamLogs(ctx context.Context, cm kai.ClusterManager, tailLines i
 	if err != nil {
 		return result, fmt.Errorf("failed to stream logs: %v", err)
 	}
-	defer logsStream.Close()
+	defer func() { _ = logsStream.Close() }()
 
 	// Read the logs with a max size limit to prevent excessive output
 	maxSize := 100 * 1024 // Limit to ~100KB of logs
