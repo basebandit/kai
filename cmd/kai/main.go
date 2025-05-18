@@ -53,7 +53,7 @@ func log(w io.Writer, format string, a ...any) {
 	_, _ = fmt.Fprintf(w, format, a...)
 }
 
-func registerAllTools(s *kai.Server, cm *cluster.Cluster) {
+func registerAllTools(s *kai.Server, cm *cluster.Manager) {
 	tools.RegisterPodTools(s, cm)
 	tools.RegisterDeploymentTools(s, cm)
 }
