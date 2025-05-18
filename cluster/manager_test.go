@@ -41,7 +41,7 @@ func TestKubeConfigLoading(t *testing.T) {
 func testNewClusterManager(t *testing.T) {
 	cm := New()
 	assert.NotNil(t, cm)
-	assert.Equal(t, "default", cm.GetCurrentNamespace())
+	assert.Equal(t, defaultNamespace, cm.GetCurrentNamespace())
 	assert.Empty(t, cm.ListClusters())
 }
 
@@ -49,15 +49,15 @@ func testNamespaceOperations(t *testing.T) {
 	cm := New()
 
 	// Test default
-	assert.Equal(t, "default", cm.GetCurrentNamespace())
+	assert.Equal(t, defaultNamespace, cm.GetCurrentNamespace())
 
 	// Test setting to a new value
-	cm.SetCurrentNamespace("test-namespace")
-	assert.Equal(t, "test-namespace", cm.GetCurrentNamespace())
+	cm.SetCurrentNamespace(testNamespace)
+	assert.Equal(t, testNamespace, cm.GetCurrentNamespace())
 
 	// Test setting to empty (should revert to default)
 	cm.SetCurrentNamespace("")
-	assert.Equal(t, "default", cm.GetCurrentNamespace())
+	assert.Equal(t, defaultNamespace, cm.GetCurrentNamespace())
 }
 
 func testContextOperations(t *testing.T) {
@@ -65,12 +65,12 @@ func testContextOperations(t *testing.T) {
 
 	// Add a fake client
 	fakeClient := fake.NewSimpleClientset()
-	cm.clients["test-cluster"] = fakeClient
+	cm.clients[testClusterName] = fakeClient
 
 	// Test setting to a valid context
-	err := cm.SetCurrentContext("test-cluster")
+	err := cm.SetCurrentContext(testClusterName)
 	assert.NoError(t, err)
-	assert.Equal(t, "test-cluster", cm.GetCurrentContext())
+	assert.Equal(t, testClusterName, cm.GetCurrentContext())
 
 	// Test setting to an invalid context
 	err = cm.SetCurrentContext("nonexistent-cluster")
@@ -88,8 +88,8 @@ func testClientOperations(t *testing.T) {
 
 	// Add a fake client
 	fakeClient := fake.NewSimpleClientset()
-	cm.clients["test-cluster"] = fakeClient
-	cm.currentContext = "test-cluster"
+	cm.clients[testClusterName] = fakeClient
+	cm.currentContext = testClusterName
 
 	// Test getting the current client
 	client, err = cm.GetCurrentClient()
@@ -97,7 +97,7 @@ func testClientOperations(t *testing.T) {
 	assert.Equal(t, fakeClient, client)
 
 	// Test getting a specific client
-	client, err = cm.GetClient("test-cluster")
+	client, err = cm.GetClient(testClusterName)
 	assert.NoError(t, err)
 	assert.Equal(t, fakeClient, client)
 
@@ -139,7 +139,7 @@ func testValidateInputs(t *testing.T) {
 	assert.Contains(t, err.Error(), "cluster name cannot be empty")
 
 	// Test with valid inputs
-	err = validateInputs("test-cluster", "/path/to/config")
+	err = validateInputs(testClusterName, "/path/to/config")
 	assert.NoError(t, err)
 }
 
@@ -230,7 +230,4 @@ users:
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "error accessing file")
 	})
-
-	// For a full integration test, we'd need to mock the k8s client creation and API calls,
-	// which would require significant refactoring of the original code.
 }

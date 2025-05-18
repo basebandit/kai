@@ -15,8 +15,8 @@ import (
 	"k8s.io/client-go/util/homedir"
 )
 
-// Cluster maintains connections to Kubernetes clusters
-type Cluster struct {
+// Manager maintains connections to Kubernetes clusters
+type Manager struct {
 	kubeconfigs      map[string]string
 	clients          map[string]kubernetes.Interface
 	dynamicClients   map[string]dynamic.Interface
@@ -24,9 +24,9 @@ type Cluster struct {
 	currentNamespace string
 }
 
-// New creates a new ClusterManager
-func New() *Cluster {
-	return &Cluster{
+// New creates a new cluster Manager
+func New() *Manager {
+	return &Manager{
 		kubeconfigs:      make(map[string]string),
 		clients:          make(map[string]kubernetes.Interface),
 		dynamicClients:   make(map[string]dynamic.Interface),
@@ -35,7 +35,7 @@ func New() *Cluster {
 }
 
 // LoadKubeConfig loads a kubeconfig file into the manager
-func (cm *Cluster) LoadKubeConfig(name, path string) error {
+func (cm *Manager) LoadKubeConfig(name, path string) error {
 	if err := validateInputs(name, path); err != nil {
 		return err
 	}
@@ -80,7 +80,7 @@ func (cm *Cluster) LoadKubeConfig(name, path string) error {
 }
 
 // GetClient returns the Kubernetes client for a specific cluster
-func (cm *Cluster) GetClient(clusterName string) (kubernetes.Interface, error) {
+func (cm *Manager) GetClient(clusterName string) (kubernetes.Interface, error) {
 	client, exists := cm.clients[clusterName]
 	if !exists {
 		return nil, fmt.Errorf("cluster %s not found", clusterName)
@@ -89,7 +89,7 @@ func (cm *Cluster) GetClient(clusterName string) (kubernetes.Interface, error) {
 }
 
 // GetDynamicClient returns the dynamic client for a specific cluster
-func (cm *Cluster) GetDynamicClient(clusterName string) (dynamic.Interface, error) {
+func (cm *Manager) GetDynamicClient(clusterName string) (dynamic.Interface, error) {
 	client, exists := cm.dynamicClients[clusterName]
 	if !exists {
 		return nil, fmt.Errorf("cluster %s not found", clusterName)
@@ -98,7 +98,7 @@ func (cm *Cluster) GetDynamicClient(clusterName string) (dynamic.Interface, erro
 }
 
 // GetCurrentClient returns the client for the current context
-func (cm *Cluster) GetCurrentClient() (kubernetes.Interface, error) {
+func (cm *Manager) GetCurrentClient() (kubernetes.Interface, error) {
 	if len(cm.clients) == 0 {
 		return nil, errors.New("no clusters configured - use the load_kubeconfig tool first")
 	}
@@ -117,7 +117,7 @@ func (cm *Cluster) GetCurrentClient() (kubernetes.Interface, error) {
 }
 
 // GetCurrentDynamicClient returns the dynamic client for the current context
-func (cm *Cluster) GetCurrentDynamicClient() (dynamic.Interface, error) {
+func (cm *Manager) GetCurrentDynamicClient() (dynamic.Interface, error) {
 	if len(cm.dynamicClients) == 0 {
 		return nil, errors.New("no clusters configured - use the load_kubeconfig tool first")
 	}
@@ -136,7 +136,7 @@ func (cm *Cluster) GetCurrentDynamicClient() (dynamic.Interface, error) {
 }
 
 // SetCurrentNamespace sets the current namespace
-func (cm *Cluster) SetCurrentNamespace(namespace string) {
+func (cm *Manager) SetCurrentNamespace(namespace string) {
 	if namespace == "" {
 		namespace = "default"
 	}
@@ -144,12 +144,12 @@ func (cm *Cluster) SetCurrentNamespace(namespace string) {
 }
 
 // GetCurrentNamespace returns the current namespace
-func (cm *Cluster) GetCurrentNamespace() string {
+func (cm *Manager) GetCurrentNamespace() string {
 	return cm.currentNamespace
 }
 
 // ListClusters returns a list of all configured clusters
-func (cm *Cluster) ListClusters() []string {
+func (cm *Manager) ListClusters() []string {
 	clusters := make([]string, 0, len(cm.clients))
 	for name := range cm.clients {
 		clusters = append(clusters, name)
@@ -158,7 +158,7 @@ func (cm *Cluster) ListClusters() []string {
 }
 
 // SetCurrentContext sets the current context
-func (cm *Cluster) SetCurrentContext(contextName string) error {
+func (cm *Manager) SetCurrentContext(contextName string) error {
 	if _, exists := cm.clients[contextName]; !exists {
 		return fmt.Errorf("cluster %s not found", contextName)
 	}
@@ -167,7 +167,7 @@ func (cm *Cluster) SetCurrentContext(contextName string) error {
 }
 
 // GetCurrentContext returns the current context name
-func (cm *Cluster) GetCurrentContext() string {
+func (cm *Manager) GetCurrentContext() string {
 	return cm.currentContext
 }
 

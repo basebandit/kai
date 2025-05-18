@@ -16,13 +16,13 @@ import (
 // TestNewDeployment tests deployment creation with defaults
 func TestNewDeployment(t *testing.T) {
 	deployment := &Deployment{
-		Name:      "test-app",
-		Namespace: "default",
+		Name:      deploymentName1,
+		Namespace: defaultNamespace,
 		Replicas:  1, // Default to 1 replica
 	}
 
-	assert.Equal(t, "test-app", deployment.Name)
-	assert.Equal(t, "default", deployment.Namespace)
+	assert.Equal(t, deploymentName1, deployment.Name)
+	assert.Equal(t, defaultNamespace, deployment.Namespace)
 	assert.Equal(t, float64(1), deployment.Replicas) // Default value
 	assert.Nil(t, deployment.Labels)
 	assert.Empty(t, deployment.ContainerPort)
@@ -38,10 +38,10 @@ func TestDeployment_Create(t *testing.T) {
 	// Test error case only - success case should be in integration tests
 	t.Run("Error getting dynamic client", func(t *testing.T) {
 		deployment := &Deployment{
-			Name:      "test-app",
-			Namespace: "default",
+			Name:      deploymentName1,
+			Namespace: defaultNamespace,
 			Replicas:  1, // Default to 1 replica,
-			Image:     "nginx:latest",
+			Image:     nginxImage,
 		}
 
 		mockCM := testmocks.NewMockClusterManager()
@@ -93,7 +93,7 @@ func TestDeployment_List(t *testing.T) {
 			name: "List deployments in specific namespace",
 			deployment: &Deployment{
 				Name:      "",
-				Namespace: "test-namespace",
+				Namespace: testNamespace,
 				Replicas:  1, // Default to 1 replica,
 			},
 			allNamespaces: false,
@@ -101,9 +101,9 @@ func TestDeployment_List(t *testing.T) {
 			setupMock: func(mockCM *testmocks.MockClusterManager) {
 				// Create fake deployments
 				fakeDeployments := []runtime.Object{
-					createDeploymentObj("deployment1", "test-namespace", 2),
-					createDeploymentObj("deployment2", "test-namespace", 3),
-					createDeploymentObj("deployment3", "other-namespace", 1), // Should not be listed
+					createDeploymentObj(deploymentName1, testNamespace, 2),
+					createDeploymentObj(deploymentName2, testNamespace, 3),
+					createDeploymentObj(deploymentName3, otherNamespace, 1), // Should not be listed
 				}
 
 				// Create fake client with the deployments
@@ -123,8 +123,8 @@ func TestDeployment_List(t *testing.T) {
 			setupMock: func(mockCM *testmocks.MockClusterManager) {
 				// Create fake deployments in different namespaces
 				fakeDeployments := []runtime.Object{
-					createDeploymentObj("deployment1", "namespace1", 1),
-					createDeploymentObj("deployment2", "namespace2", 1),
+					createDeploymentObj(deploymentName1, "namespace1", 1),
+					createDeploymentObj(deploymentName2, "namespace2", 1),
 				}
 
 				// Create fake client with the deployments
@@ -138,7 +138,7 @@ func TestDeployment_List(t *testing.T) {
 		},
 		{
 			name:          "No deployments found",
-			deployment:    &Deployment{Namespace: "empty-namespace"},
+			deployment:    &Deployment{Namespace: emptyNamespace},
 			allNamespaces: false,
 			labelSelector: "",
 			setupMock: func(mockCM *testmocks.MockClusterManager) {
@@ -153,7 +153,7 @@ func TestDeployment_List(t *testing.T) {
 		},
 		{
 			name:          "Error getting client",
-			deployment:    &Deployment{Namespace: "default"},
+			deployment:    &Deployment{Namespace: defaultNamespace},
 			allNamespaces: false,
 			labelSelector: "",
 			setupMock: func(mockCM *testmocks.MockClusterManager) {

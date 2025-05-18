@@ -14,10 +14,6 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
-const (
-	testClusterName = "test-cluster"
-)
-
 var (
 	shellCommand = []interface{}{"/bin/sh", "-c"}
 	sleepArgs    = []interface{}{"echo hello; sleep 3600"}
@@ -87,7 +83,7 @@ func createPodWithLabels(name, namespace string, labels map[string]string) *core
 }
 
 // setupTestCluster creates a test cluster manager with the given objects
-func setupTestCluster(objects ...runtime.Object) *Cluster {
+func setupTestCluster(objects ...runtime.Object) *Manager {
 	cm := New()
 	fakeClient := fake.NewSimpleClientset(objects...)
 	cm.clients[testClusterName] = fakeClient
@@ -588,7 +584,7 @@ func testStreamPodLogs(t *testing.T) {
 
 			_, err := tc.pod.StreamLogs(ctx, cm, tc.tailLines, tc.previous, tc.since)
 
-			// Note that with fake client, the actual streaming will fail
+			// Note: that with fake client, the actual streaming will fail
 			// so we're mainly testing the validation logic
 			if tc.expectError {
 				require.Error(t, err)
