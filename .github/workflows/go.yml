@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required for SonarCloud
       
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -25,10 +27,11 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
-      - name: Run tests
-        run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+      - name: Run tests 
+        run: go test -v -race -coverprofile=./coverage/coverage.out -covermode=atomic ./...
 
       - name: SonarCloud Scan
+        if: runner.os == 'Linux'
         uses: SonarSource/sonarqube-scan-action@v5.2.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
