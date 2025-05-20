@@ -43,5 +43,15 @@ type PodOperator interface {
 // DeploymentOperator defines the operations needed for deployment management
 type DeploymentOperator interface {
 	Create(ctx context.Context, cm ClusterManager) (string, error)
+	Get(ctx context.Context, cm ClusterManager) (string, error)
+	Update(ctx context.Context, cm ClusterManager) (string, error)
+	List(ctx context.Context, cm ClusterManager, allNamespaces bool, labelSelector string) (string, error)
+}
+
+// ServiceOperator defines the operations needed for service management
+type ServiceOperator interface {
+	Create(ctx context.Context, cm ClusterManager) (string, error)
+	Get(ctx context.Context, cm ClusterManager) (string, error)
+	Delete(ctx context.Context, cm ClusterManager) (string, error)
 	List(ctx context.Context, cm ClusterManager, allNamespaces bool, labelSelector string) (string, error)
 }
