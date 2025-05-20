@@ -1,15 +1,5 @@
-name: Build
-on: 
-  push:
-    branches:
-      - main
-      - playground
-  pull_request: 
-    branches:
-      - main
-      - playground
-  schedule:
-    - cron: '0 0 * * 0'  
+name: Unit tests
+on: [push, pull_request]
 
 permissions:
   contents: read
