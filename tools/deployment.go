@@ -61,6 +61,19 @@ func RegisterDeploymentToolsWithFactory(s kai.ServerInterface, cm kai.ClusterMan
 
 	s.AddTool(listDeploymentTool, listDeploymentsHandler(cm, factory))
 
+	describeDeploymentTool := mcp.NewTool("describe_deployment",
+		mcp.WithDescription("Get detailed information about a specific deployment"),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Name of the deployment"),
+		),
+		mcp.WithString("namespace",
+			mcp.Description("Namespace of the deployment (defaults to current namespace)"),
+		),
+	)
+
+	s.AddTool(describeDeploymentTool, describeDeploymentHandler(cm, factory))
+
 	createDeploymentTool := mcp.NewTool("create_deployment",
 		mcp.WithDescription("Create a new deployment in the current namespace"),
 		mcp.WithString("name",
@@ -95,6 +108,40 @@ func RegisterDeploymentToolsWithFactory(s kai.ServerInterface, cm kai.ClusterMan
 	)
 
 	s.AddTool(createDeploymentTool, createDeploymentHandler(cm, factory))
+
+	updateDeploymentTool := mcp.NewTool("update_deployment",
+		mcp.WithDescription("Update an existing deployment"),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Name of the deployment to update"),
+		),
+		mcp.WithString("namespace",
+			mcp.Description("Namespace of the deployment (defaults to current namespace)"),
+		),
+		mcp.WithString("image",
+			mcp.Description("New container image to use for the deployment"),
+		),
+		mcp.WithNumber("replicas",
+			mcp.Description("New number of replicas"),
+		),
+		mcp.WithObject("labels",
+			mcp.Description("Labels to add or update on the deployment and pods"),
+		),
+		mcp.WithString("container_port",
+			mcp.Description("Container port to expose (format: 'port' or 'port/protocol')"),
+		),
+		mcp.WithObject("env",
+			mcp.Description("Environment variables to add or update as key-value pairs"),
+		),
+		mcp.WithArray("image_pull_secrets",
+			mcp.Description("Names of image pull secrets"),
+		),
+		mcp.WithString("image_pull_policy",
+			mcp.Description("Image pull policy (Always, IfNotPresent, Never)"),
+		),
+	)
+
+	s.AddTool(updateDeploymentTool, updateDeploymentHandler(cm, factory))
 }
 
 // listDeploymentsHandler handles the list_deployments tool
@@ -135,6 +182,40 @@ func listDeploymentsHandler(cm kai.ClusterManager, factory DeploymentFactory) fu
 	}
 }
 
+// describeDeploymentHandler handles the describe_deployment tool
+func describeDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		nameArg, ok := request.Params.Arguments["name"]
+		if !ok || nameArg == nil {
+			return mcp.NewToolResultText("Required parameter 'name' is missing"), nil
+		}
+
+		name, ok := nameArg.(string)
+		if !ok || name == "" {
+			return mcp.NewToolResultText("Parameter 'name' must be a non-empty string"), nil
+		}
+
+		namespace := cm.GetCurrentNamespace()
+		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+			namespace = namespaceArg
+		}
+
+		params := kai.DeploymentParams{
+			Name:      name,
+			Namespace: namespace,
+		}
+
+		deployment := factory.NewDeployment(params)
+
+		resultText, err := deployment.Get(ctx, cm)
+		if err != nil {
+			return mcp.NewToolResultText(err.Error()), nil
+		}
+
+		return mcp.NewToolResultText(resultText), nil
+	}
+}
+
 // createDeploymentHandler handles the create_deployment tool
 func createDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -143,6 +224,7 @@ func createDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) f
 			Replicas: 1, // Set default replica count to 1
 		}
 
+		// Validate required parameters
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText("Required parameter 'name' is missing"), nil
@@ -205,6 +287,91 @@ func createDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) f
 		deployment := factory.NewDeployment(params)
 
 		resultText, err := deployment.Create(ctx, cm)
+		if err != nil {
+			return mcp.NewToolResultText(err.Error()), nil
+		}
+
+		return mcp.NewToolResultText(resultText), nil
+	}
+}
+
+// updateDeploymentHandler handles the update_deployment tool
+func updateDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		// Initialize params with defaults
+		params := kai.DeploymentParams{}
+
+		// Validate required parameters
+		nameArg, ok := request.Params.Arguments["name"]
+		if !ok || nameArg == nil {
+			return mcp.NewToolResultText("Required parameter 'name' is missing"), nil
+		}
+
+		name, ok := nameArg.(string)
+		if !ok || name == "" {
+			return mcp.NewToolResultText("Parameter 'name' must be a non-empty string"), nil
+		}
+
+		params.Name = name
+
+		// Get namespace (optional with default)
+		namespace := cm.GetCurrentNamespace()
+		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+			namespace = namespaceArg
+		}
+		params.Namespace = namespace
+
+		// Track if any update parameters are provided
+		hasUpdateParams := false
+
+		// Process optional update parameters
+		if imageArg, ok := request.Params.Arguments["image"].(string); ok && imageArg != "" {
+			params.Image = imageArg
+			hasUpdateParams = true
+		}
+
+		if replicasArg, ok := request.Params.Arguments["replicas"].(float64); ok {
+			params.Replicas = replicasArg
+			hasUpdateParams = true
+		}
+
+		if labelsArg, ok := request.Params.Arguments["labels"].(map[string]interface{}); ok {
+			params.Labels = labelsArg
+			hasUpdateParams = true
+		}
+
+		if containerPortArg, ok := request.Params.Arguments["container_port"].(string); ok && containerPortArg != "" {
+			if valid, errMsg := validateContainerPort(containerPortArg); valid {
+				params.ContainerPort = containerPortArg
+				hasUpdateParams = true
+			} else {
+				return mcp.NewToolResultText(errMsg), nil
+			}
+		}
+
+		if envArg, ok := request.Params.Arguments["env"].(map[string]interface{}); ok {
+			params.Env = envArg
+			hasUpdateParams = true
+		}
+
+		if imagePullSecretsArg, ok := request.Params.Arguments["image_pull_secrets"].([]interface{}); ok {
+			params.ImagePullSecrets = imagePullSecretsArg
+			hasUpdateParams = true
+		}
+
+		if imagePullPolicyArg, ok := request.Params.Arguments["image_pull_policy"].(string); ok {
+			params.ImagePullPolicy = imagePullPolicyArg
+			hasUpdateParams = true
+		}
+
+		// Check if any update parameters are provided
+		if !hasUpdateParams {
+			return mcp.NewToolResultText("At least one field to update must be specified"), nil
+		}
+
+		// Update the deployment - create deployment object first
+		deployment := factory.NewDeployment(params)
+		resultText, err := deployment.Update(ctx, cm)
 		if err != nil {
 			return mcp.NewToolResultText(err.Error()), nil
 		}
