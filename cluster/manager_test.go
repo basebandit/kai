@@ -36,8 +36,6 @@ func TestKubeConfigLoading(t *testing.T) {
 	t.Run("LoadKubeConfig", testLoadKubeConfig)
 }
 
-// Individual test functions
-
 func testNewClusterManager(t *testing.T) {
 	cm := New()
 	assert.NotNil(t, cm)
@@ -47,32 +45,24 @@ func testNewClusterManager(t *testing.T) {
 
 func testNamespaceOperations(t *testing.T) {
 	cm := New()
-
-	// Test default
 	assert.Equal(t, defaultNamespace, cm.GetCurrentNamespace())
 
-	// Test setting to a new value
 	cm.SetCurrentNamespace(testNamespace)
 	assert.Equal(t, testNamespace, cm.GetCurrentNamespace())
 
-	// Test setting to empty (should revert to default)
 	cm.SetCurrentNamespace("")
 	assert.Equal(t, defaultNamespace, cm.GetCurrentNamespace())
 }
 
 func testContextOperations(t *testing.T) {
 	cm := New()
-
-	// Add a fake client
 	fakeClient := fake.NewSimpleClientset()
 	cm.clients[testClusterName] = fakeClient
 
-	// Test setting to a valid context
 	err := cm.SetCurrentContext(testClusterName)
 	assert.NoError(t, err)
 	assert.Equal(t, testClusterName, cm.GetCurrentContext())
 
-	// Test setting to an invalid context
 	err = cm.SetCurrentContext("nonexistent-cluster")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "cluster nonexistent-cluster not found")
@@ -80,33 +70,26 @@ func testContextOperations(t *testing.T) {
 
 func testClientOperations(t *testing.T) {
 	cm := New()
-
-	// Test with no clients
 	client, err := cm.GetCurrentClient()
 	assert.Error(t, err)
 	assert.Nil(t, client)
 
-	// Add a fake client
 	fakeClient := fake.NewSimpleClientset()
 	cm.clients[testClusterName] = fakeClient
 	cm.currentContext = testClusterName
 
-	// Test getting the current client
 	client, err = cm.GetCurrentClient()
 	assert.NoError(t, err)
 	assert.Equal(t, fakeClient, client)
 
-	// Test getting a specific client
 	client, err = cm.GetClient(testClusterName)
 	assert.NoError(t, err)
 	assert.Equal(t, fakeClient, client)
 
-	// Test getting a non-existent client
 	client, err = cm.GetClient("nonexistent-cluster")
 	assert.Error(t, err)
 	assert.Nil(t, client)
 
-	// Test getting dynamic clients
 	dynamicClient, err := cm.GetCurrentDynamicClient()
 	assert.Error(t, err) // We haven't set any dynamic clients
 	assert.Nil(t, dynamicClient)
@@ -114,42 +97,32 @@ func testClientOperations(t *testing.T) {
 
 func testListClusters(t *testing.T) {
 	cm := New()
-
-	// Test with no clients
 	clusters := cm.ListClusters()
 	assert.Empty(t, clusters)
 
-	// Add some fake clients
 	cm.clients["cluster1"] = fake.NewSimpleClientset()
 	cm.clients["cluster2"] = fake.NewSimpleClientset()
 
-	// Test listing clusters
 	clusters = cm.ListClusters()
 	assert.Len(t, clusters, 2)
 	assert.Contains(t, clusters, "cluster1")
 	assert.Contains(t, clusters, "cluster2")
 }
 
-// KubeConfig Loading Tests
-
 func testValidateInputs(t *testing.T) {
-	// Test with empty cluster name
 	err := validateInputs("", "/path/to/config")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "cluster name cannot be empty")
 
-	// Test with valid inputs
 	err = validateInputs(testClusterName, "/path/to/config")
 	assert.NoError(t, err)
 }
 
 func testResolvePath(t *testing.T) {
-	// Test with empty path
 	path, err := resolvePath("")
 	assert.NoError(t, err)
 	assert.Contains(t, path, ".kube/config")
 
-	// Test with provided path
 	testPath := "/path/to/config"
 	path, err = resolvePath(testPath)
 	assert.NoError(t, err)
@@ -157,38 +130,31 @@ func testResolvePath(t *testing.T) {
 }
 
 func testValidateFile(t *testing.T) {
-	// Create a temporary file
 	tempDir := t.TempDir()
 	filePath := filepath.Join(tempDir, "config")
 	err := os.WriteFile(filePath, []byte("test"), 0600)
 	require.NoError(t, err)
 
-	// Create a directory
 	dirPath := filepath.Join(tempDir, "configdir")
 	err = os.Mkdir(dirPath, 0700)
 	require.NoError(t, err)
 
-	// Test with non-existent file
 	err = validateFile("/nonexistent/path")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "error accessing file")
 
-	// Test with directory
 	err = validateFile(dirPath)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "is a directory, not a file")
 
-	// Test with valid file
 	err = validateFile(filePath)
 	assert.NoError(t, err)
 }
 
 func testLoadKubeConfig(t *testing.T) {
-	// Create a temporary kubeconfig file for testing
 	tempDir := t.TempDir()
 	kubeconfigPath := filepath.Join(tempDir, "config")
 
-	// Sample minimal kubeconfig content
 	kubeconfigContent := `
 apiVersion: v1
 kind: Config

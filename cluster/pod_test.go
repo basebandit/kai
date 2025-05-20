@@ -168,13 +168,9 @@ func testCreatePods(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Setup
 			cm := setupTestCluster(tc.setupObjects...)
 
-			// Execute
 			result, err := tc.pod.Create(ctx, cm)
-
-			// Verify result
 			if tc.expectError {
 				assert.Error(t, err)
 				if tc.errorMsg != "" {
@@ -184,7 +180,6 @@ func testCreatePods(t *testing.T) {
 				assert.NoError(t, err)
 				assert.Contains(t, result, tc.expectedText)
 
-				// Verify pod was created
 				fakeClient := cm.clients[testClusterName]
 				pod, err := fakeClient.CoreV1().Pods(tc.pod.Namespace).Get(ctx, tc.pod.Name, metav1.GetOptions{})
 				require.NoError(t, err)
@@ -246,12 +241,9 @@ func testCreatePods(t *testing.T) {
 
 func testGetPod(t *testing.T) {
 	ctx := context.Background()
-
-	// Create common test objects
 	runningPod := createPod(podName, testNamespace, corev1.PodRunning)
 	testNamespaceObj := createNamespace(testNamespace)
 
-	// Define test cases
 	testCases := []struct {
 		name        string
 		pod         Pod
@@ -308,14 +300,12 @@ func testGetPod(t *testing.T) {
 func testListPods(t *testing.T) {
 	ctx := context.Background()
 
-	// Create test objects
 	pod1WithLabel := createPodWithLabels(pod1Name, testNamespace, map[string]string{"app": "test"})
 	pod2WithLabel := createPodWithLabels(pod2Name, testNamespace, map[string]string{"app": "test"})
 	pod3DiffNS := createPodWithLabels(pod3Name, otherNamespace, nil)
 	testNamespaceObj := createNamespace(testNamespace)
 	otherNamespaceObj := createNamespace(otherNamespace)
 
-	// Create test pods collection
 	testPods := []runtime.Object{
 		pod1WithLabel,
 		pod2WithLabel,
@@ -324,7 +314,6 @@ func testListPods(t *testing.T) {
 		otherNamespaceObj,
 	}
 
-	// Define test cases
 	testCases := []struct {
 		name              string
 		pod               Pod
@@ -400,12 +389,10 @@ func testListPods(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 
-				// Check for expected content
 				for _, expected := range tc.expectedContent {
 					assert.Contains(t, result, expected)
 				}
 
-				// Check for unexpected content
 				for _, unexpected := range tc.unexpectedContent {
 					assert.NotContains(t, result, unexpected)
 				}
@@ -505,12 +492,10 @@ func testDeletePod(t *testing.T) {
 func testStreamPodLogs(t *testing.T) {
 	ctx := context.Background()
 
-	// Create test objects
 	runningPod := createPod(podName, testNamespace, corev1.PodRunning, containerName)
 	pendingPod := createPod(pendingPodName, testNamespace, corev1.PodPending, containerName)
 	testNamespaceObj := createNamespace(testNamespace)
 
-	// Define test cases
 	testCases := []struct {
 		name          string
 		pod           Pod
