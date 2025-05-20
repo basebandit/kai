@@ -2,6 +2,7 @@ package cluster
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -132,71 +133,278 @@ func formatDeploymentList(deployments *appsv1.DeploymentList) string {
 	return resultText
 }
 
+// formatDeployment formats a deployment for display
+func formatDeployment(deployment *appsv1.Deployment) string {
+	result := fmt.Sprintf("Deployment: %s\n", deployment.Name)
+	result += fmt.Sprintf("Namespace: %s\n", deployment.Namespace)
+
+	// Basic information
+	var replicas int32 = 0
+	if deployment.Spec.Replicas != nil {
+		replicas = *deployment.Spec.Replicas
+	}
+	result += fmt.Sprintf("Replicas: %d/%d (available/total)\n", deployment.Status.AvailableReplicas, replicas)
+	result += fmt.Sprintf("Created: %s\n", deployment.CreationTimestamp.Format(time.RFC3339))
+
+	// Status conditions
+	if len(deployment.Status.Conditions) > 0 {
+		result += "\nConditions:\n"
+		for _, condition := range deployment.Status.Conditions {
+			result += fmt.Sprintf("- Type: %s, Status: %s, Last Update: %s\n",
+				condition.Type,
+				condition.Status,
+				condition.LastUpdateTime.Format(time.RFC3339))
+			if condition.Message != "" {
+				result += fmt.Sprintf("  Message: %s\n", condition.Message)
+			}
+		}
+	}
+
+	// Selectors
+	if len(deployment.Spec.Selector.MatchLabels) > 0 {
+		result += "\nSelector:\n"
+		for k, v := range deployment.Spec.Selector.MatchLabels {
+			result += fmt.Sprintf("- %s: %s\n", k, v)
+		}
+	}
+
+	// Strategy
+	result += fmt.Sprintf("\nStrategy: %s\n", deployment.Spec.Strategy.Type)
+	if deployment.Spec.Strategy.Type == appsv1.RollingUpdateDeploymentStrategyType && deployment.Spec.Strategy.RollingUpdate != nil {
+		if deployment.Spec.Strategy.RollingUpdate.MaxUnavailable != nil {
+			result += fmt.Sprintf("Max Unavailable: %s\n", deployment.Spec.Strategy.RollingUpdate.MaxUnavailable.String())
+		}
+		if deployment.Spec.Strategy.RollingUpdate.MaxSurge != nil {
+			result += fmt.Sprintf("Max Surge: %s\n", deployment.Spec.Strategy.RollingUpdate.MaxSurge.String())
+		}
+	}
+
+	// Containers
+	if len(deployment.Spec.Template.Spec.Containers) > 0 {
+		result += "\nContainers:\n"
+		for i, container := range deployment.Spec.Template.Spec.Containers {
+			result += fmt.Sprintf("%d. %s (Image: %s)\n", i+1, container.Name, container.Image)
+
+			// Container ports
+			if len(container.Ports) > 0 {
+				result += "   Ports:\n"
+				for _, port := range container.Ports {
+					result += fmt.Sprintf("   - %d/%s\n", port.ContainerPort, port.Protocol)
+				}
+			}
+
+			// Environment variables
+			if len(container.Env) > 0 {
+				result += "   Environment:\n"
+				for _, env := range container.Env {
+					if env.ValueFrom != nil {
+						result += fmt.Sprintf("   - %s: <set from source>\n", env.Name)
+					} else {
+						result += fmt.Sprintf("   - %s: %s\n", env.Name, env.Value)
+					}
+				}
+			}
+
+			// Resources
+			if container.Resources.Limits != nil || container.Resources.Requests != nil {
+				result += "   Resources:\n"
+				if container.Resources.Limits != nil {
+					result += "     Limits:\n"
+					for resource, quantity := range container.Resources.Limits {
+						result += fmt.Sprintf("     - %s: %s\n", resource, quantity.String())
+					}
+				}
+				if container.Resources.Requests != nil {
+					result += "     Requests:\n"
+					for resource, quantity := range container.Resources.Requests {
+						result += fmt.Sprintf("     - %s: %s\n", resource, quantity.String())
+					}
+				}
+			}
+
+			// Image pull policy
+			result += fmt.Sprintf("   Image Pull Policy: %s\n", container.ImagePullPolicy)
+		}
+	}
+
+	// Volume mounts
+	if len(deployment.Spec.Template.Spec.Volumes) > 0 {
+		result += "\nVolumes:\n"
+		for _, volume := range deployment.Spec.Template.Spec.Volumes {
+			result += fmt.Sprintf("- %s\n", volume.Name)
+
+			// Add volume type information
+			if volume.PersistentVolumeClaim != nil {
+				result += fmt.Sprintf("  Type: PersistentVolumeClaim (Claim: %s)\n", volume.PersistentVolumeClaim.ClaimName)
+			} else if volume.ConfigMap != nil {
+				result += fmt.Sprintf("  Type: ConfigMap (Name: %s)\n", volume.ConfigMap.Name)
+			} else if volume.Secret != nil {
+				result += fmt.Sprintf("  Type: Secret (Name: %s)\n", volume.Secret.SecretName)
+			} else if volume.EmptyDir != nil {
+				result += "  Type: EmptyDir\n"
+			} else {
+				result += "  Type: Other\n"
+			}
+		}
+	}
+
+	// Pod labels
+	if len(deployment.Spec.Template.Labels) > 0 {
+		result += "\nPod Labels:\n"
+		for k, v := range deployment.Spec.Template.Labels {
+			result += fmt.Sprintf("- %s: %s\n", k, v)
+		}
+	}
+
+	return result
+}
+
 // formatService formats a service for display
-// func formatService(sb *strings.Builder, svc corev1.Service, includeNamespace bool) {
-// 	// Get service type
-// 	serviceType := string(svc.Spec.Type)
+func formatService(svc *corev1.Service) string {
+	result := fmt.Sprintf("Service: %s\n", svc.Name)
+	result += fmt.Sprintf("Namespace: %s\n", svc.Namespace)
+	result += fmt.Sprintf("Type: %s\n", svc.Spec.Type)
 
-// 	// Get cluster IP
-// 	clusterIP := svc.Spec.ClusterIP
-// 	if clusterIP == "" {
-// 		clusterIP = "<none>"
-// 	}
+	// Get cluster IP
+	result += fmt.Sprintf("ClusterIP: %s\n", svc.Spec.ClusterIP)
 
-// 	// Get external IP
-// 	externalIP := "<none>"
-// 	if len(svc.Status.LoadBalancer.Ingress) > 0 {
-// 		ips := []string{}
-// 		for _, ingress := range svc.Status.LoadBalancer.Ingress {
-// 			if ingress.IP != "" {
-// 				ips = append(ips, ingress.IP)
-// 			} else if ingress.Hostname != "" {
-// 				ips = append(ips, ingress.Hostname)
-// 			}
-// 		}
-// 		if len(ips) > 0 {
-// 			externalIP = strings.Join(ips, ",")
-// 		}
-// 	} else if len(svc.Spec.ExternalIPs) > 0 {
-// 		externalIP = strings.Join(svc.Spec.ExternalIPs, ",")
-// 	}
+	// Get external IP
+	if len(svc.Status.LoadBalancer.Ingress) > 0 {
+		ips := []string{}
+		for _, ingress := range svc.Status.LoadBalancer.Ingress {
+			if ingress.IP != "" {
+				ips = append(ips, ingress.IP)
+			} else if ingress.Hostname != "" {
+				ips = append(ips, ingress.Hostname)
+			}
+		}
+		if len(ips) > 0 {
+			result += fmt.Sprintf("External IP(s): %s\n", strings.Join(ips, ", "))
+		}
+	} else if len(svc.Spec.ExternalIPs) > 0 {
+		result += fmt.Sprintf("External IP(s): %s\n", strings.Join(svc.Spec.ExternalIPs, ", "))
+	}
 
-// 	// Get port(s)
-// 	ports := []string{}
-// 	for _, port := range svc.Spec.Ports {
-// 		if port.NodePort > 0 {
-// 			ports = append(ports, fmt.Sprintf("%d:%d/%s", port.Port, port.NodePort, port.Protocol))
-// 		} else {
-// 			ports = append(ports, fmt.Sprintf("%d/%s", port.Port, port.Protocol))
-// 		}
-// 	}
-// 	portsStr := "<none>"
-// 	if len(ports) > 0 {
-// 		portsStr = strings.Join(ports, ",")
-// 	}
+	// Add creation timestamp
+	result += fmt.Sprintf("Created: %s\n", svc.CreationTimestamp.Format(time.RFC3339))
 
-// 	// Get age
-// 	age := time.Since(svc.CreationTimestamp.Time).Round(time.Second)
+	// Get ports
+	if len(svc.Spec.Ports) > 0 {
+		result += "\nPorts:\n"
+		for i, port := range svc.Spec.Ports {
+			portInfo := fmt.Sprintf("%d. ", i+1)
+			if port.Name != "" {
+				portInfo += fmt.Sprintf("%s: ", port.Name)
+			}
 
-// 	if includeNamespace {
-// 		fmt.Fprintf(sb, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-// 			svc.Namespace,
-// 			svc.Name,
-// 			serviceType,
-// 			clusterIP,
-// 			externalIP,
-// 			portsStr,
-// 			formatDuration(age))
-// 	} else {
-// 		fmt.Fprintf(sb, "%s\t%s\t%s\t%s\t%s\t%s\n",
-// 			svc.Name,
-// 			serviceType,
-// 			clusterIP,
-// 			externalIP,
-// 			portsStr,
-// 			formatDuration(age))
-// 	}
-// }
+			portInfo += fmt.Sprintf("%d", port.Port)
+
+			targetPort := port.TargetPort.String()
+			portInfo += fmt.Sprintf(" → %s", targetPort)
+
+			if port.NodePort > 0 {
+				portInfo += fmt.Sprintf(" (NodePort: %d)", port.NodePort)
+			}
+
+			portInfo += fmt.Sprintf(" [%s]", port.Protocol)
+			result += portInfo + "\n"
+		}
+	}
+
+	// Add selector
+	if len(svc.Spec.Selector) > 0 {
+		result += "\nSelector:\n"
+		for k, v := range svc.Spec.Selector {
+			result += fmt.Sprintf("- %s: %s\n", k, v)
+		}
+	}
+
+	// Add labels
+	if len(svc.Labels) > 0 {
+		result += "\nLabels:\n"
+		for k, v := range svc.Labels {
+			result += fmt.Sprintf("- %s: %s\n", k, v)
+		}
+	}
+
+	return result
+}
+
+// formatServiceList formats a list of services for display
+func formatServiceList(services *corev1.ServiceList, includeNamespace bool) string {
+	var result strings.Builder
+
+	for _, svc := range services.Items {
+		// Get service type
+		serviceType := string(svc.Spec.Type)
+
+		// Get cluster IP
+		clusterIP := svc.Spec.ClusterIP
+		if clusterIP == "" {
+			clusterIP = "<none>"
+		}
+
+		// Get external IP
+		externalIP := "<none>"
+		if len(svc.Status.LoadBalancer.Ingress) > 0 {
+			ips := []string{}
+			for _, ingress := range svc.Status.LoadBalancer.Ingress {
+				if ingress.IP != "" {
+					ips = append(ips, ingress.IP)
+				} else if ingress.Hostname != "" {
+					ips = append(ips, ingress.Hostname)
+				}
+			}
+			if len(ips) > 0 {
+				externalIP = strings.Join(ips, ",")
+			}
+		} else if len(svc.Spec.ExternalIPs) > 0 {
+			externalIP = strings.Join(svc.Spec.ExternalIPs, ",")
+		}
+
+		// Get port(s)
+		ports := []string{}
+		for _, port := range svc.Spec.Ports {
+			if port.NodePort > 0 {
+				ports = append(ports, fmt.Sprintf("%d:%d/%s", port.Port, port.NodePort, port.Protocol))
+			} else {
+				ports = append(ports, fmt.Sprintf("%d/%s", port.Port, port.Protocol))
+			}
+		}
+		portsStr := "<none>"
+		if len(ports) > 0 {
+			portsStr = strings.Join(ports, ",")
+		}
+
+		// Get age
+		age := time.Since(svc.CreationTimestamp.Time).Round(time.Second)
+
+		// Format the output
+		if includeNamespace {
+			result.WriteString(fmt.Sprintf("• %s/%s: Type=%s, ClusterIP=%s, ExternalIP=%s, Ports=%s, Age=%s\n",
+				svc.Namespace,
+				svc.Name,
+				serviceType,
+				clusterIP,
+				externalIP,
+				portsStr,
+				formatDuration(age)))
+		} else {
+			result.WriteString(fmt.Sprintf("• %s: Type=%s, ClusterIP=%s, ExternalIP=%s, Ports=%s, Age=%s\n",
+				svc.Name,
+				serviceType,
+				clusterIP,
+				externalIP,
+				portsStr,
+				formatDuration(age)))
+		}
+	}
+
+	// Add total count
+	result.WriteString(fmt.Sprintf("\nTotal: %d service(s)", len(services.Items)))
+
+	return result.String()
+}
 
 // formatDuration formats a time.Duration in a human-readable way similar to kubectl
 func formatDuration(d time.Duration) string {
@@ -211,4 +419,21 @@ func formatDuration(d time.Duration) string {
 		days := int(d.Hours() / 24)
 		return fmt.Sprintf("%dd", days)
 	}
+}
+
+// convert interface map to string map
+func convertToStringMap(input map[string]interface{}) map[string]string {
+	if input == nil {
+		return nil
+	}
+
+	result := make(map[string]string, len(input))
+	for k, v := range input {
+		if strValue, ok := v.(string); ok {
+			result[k] = strValue
+		} else if strValue, ok := fmt.Sprintf("%v", v), true; ok {
+			result[k] = strValue
+		}
+	}
+	return result
 }
