@@ -45,25 +45,6 @@ func createServiceObj(name, namespace string, serviceType corev1.ServiceType) *c
 	}
 }
 
-// createServiceWithSelector creates a service with selector for testing
-func createServiceWithSelector(name, namespace string, selector map[string]string) *corev1.Service {
-	return &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-		},
-		Spec: corev1.ServiceSpec{
-			Selector: selector,
-			Ports: []corev1.ServicePort{
-				{
-					Port:     80,
-					Protocol: corev1.ProtocolTCP,
-				},
-			},
-		},
-	}
-}
-
 func testCreateServices(t *testing.T) {
 	ctx := context.Background()
 
