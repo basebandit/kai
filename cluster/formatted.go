@@ -234,15 +234,16 @@ func formatDeployment(deployment *appsv1.Deployment) string {
 			result += fmt.Sprintf("- %s\n", volume.Name)
 
 			// Add volume type information
-			if volume.PersistentVolumeClaim != nil {
+			switch {
+			case volume.PersistentVolumeClaim != nil:
 				result += fmt.Sprintf("  Type: PersistentVolumeClaim (Claim: %s)\n", volume.PersistentVolumeClaim.ClaimName)
-			} else if volume.ConfigMap != nil {
+			case volume.ConfigMap != nil:
 				result += fmt.Sprintf("  Type: ConfigMap (Name: %s)\n", volume.ConfigMap.Name)
-			} else if volume.Secret != nil {
+			case volume.Secret != nil:
 				result += fmt.Sprintf("  Type: Secret (Name: %s)\n", volume.Secret.SecretName)
-			} else if volume.EmptyDir != nil {
+			case volume.EmptyDir != nil:
 				result += "  Type: EmptyDir\n"
-			} else {
+			default:
 				result += "  Type: Other\n"
 			}
 		}
