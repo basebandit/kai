@@ -170,7 +170,6 @@ func listServicesHandler(cm kai.ClusterManager, factory ServiceFactory) func(ctx
 		}
 		service := factory.NewService(params)
 
-		// List services
 		resultText, err := service.List(ctx, cm, allNamespaces, labelSelector)
 		if err != nil {
 			return mcp.NewToolResultText(err.Error()), nil
@@ -217,10 +216,8 @@ func getServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ctx c
 // createServiceHandler handles the create_service tool
 func createServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		// Initialize params with default values
 		params := kai.ServiceParams{}
 
-		// Validate required parameters
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText("Required parameter 'name' is missing"), nil
@@ -336,17 +333,14 @@ func createServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ct
 // deleteServiceHandler handles the delete_service tool
 func deleteServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		// Initialize params with default values
 		params := kai.ServiceParams{}
 
-		// Get namespace (optional with default)
 		namespace := cm.GetCurrentNamespace()
 		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 		params.Namespace = namespace
 
-		// Check if we have a name specified
 		nameArg, nameOk := request.Params.Arguments["name"]
 		if nameOk && nameArg != nil {
 			name, ok := nameArg.(string)
@@ -356,7 +350,6 @@ func deleteServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ct
 			params.Name = name
 		}
 
-		// Check if we have labels specified
 		labelsArg, labelsOk := request.Params.Arguments["labels"]
 		if labelsOk && labelsArg != nil {
 			labels, ok := labelsArg.(map[string]interface{})
@@ -369,14 +362,12 @@ func deleteServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ct
 			params.Labels = labels
 		}
 
-		// Either name or labels must be provided
 		if !nameOk && !labelsOk {
 			return mcp.NewToolResultText("Either 'name' or 'labels' parameter must be provided"), nil
 		}
 
 		service := factory.NewService(params)
 
-		// Delete the service(s)
 		resultText, err := service.Delete(ctx, cm)
 		if err != nil {
 			return mcp.NewToolResultText(err.Error()), nil
@@ -396,7 +387,6 @@ func processPortsArray(portsArray []interface{}) ([]kai.ServicePort, error) {
 			return nil, fmt.Errorf("port %d: must be an object", i)
 		}
 
-		// Process port (required)
 		portArg, ok := portObj["port"]
 		if !ok || portArg == nil {
 			return nil, fmt.Errorf("port %d: required field 'port' is missing", i)
@@ -422,17 +412,14 @@ func processPortsArray(portsArray []interface{}) ([]kai.ServicePort, error) {
 			return nil, fmt.Errorf("port %d: port number must be between 1 and 65535", i)
 		}
 
-		// Create service port
 		servicePort := kai.ServicePort{
 			Port: portNum,
 		}
 
-		// Process name (optional)
 		if nameArg, ok := portObj["name"].(string); ok && nameArg != "" {
 			servicePort.Name = nameArg
 		}
 
-		// Process targetPort (optional)
 		if targetPortArg, ok := portObj["targetPort"]; ok && targetPortArg != nil {
 			switch tp := targetPortArg.(type) {
 			case float64:
@@ -464,7 +451,6 @@ func processPortsArray(portsArray []interface{}) ([]kai.ServicePort, error) {
 			servicePort.TargetPort = portNum
 		}
 
-		// Process nodePort (optional)
 		if nodePortArg, ok := portObj["nodePort"]; ok && nodePortArg != nil {
 			var nodePort int32
 			switch np := nodePortArg.(type) {
@@ -487,11 +473,9 @@ func processPortsArray(portsArray []interface{}) ([]kai.ServicePort, error) {
 			if nodePort < 30000 || nodePort > 32767 {
 				return nil, fmt.Errorf("port %d: nodePort must be between 30000 and 32767", i)
 			}
-
 			servicePort.NodePort = nodePort
 		}
 
-		// Process protocol (optional)
 		if protocolArg, ok := portObj["protocol"].(string); ok && protocolArg != "" {
 			protocol := protocolArg
 			validProtocols := map[string]bool{
