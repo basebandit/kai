@@ -7,49 +7,10 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// MockDeploymentFactory implements the tools.DeploymentFactory interface
-type MockDeploymentFactory struct {
-	mock.Mock
-}
-
-// NewMockDeploymentFactory creates a new MockDeploymentFactory
-func NewMockDeploymentFactory() *MockDeploymentFactory {
-	return &MockDeploymentFactory{}
-}
-
-// NewDeployment returns a mocked DeploymentOperator
-func (m *MockDeploymentFactory) NewDeployment(params kai.DeploymentParams) kai.DeploymentOperator {
-	args := m.Called(params)
-	return args.Get(0).(kai.DeploymentOperator)
-}
-
-// MockDeployment implements the kai.DeploymentOperator interface
+// MockDeployment is a mock implementation of the DeploymentOperator interface
 type MockDeployment struct {
 	mock.Mock
-	Name             string
-	Namespace        string
-	Image            string
-	Replicas         float64
-	Labels           map[string]interface{}
-	ContainerPort    string
-	Env              map[string]interface{}
-	ImagePullPolicy  string
-	ImagePullSecrets []interface{}
-}
-
-// NewMockDeployment creates a new MockDeployment
-func NewMockDeployment(params kai.DeploymentParams) *MockDeployment {
-	return &MockDeployment{
-		Name:             params.Name,
-		Image:            params.Image,
-		Namespace:        params.Namespace,
-		Replicas:         params.Replicas,
-		Labels:           params.Labels,
-		ContainerPort:    params.ContainerPort,
-		Env:              params.Env,
-		ImagePullPolicy:  params.ImagePullPolicy,
-		ImagePullSecrets: params.ImagePullSecrets,
-	}
+	Params kai.DeploymentParams
 }
 
 // Create mocks the Create method
@@ -62,4 +23,39 @@ func (m *MockDeployment) Create(ctx context.Context, cm kai.ClusterManager) (str
 func (m *MockDeployment) List(ctx context.Context, cm kai.ClusterManager, allNamespaces bool, labelSelector string) (string, error) {
 	args := m.Called(ctx, cm, allNamespaces, labelSelector)
 	return args.String(0), args.Error(1)
+}
+
+// Get mocks the Get method
+func (m *MockDeployment) Get(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	args := m.Called(ctx, cm)
+	return args.String(0), args.Error(1)
+}
+
+// Update mocks the Update method
+func (m *MockDeployment) Update(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	args := m.Called(ctx, cm)
+	return args.String(0), args.Error(1)
+}
+
+// NewMockDeployment creates a new MockDeployment
+func NewMockDeployment(params kai.DeploymentParams) *MockDeployment {
+	return &MockDeployment{
+		Params: params,
+	}
+}
+
+// MockDeploymentFactory is a mock for DeploymentFactory
+type MockDeploymentFactory struct {
+	mock.Mock
+}
+
+// NewMockDeploymentFactory creates a new MockDeploymentFactory
+func NewMockDeploymentFactory() *MockDeploymentFactory {
+	return &MockDeploymentFactory{}
+}
+
+// NewDeployment mocks the NewDeployment method
+func (m *MockDeploymentFactory) NewDeployment(params kai.DeploymentParams) kai.DeploymentOperator {
+	args := m.Called(params)
+	return args.Get(0).(kai.DeploymentOperator)
 }

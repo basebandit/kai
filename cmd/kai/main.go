@@ -56,4 +56,5 @@ func log(w io.Writer, format string, a ...any) {
 func registerAllTools(s *kai.Server, cm *cluster.Manager) {
 	tools.RegisterPodTools(s, cm)
 	tools.RegisterDeploymentTools(s, cm)
+	tools.RegisterServiceTools(s, cm)
 }

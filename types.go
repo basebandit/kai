@@ -32,3 +32,26 @@ type PodParams struct {
 	Volumes            []interface{}
 	VolumeMounts       []interface{}
 }
+
+// ServiceParams holds all possible service configuration parameters
+type ServiceParams struct {
+	Name            string
+	Namespace       string
+	Labels          map[string]interface{}
+	Selector        map[string]interface{}
+	Type            string
+	Ports           []ServicePort
+	ClusterIP       string
+	ExternalIPs     []string
+	ExternalName    string
+	SessionAffinity string
+}
+
+// ServicePort represents a service port configuration
+type ServicePort struct {
+	Name       string
+	Port       int32
+	TargetPort interface{} // Can be int32 or string
+	NodePort   int32
+	Protocol   string
+}

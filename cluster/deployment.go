@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/basebandit/kai"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -153,6 +154,273 @@ func (d *Deployment) Create(ctx context.Context, cm kai.ClusterManager) (string,
 	}
 
 	result = fmt.Sprintf("Deployment %q created successfully in namespace %q with %g replica(s)", d.Name, d.Namespace, d.Replicas)
+
+	return result, nil
+}
+
+// Get retrieves information about a specific deployment
+func (d *Deployment) Get(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	var result string
+
+	client, err := cm.GetCurrentClient()
+	if err != nil {
+		return result, fmt.Errorf("error getting client: %w", err)
+	}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+
+	// If namespace is empty, use current namespace
+	namespace := d.Namespace
+	if namespace == "" {
+		namespace = cm.GetCurrentNamespace()
+	}
+
+	// Get the deployment
+	deployment, err := client.AppsV1().Deployments(namespace).Get(timeoutCtx, d.Name, metav1.GetOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to get deployment: %w", err)
+	}
+
+	result = formatDeployment(deployment)
+	return result, nil
+}
+
+// Update updates an existing deployment in the cluster
+func (d *Deployment) Update(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	var result string
+
+	client, err := cm.GetCurrentClient()
+	if err != nil {
+		return result, fmt.Errorf("error getting client: %w", err)
+	}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	// If namespace is empty, use current namespace
+	namespace := d.Namespace
+	if namespace == "" {
+		namespace = cm.GetCurrentNamespace()
+	}
+
+	// Get the current deployment
+	deployment, err := client.AppsV1().Deployments(namespace).Get(timeoutCtx, d.Name, metav1.GetOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to get deployment: %w", err)
+	}
+
+	// Update fields based on what's provided
+
+	// Update replicas if specified
+	if d.Replicas > 0 {
+		replicas := int32(d.Replicas)
+		deployment.Spec.Replicas = &replicas
+	}
+
+	// Update image if specified
+	if d.Image != "" {
+		// Find the container with the same name as the deployment or the first container
+		containerIndex := -1
+		for i, container := range deployment.Spec.Template.Spec.Containers {
+			if container.Name == d.Name || i == 0 {
+				containerIndex = i
+				break
+			}
+		}
+
+		if containerIndex >= 0 {
+			deployment.Spec.Template.Spec.Containers[containerIndex].Image = d.Image
+		} else {
+			return result, fmt.Errorf("no suitable container found to update image")
+		}
+	}
+
+	// Update labels if specified
+	if d.Labels != nil {
+		// Convert to string map
+		labels := make(map[string]string)
+		for k, v := range d.Labels {
+			if strVal, ok := v.(string); ok {
+				labels[k] = strVal
+			} else if strVal, ok := fmt.Sprintf("%v", v), true; ok {
+				labels[k] = strVal
+			}
+		}
+
+		// Update deployment labels
+		if deployment.Labels == nil {
+			deployment.Labels = make(map[string]string)
+		}
+		for k, v := range labels {
+			deployment.Labels[k] = v
+		}
+
+		// Update template labels
+		if deployment.Spec.Template.Labels == nil {
+			deployment.Spec.Template.Labels = make(map[string]string)
+		}
+		for k, v := range labels {
+			deployment.Spec.Template.Labels[k] = v
+		}
+
+		// Update selector labels (carefully, as this is immutable for most fields)
+		// Only add new labels, don't modify existing ones
+		if deployment.Spec.Selector.MatchLabels == nil {
+			deployment.Spec.Selector.MatchLabels = make(map[string]string)
+		}
+		for k, v := range labels {
+			if _, exists := deployment.Spec.Selector.MatchLabels[k]; !exists {
+				deployment.Spec.Selector.MatchLabels[k] = v
+			}
+		}
+	}
+
+	// Update environment variables if specified
+	if len(d.Env) > 0 {
+		// Find the container with the same name as the deployment or the first container
+		containerIndex := -1
+		for i, container := range deployment.Spec.Template.Spec.Containers {
+			if container.Name == d.Name || i == 0 {
+				containerIndex = i
+				break
+			}
+		}
+
+		if containerIndex >= 0 {
+			// Convert env map to Kubernetes env vars
+			newEnvVars := make([]corev1.EnvVar, 0, len(d.Env))
+			for k, v := range d.Env {
+				if strVal, ok := v.(string); ok {
+					newEnvVars = append(newEnvVars, corev1.EnvVar{
+						Name:  k,
+						Value: strVal,
+					})
+				}
+			}
+
+			// Create a map of existing env vars for easy lookup
+			existingEnvVars := make(map[string]int)
+			for i, env := range deployment.Spec.Template.Spec.Containers[containerIndex].Env {
+				existingEnvVars[env.Name] = i
+			}
+
+			// Update or add environment variables
+			for _, env := range newEnvVars {
+				if i, exists := existingEnvVars[env.Name]; exists {
+					// Update existing env var
+					deployment.Spec.Template.Spec.Containers[containerIndex].Env[i] = env
+				} else {
+					// Add new env var
+					deployment.Spec.Template.Spec.Containers[containerIndex].Env = append(
+						deployment.Spec.Template.Spec.Containers[containerIndex].Env, env)
+				}
+			}
+		} else {
+			return result, fmt.Errorf("no suitable container found to update environment variables")
+		}
+	}
+
+	// Update container port if specified
+	if d.ContainerPort != "" {
+		// Find the container with the same name as the deployment or the first container
+		containerIndex := -1
+		for i, container := range deployment.Spec.Template.Spec.Containers {
+			if container.Name == d.Name || i == 0 {
+				containerIndex = i
+				break
+			}
+		}
+
+		if containerIndex >= 0 {
+			parts := strings.Split(d.ContainerPort, "/")
+			var portVal int32
+			if _, err := fmt.Sscanf(parts[0], "%d", &portVal); err == nil {
+				portDefinition := corev1.ContainerPort{
+					ContainerPort: portVal,
+				}
+
+				// Add protocol if specified
+				if len(parts) > 1 {
+					protocol := strings.ToUpper(parts[1])
+					if protocol == "TCP" || protocol == "UDP" || protocol == "SCTP" {
+						portDefinition.Protocol = corev1.Protocol(protocol)
+					}
+				} else {
+					// Default to TCP
+					portDefinition.Protocol = corev1.ProtocolTCP
+				}
+
+				// Check if we need to update an existing port or add a new one
+				portUpdated := false
+				for i, port := range deployment.Spec.Template.Spec.Containers[containerIndex].Ports {
+					if port.ContainerPort == portVal {
+						deployment.Spec.Template.Spec.Containers[containerIndex].Ports[i] = portDefinition
+						portUpdated = true
+						break
+					}
+				}
+
+				if !portUpdated {
+					deployment.Spec.Template.Spec.Containers[containerIndex].Ports = append(
+						deployment.Spec.Template.Spec.Containers[containerIndex].Ports, portDefinition)
+				}
+			}
+		} else {
+			return result, fmt.Errorf("no suitable container found to update container port")
+		}
+	}
+
+	// Update image pull policy if specified
+	if d.ImagePullPolicy != "" {
+		// Find the container with the same name as the deployment or the first container
+		containerIndex := -1
+		for i, container := range deployment.Spec.Template.Spec.Containers {
+			if container.Name == d.Name || i == 0 {
+				containerIndex = i
+				break
+			}
+		}
+
+		if containerIndex >= 0 {
+			validPolicies := map[string]corev1.PullPolicy{
+				"Always":       corev1.PullAlways,
+				"IfNotPresent": corev1.PullIfNotPresent,
+				"Never":        corev1.PullNever,
+			}
+			if policy, ok := validPolicies[d.ImagePullPolicy]; ok {
+				deployment.Spec.Template.Spec.Containers[containerIndex].ImagePullPolicy = policy
+			}
+		} else {
+			return result, fmt.Errorf("no suitable container found to update image pull policy")
+		}
+	}
+
+	// Update image pull secrets if specified
+	if len(d.ImagePullSecrets) > 0 {
+		pullSecrets := make([]corev1.LocalObjectReference, 0, len(d.ImagePullSecrets))
+		for _, v := range d.ImagePullSecrets {
+			if strVal, ok := v.(string); ok && strVal != "" {
+				pullSecrets = append(pullSecrets, corev1.LocalObjectReference{
+					Name: strVal,
+				})
+			}
+		}
+		if len(pullSecrets) > 0 {
+			deployment.Spec.Template.Spec.ImagePullSecrets = pullSecrets
+		}
+	}
+
+	// Update the deployment
+	updatedDeployment, err := client.AppsV1().Deployments(namespace).Update(timeoutCtx, deployment, metav1.UpdateOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to update deployment: %w", err)
+	}
+
+	result = fmt.Sprintf("Deployment %q updated successfully in namespace %q", updatedDeployment.Name, updatedDeployment.Namespace)
+	if updatedDeployment.Spec.Replicas != nil {
+		result += fmt.Sprintf(" with %d replica(s)", *updatedDeployment.Spec.Replicas)
+	}
 
 	return result, nil
 }

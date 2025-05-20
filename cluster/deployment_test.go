@@ -35,7 +35,6 @@ func TestNewDeployment(t *testing.T) {
 func TestDeployment_Create(t *testing.T) {
 	ctx := context.Background()
 
-	// Test error case only - success case should be in integration tests
 	t.Run("Error getting dynamic client", func(t *testing.T) {
 		deployment := &Deployment{
 			Name:      deploymentName1,
@@ -47,15 +46,11 @@ func TestDeployment_Create(t *testing.T) {
 		mockCM := testmocks.NewMockClusterManager()
 		mockCM.On("GetCurrentDynamicClient").Return(nil, errors.New("client unavailable"))
 
-		// Execute
 		result, err := deployment.Create(ctx, mockCM)
-
-		// Verify
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "failed to get a dynamic client: client unavailable")
 		assert.Empty(t, result)
 
-		// Verify mocks
 		mockCM.AssertExpectations(t)
 	})
 }
@@ -99,17 +94,13 @@ func TestDeployment_List(t *testing.T) {
 			allNamespaces: false,
 			labelSelector: "",
 			setupMock: func(mockCM *testmocks.MockClusterManager) {
-				// Create fake deployments
 				fakeDeployments := []runtime.Object{
 					createDeploymentObj(deploymentName1, testNamespace, 2),
 					createDeploymentObj(deploymentName2, testNamespace, 3),
 					createDeploymentObj(deploymentName3, otherNamespace, 1), // Should not be listed
 				}
 
-				// Create fake client with the deployments
 				fakeClient := fake.NewSimpleClientset(fakeDeployments...)
-
-				// Setup mock to return our fake client
 				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
 			},
 			expectedResult: "Deployments in namespace \"test-namespace\":",
@@ -121,16 +112,12 @@ func TestDeployment_List(t *testing.T) {
 			allNamespaces: true,
 			labelSelector: "",
 			setupMock: func(mockCM *testmocks.MockClusterManager) {
-				// Create fake deployments in different namespaces
 				fakeDeployments := []runtime.Object{
 					createDeploymentObj(deploymentName1, "namespace1", 1),
 					createDeploymentObj(deploymentName2, "namespace2", 1),
 				}
 
-				// Create fake client with the deployments
 				fakeClient := fake.NewSimpleClientset(fakeDeployments...)
-
-				// Setup mock to return our fake client
 				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
 			},
 			expectedResult: "Deployments across all namespaces:",
@@ -142,10 +129,7 @@ func TestDeployment_List(t *testing.T) {
 			allNamespaces: false,
 			labelSelector: "",
 			setupMock: func(mockCM *testmocks.MockClusterManager) {
-				// Create an empty fake client
 				fakeClient := fake.NewSimpleClientset()
-
-				// Setup mock to return our fake client
 				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
 			},
 			expectedResult: "No deployments found in namespace \"empty-namespace\"",
@@ -157,7 +141,6 @@ func TestDeployment_List(t *testing.T) {
 			allNamespaces: false,
 			labelSelector: "",
 			setupMock: func(mockCM *testmocks.MockClusterManager) {
-				// Setup mock to return an error
 				mockCM.On("GetCurrentClient").Return(nil, errors.New("client unavailable"))
 			},
 			expectedResult: "",
@@ -169,13 +152,9 @@ func TestDeployment_List(t *testing.T) {
 			allNamespaces: false,
 			labelSelector: "",
 			setupMock: func(mockCM *testmocks.MockClusterManager) {
-				// Setup mock to return current namespace
 				mockCM.On("GetCurrentNamespace").Return("current-namespace")
 
-				// Create an empty fake client
 				fakeClient := fake.NewSimpleClientset()
-
-				// Setup mock to return our fake client
 				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
 			},
 			expectedResult: "No deployments found in namespace \"current-namespace\"",
@@ -185,14 +164,10 @@ func TestDeployment_List(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Setup mock
 			mockCM := testmocks.NewMockClusterManager()
 			tc.setupMock(mockCM)
 
-			// Call the function
 			result, err := tc.deployment.List(ctx, mockCM, tc.allNamespaces, tc.labelSelector)
-
-			// Check results
 			if tc.expectedError != "" {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), tc.expectedError)
@@ -201,7 +176,6 @@ func TestDeployment_List(t *testing.T) {
 				assert.Contains(t, result, tc.expectedResult)
 			}
 
-			// Verify mocks
 			mockCM.AssertExpectations(t)
 		})
 	}
