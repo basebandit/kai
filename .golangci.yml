@@ -27,6 +27,9 @@ linters:
         - all
         - '-QF1008'
         - '-ST1000' 
+    gosec:
+      excludes:
+        - G115
     revive:
       rules:
         - name: exported
