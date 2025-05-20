@@ -153,11 +153,9 @@ func TestListServicesHandler(t *testing.T) {
 
 			request := mcp.CallToolRequest{
 				Params: struct {
-					Name      string                 `json:"name"`
-					Arguments map[string]interface{} `json:"arguments,omitempty"`
-					Meta      *struct {
-						ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
-					} `json:"_meta,omitempty"`
+					Name      string         `json:"name"`
+					Arguments map[string]any `json:"arguments,omitempty"`
+					Meta      *mcp.Meta      `json:"_meta,omitempty"`
 				}{
 					Arguments: tc.args,
 				},
@@ -254,11 +252,9 @@ func TestGetServiceHandler(t *testing.T) {
 
 			request := mcp.CallToolRequest{
 				Params: struct {
-					Name      string                 `json:"name"`
-					Arguments map[string]interface{} `json:"arguments,omitempty"`
-					Meta      *struct {
-						ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
-					} `json:"_meta,omitempty"`
+					Name      string         `json:"name"`
+					Arguments map[string]any `json:"arguments,omitempty"`
+					Meta      *mcp.Meta      `json:"_meta,omitempty"`
 				}{
 					Arguments: tc.args,
 				},
@@ -590,11 +586,9 @@ func TestCreateServiceHandler(t *testing.T) {
 
 			request := mcp.CallToolRequest{
 				Params: struct {
-					Name      string                 `json:"name"`
-					Arguments map[string]interface{} `json:"arguments,omitempty"`
-					Meta      *struct {
-						ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
-					} `json:"_meta,omitempty"`
+					Name      string         `json:"name"`
+					Arguments map[string]any `json:"arguments,omitempty"`
+					Meta      *mcp.Meta      `json:"_meta,omitempty"`
 				}{
 					Arguments: tc.args,
 				},
@@ -831,11 +825,9 @@ func TestDeleteServiceHandler(t *testing.T) {
 
 			request := mcp.CallToolRequest{
 				Params: struct {
-					Name      string                 `json:"name"`
-					Arguments map[string]interface{} `json:"arguments,omitempty"`
-					Meta      *struct {
-						ProgressToken mcp.ProgressToken `json:"progressToken,omitempty"`
-					} `json:"_meta,omitempty"`
+					Name      string         `json:"name"`
+					Arguments map[string]any `json:"arguments,omitempty"`
+					Meta      *mcp.Meta      `json:"_meta,omitempty"`
 				}{
 					Arguments: tc.args,
 				},
