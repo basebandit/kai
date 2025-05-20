@@ -170,9 +170,8 @@ func listDeploymentsHandler(cm kai.ClusterManager, factory DeploymentFactory) fu
 		params := kai.DeploymentParams{
 			Namespace: namespace, // will be used if allNamespaces is false
 		}
-		deployment := factory.NewDeployment(params)
 
-		// List deployments
+		deployment := factory.NewDeployment(params)
 		resultText, err := deployment.List(ctx, cm, allNamespaces, labelSelector)
 		if err != nil {
 			return mcp.NewToolResultText(err.Error()), nil
@@ -219,12 +218,10 @@ func describeDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory)
 // createDeploymentHandler handles the create_deployment tool
 func createDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		// Initialize params with default values
 		params := kai.DeploymentParams{
 			Replicas: 1, // Set default replica count to 1
 		}
 
-		// Validate required parameters
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText("Required parameter 'name' is missing"), nil
@@ -245,7 +242,6 @@ func createDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) f
 			return mcp.NewToolResultText("Parameter 'image' must be a non-empty string"), nil
 		}
 
-		// Process optional parameters
 		if replicasArg, ok := request.Params.Arguments["replicas"].(float64); ok {
 			params.Replicas = replicasArg
 		}
@@ -274,7 +270,6 @@ func createDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) f
 			params.ImagePullPolicy = imagePullPolicyArg
 		}
 
-		// Get namespace (optional with default)
 		namespace := cm.GetCurrentNamespace()
 		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
@@ -298,10 +293,8 @@ func createDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) f
 // updateDeploymentHandler handles the update_deployment tool
 func updateDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		// Initialize params with defaults
 		params := kai.DeploymentParams{}
 
-		// Validate required parameters
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText("Required parameter 'name' is missing"), nil
@@ -314,17 +307,14 @@ func updateDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) f
 
 		params.Name = name
 
-		// Get namespace (optional with default)
 		namespace := cm.GetCurrentNamespace()
 		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 		params.Namespace = namespace
 
-		// Track if any update parameters are provided
-		hasUpdateParams := false
+		var hasUpdateParams bool // false
 
-		// Process optional update parameters
 		if imageArg, ok := request.Params.Arguments["image"].(string); ok && imageArg != "" {
 			params.Image = imageArg
 			hasUpdateParams = true
@@ -364,12 +354,10 @@ func updateDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) f
 			hasUpdateParams = true
 		}
 
-		// Check if any update parameters are provided
 		if !hasUpdateParams {
 			return mcp.NewToolResultText("At least one field to update must be specified"), nil
 		}
 
-		// Update the deployment - create deployment object first
 		deployment := factory.NewDeployment(params)
 		resultText, err := deployment.Update(ctx, cm)
 		if err != nil {

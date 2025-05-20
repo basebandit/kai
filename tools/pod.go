@@ -168,12 +168,10 @@ func RegisterPodToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, f
 // createPodHandler handles the create_pod tool
 func createPodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		// Initialize params with default values
 		params := kai.PodParams{
 			RestartPolicy: "Always", // Default restart policy
 		}
 
-		// Validate required parameters
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText("Required parameter 'name' is missing"), nil
@@ -194,18 +192,15 @@ func createPodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx contex
 			return mcp.NewToolResultText("Parameter 'image' must be a non-empty string"), nil
 		}
 
-		// Get namespace (optional with default)
 		namespace := cm.GetCurrentNamespace()
 		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 
-		// Set required parameters
 		params.Name = name
 		params.Image = image
 		params.Namespace = namespace
 
-		// Process optional parameters
 		if commandArg, ok := request.Params.Arguments["command"].([]interface{}); ok && len(commandArg) > 0 {
 			params.Command = make([]interface{}, len(commandArg))
 			for i, cmd := range commandArg {
@@ -231,7 +226,6 @@ func createPodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx contex
 		if containerNameArg, ok := request.Params.Arguments["container_name"].(string); ok && containerNameArg != "" {
 			params.ContainerName = containerNameArg
 		} else {
-			// Default container name to pod name if not specified
 			params.ContainerName = name
 		}
 
@@ -277,10 +271,8 @@ func createPodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx contex
 			params.ServiceAccountName = serviceAccountArg
 		}
 
-		// Create pod using the factory
 		pod := factory.NewPod(params)
 
-		// Create the pod in Kubernetes
 		resultText, err := pod.Create(ctx, cm)
 		if err != nil {
 			return mcp.NewToolResultText(err.Error()), nil
@@ -440,7 +432,6 @@ func streamLogsHandler(cm kai.ClusterManager, factory PodFactory) func(ctx conte
 			previous = previousArg
 		}
 
-		// var sinceTime *metav1.Time
 		var sinceDuration *time.Duration
 		if sinceArg, ok := request.Params.Arguments["since"].(string); ok && sinceArg != "" {
 			duration, err := time.ParseDuration(sinceArg)

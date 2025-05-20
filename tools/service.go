@@ -25,7 +25,6 @@ func NewDefaultServiceFactory() *DefaultServiceFactory {
 
 // NewService creates a new service operator
 func (f *DefaultServiceFactory) NewService(params kai.ServiceParams) kai.ServiceOperator {
-	// Convert ServicePort from kai.ServiceParams to cluster.ServicePort
 	ports := make([]cluster.ServicePort, 0, len(params.Ports))
 	for _, p := range params.Ports {
 		ports = append(ports, cluster.ServicePort{
@@ -37,7 +36,6 @@ func (f *DefaultServiceFactory) NewService(params kai.ServiceParams) kai.Service
 		})
 	}
 
-	// Create and return a new Service
 	return &cluster.Service{
 		Name:            params.Name,
 		Namespace:       params.Namespace,

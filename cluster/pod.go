@@ -35,7 +35,6 @@ type Pod struct {
 func (p *Pod) Create(ctx context.Context, cm kai.ClusterManager) (string, error) {
 	var result string
 
-	// Validate required fields
 	if p.Image == "" {
 		return result, fmt.Errorf("failed to create pod: image cannot be empty")
 	}
@@ -54,7 +53,6 @@ func (p *Pod) Create(ctx context.Context, cm kai.ClusterManager) (string, error)
 		return result, fmt.Errorf("namespace %q not found: %w", p.Namespace, err)
 	}
 
-	// Create the pod object
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      p.Name,
@@ -76,7 +74,6 @@ func (p *Pod) Create(ctx context.Context, cm kai.ClusterManager) (string, error)
 		}
 	}
 
-	// Create container
 	container := corev1.Container{
 		Name:  p.ContainerName,
 		Image: p.Image,
@@ -261,7 +258,6 @@ func (p *Pod) List(ctx context.Context, cm kai.ClusterManager, limit int64, labe
 		return result, nil
 	}
 
-	// Create list options
 	listOptions := metav1.ListOptions{
 		LabelSelector: labelSelector,
 		FieldSelector: fieldSelector,

@@ -30,7 +30,7 @@ type Deployment struct {
 func (d *Deployment) Create(ctx context.Context, cm kai.ClusterManager) (string, error) {
 	var result string
 
-	// Add default app label if no labels provided
+	// Add default app label for when no labels provided
 	labels := map[string]interface{}{
 		"app": d.Name,
 	}
@@ -89,7 +89,6 @@ func (d *Deployment) Create(ctx context.Context, cm kai.ClusterManager) (string,
 		}
 	}
 
-	// Create pod spec
 	podSpec := map[string]interface{}{
 		"containers": []interface{}{container},
 	}
@@ -209,8 +208,6 @@ func (d *Deployment) Update(ctx context.Context, cm kai.ClusterManager) (string,
 	if err != nil {
 		return result, fmt.Errorf("failed to get deployment: %w", err)
 	}
-
-	// Update fields based on what's provided
 
 	// Update replicas if specified
 	if d.Replicas > 0 {

@@ -172,20 +172,15 @@ func (s *Service) Create(ctx context.Context, cm kai.ClusterManager) (string, er
 		}
 		service.Spec.Ports = servicePorts
 	} else {
-		// At least one port is required
 		return result, errors.New("at least one port must be specified")
 	}
 
-	// Create the service
 	createdService, err := client.CoreV1().Services(s.Namespace).Create(timeoutCtx, service, metav1.CreateOptions{})
 	if err != nil {
 		return result, fmt.Errorf("failed to create service: %w", err)
 	}
 
-	// Build result message
 	result = fmt.Sprintf("Service %q created successfully in namespace %q", createdService.Name, createdService.Namespace)
-
-	// Add service type to result
 	result += fmt.Sprintf(" (Type: %s)", createdService.Spec.Type)
 
 	// Add ports to result
@@ -249,7 +244,6 @@ func (s *Service) Get(ctx context.Context, cm kai.ClusterManager) (string, error
 		return result, fmt.Errorf("failed to get service '%s' in namespace '%s': %v", s.Name, s.Namespace, err)
 	}
 
-	// Format the service information
 	result = formatService(service)
 
 	return result, nil
@@ -452,8 +446,6 @@ func (s *Service) validate() error {
 	if s.Type == "ExternalName" && s.ExternalName == "" {
 		return errors.New("externalName must be specified for ExternalName service type")
 	}
-
-	// Additional validations can be added as needed
 
 	return nil
 }
