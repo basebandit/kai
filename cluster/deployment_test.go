@@ -207,10 +207,11 @@ func TestDeployment_Update(t *testing.T) {
 				foundENV1 := false
 				foundENV2 := false
 				for _, env := range updated.Spec.Template.Spec.Containers[0].Env {
-					if env.Name == "ENV1" {
+					switch env.Name {
+					case "ENV1":
 						assert.Equal(t, "updated-value", env.Value)
 						foundENV1 = true
-					} else if env.Name == "ENV2" {
+					case "ENV2":
 						assert.Equal(t, "new-value", env.Value)
 						foundENV2 = true
 					}
