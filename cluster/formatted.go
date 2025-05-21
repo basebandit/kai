@@ -407,6 +407,142 @@ func formatServiceList(services *corev1.ServiceList, includeNamespace bool) stri
 	return result.String()
 }
 
+// formatDeploymentDetailed formats a deployment with detailed information for display
+func formatDeploymentDetailed(deployment *appsv1.Deployment) string {
+	result := fmt.Sprintf("Deployment: %s\n", deployment.Name)
+	result += fmt.Sprintf("Namespace: %s\n", deployment.Namespace)
+
+	// Basic information
+	var replicas int32 = 0
+	if deployment.Spec.Replicas != nil {
+		replicas = *deployment.Spec.Replicas
+	}
+	result += fmt.Sprintf("Replicas: %d/%d (available/total)\n", deployment.Status.AvailableReplicas, replicas)
+	result += fmt.Sprintf("Created: %s\n", deployment.CreationTimestamp.Format(time.RFC3339))
+
+	// Status conditions
+	if len(deployment.Status.Conditions) > 0 {
+		result += "\nConditions:\n"
+		for _, condition := range deployment.Status.Conditions {
+			result += fmt.Sprintf("- Type: %s, Status: %s, Last Update: %s\n",
+				condition.Type,
+				condition.Status,
+				condition.LastUpdateTime.Format(time.RFC3339))
+			if condition.Message != "" {
+				result += fmt.Sprintf("  Message: %s\n", condition.Message)
+			}
+			if condition.Reason != "" {
+				result += fmt.Sprintf("  Reason: %s\n", condition.Reason)
+			}
+		}
+	}
+
+	// Selectors
+	if len(deployment.Spec.Selector.MatchLabels) > 0 {
+		result += "\nSelector:\n"
+		for k, v := range deployment.Spec.Selector.MatchLabels {
+			result += fmt.Sprintf("- %s: %s\n", k, v)
+		}
+	}
+
+	// Strategy
+	result += fmt.Sprintf("\nStrategy: %s\n", deployment.Spec.Strategy.Type)
+	if deployment.Spec.Strategy.Type == appsv1.RollingUpdateDeploymentStrategyType && deployment.Spec.Strategy.RollingUpdate != nil {
+		if deployment.Spec.Strategy.RollingUpdate.MaxUnavailable != nil {
+			result += fmt.Sprintf("Max Unavailable: %s\n", deployment.Spec.Strategy.RollingUpdate.MaxUnavailable.String())
+		}
+		if deployment.Spec.Strategy.RollingUpdate.MaxSurge != nil {
+			result += fmt.Sprintf("Max Surge: %s\n", deployment.Spec.Strategy.RollingUpdate.MaxSurge.String())
+		}
+	}
+
+	// Containers
+	if len(deployment.Spec.Template.Spec.Containers) > 0 {
+		result += "\nContainers:\n"
+		for i, container := range deployment.Spec.Template.Spec.Containers {
+			result += fmt.Sprintf("%d. %s (Image: %s)\n", i+1, container.Name, container.Image)
+
+			// Container ports
+			if len(container.Ports) > 0 {
+				result += "   Ports:\n"
+				for _, port := range container.Ports {
+					result += fmt.Sprintf("   - %d/%s\n", port.ContainerPort, port.Protocol)
+				}
+			}
+
+			// Environment variables
+			if len(container.Env) > 0 {
+				result += "   Environment:\n"
+				for _, env := range container.Env {
+					if env.ValueFrom != nil {
+						result += fmt.Sprintf("   - %s: <set from source>\n", env.Name)
+					} else {
+						result += fmt.Sprintf("   - %s: %s\n", env.Name, env.Value)
+					}
+				}
+			}
+
+			// Resources
+			if container.Resources.Limits != nil || container.Resources.Requests != nil {
+				result += "   Resources:\n"
+				if container.Resources.Limits != nil {
+					result += "     Limits:\n"
+					for resource, quantity := range container.Resources.Limits {
+						result += fmt.Sprintf("     - %s: %s\n", resource, quantity.String())
+					}
+				}
+				if container.Resources.Requests != nil {
+					result += "     Requests:\n"
+					for resource, quantity := range container.Resources.Requests {
+						result += fmt.Sprintf("     - %s: %s\n", resource, quantity.String())
+					}
+				}
+			}
+
+			// Image pull policy
+			result += fmt.Sprintf("   Image Pull Policy: %s\n", container.ImagePullPolicy)
+		}
+	}
+
+	// Volume mounts
+	if len(deployment.Spec.Template.Spec.Volumes) > 0 {
+		result += "\nVolumes:\n"
+		for _, volume := range deployment.Spec.Template.Spec.Volumes {
+			result += fmt.Sprintf("- %s\n", volume.Name)
+
+			// Add volume type information
+			switch {
+			case volume.PersistentVolumeClaim != nil:
+				result += fmt.Sprintf("  Type: PersistentVolumeClaim (Claim: %s)\n", volume.PersistentVolumeClaim.ClaimName)
+			case volume.ConfigMap != nil:
+				result += fmt.Sprintf("  Type: ConfigMap (Name: %s)\n", volume.ConfigMap.Name)
+			case volume.Secret != nil:
+				result += fmt.Sprintf("  Type: Secret (Name: %s)\n", volume.Secret.SecretName)
+			case volume.EmptyDir != nil:
+				result += "  Type: EmptyDir\n"
+			default:
+				result += "  Type: Other\n"
+			}
+		}
+	}
+
+	// Pod labels
+	if len(deployment.Spec.Template.Labels) > 0 {
+		result += "\nPod Labels:\n"
+		for k, v := range deployment.Spec.Template.Labels {
+			result += fmt.Sprintf("- %s: %s\n", k, v)
+		}
+	}
+
+	// Add status summary
+	result += "\nStatus Summary:\n"
+	result += fmt.Sprintf("- Ready: %d/%d\n", deployment.Status.ReadyReplicas, replicas)
+	result += fmt.Sprintf("- Up-to-date: %d\n", deployment.Status.UpdatedReplicas)
+	result += fmt.Sprintf("- Available: %d\n", deployment.Status.AvailableReplicas)
+
+	return result
+}
+
 // formatDuration formats a time.Duration in a human-readable way similar to kubectl
 func formatDuration(d time.Duration) string {
 	switch {

@@ -474,3 +474,30 @@ func (d *Deployment) List(ctx context.Context, cm kai.ClusterManager, allNamespa
 
 	return result, nil
 }
+
+// Describe provides detailed information about a deployment
+func (d *Deployment) Describe(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	client, err := cm.GetCurrentClient()
+	if err != nil {
+		return "", fmt.Errorf("error getting client: %w", err)
+	}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+
+	// If namespace is empty, use current namespace
+	namespace := d.Namespace
+	if namespace == "" {
+		namespace = cm.GetCurrentNamespace()
+	}
+
+	// Get the deployment
+	deployment, err := client.AppsV1().Deployments(namespace).Get(timeoutCtx, d.Name, metav1.GetOptions{})
+	if err != nil {
+		return "", fmt.Errorf("failed to get deployment: %w", err)
+	}
+
+	// Format detailed deployment information
+	result := formatDeploymentDetailed(deployment)
+	return result, nil
+}

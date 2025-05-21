@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/basebandit/kai/testmocks"
@@ -11,6 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 )
@@ -657,6 +659,182 @@ func TestDeployment_List(t *testing.T) {
 			} else {
 				assert.NoError(t, err)
 				assert.Contains(t, result, tc.expectedResult)
+			}
+
+			mockCM.AssertExpectations(t)
+		})
+	}
+}
+
+// TestDeployment_Describe tests the Describe method
+func TestDeployment_Describe(t *testing.T) {
+	ctx := context.Background()
+
+	createDeploymentObj := func(name, namespace string, replicas int32) *appsv1.Deployment {
+		return &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+				Labels: map[string]string{
+					"app": name,
+				},
+				CreationTimestamp: metav1.Now(),
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: &replicas,
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"app": name,
+					},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app": name,
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  name,
+								Image: nginxImage,
+								Ports: []corev1.ContainerPort{
+									{
+										ContainerPort: 80,
+										Protocol:      corev1.ProtocolTCP,
+									},
+								},
+								ImagePullPolicy: corev1.PullAlways,
+							},
+						},
+					},
+				},
+				Strategy: appsv1.DeploymentStrategy{
+					Type: appsv1.RollingUpdateDeploymentStrategyType,
+					RollingUpdate: &appsv1.RollingUpdateDeployment{
+						MaxUnavailable: &intstr.IntOrString{Type: intstr.String, StrVal: "25%"},
+						MaxSurge:       &intstr.IntOrString{Type: intstr.String, StrVal: "25%"},
+					},
+				},
+			},
+			Status: appsv1.DeploymentStatus{
+				ReadyReplicas:     replicas,
+				AvailableReplicas: replicas,
+				UpdatedReplicas:   replicas,
+				Conditions: []appsv1.DeploymentCondition{
+					{
+						Type:               appsv1.DeploymentAvailable,
+						Status:             corev1.ConditionTrue,
+						LastUpdateTime:     metav1.Now(),
+						LastTransitionTime: metav1.Now(),
+						Reason:             "MinimumReplicasAvailable",
+						Message:            "Deployment has minimum availability.",
+					},
+					{
+						Type:               appsv1.DeploymentProgressing,
+						Status:             corev1.ConditionTrue,
+						LastUpdateTime:     metav1.Now(),
+						LastTransitionTime: metav1.Now(),
+						Reason:             "NewReplicaSetAvailable",
+						Message:            fmt.Sprintf("ReplicaSet \"%s-679db4f448\" has successfully progressed.", name),
+					},
+				},
+			},
+		}
+	}
+
+	testCases := []struct {
+		name           string
+		deployment     *Deployment
+		setupMock      func(*testmocks.MockClusterManager)
+		expectedResult string
+		expectedError  string
+	}{
+		{
+			name: "Describe existing deployment",
+			deployment: &Deployment{
+				Name:      deploymentName1,
+				Namespace: testNamespace,
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				deployment := createDeploymentObj(deploymentName1, testNamespace, 2)
+				fakeClient := fake.NewSimpleClientset(deployment)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: deploymentName1,
+			expectedError:  "",
+		},
+		{
+			name: "Deployment not found",
+			deployment: &Deployment{
+				Name:      "nonexistent-deployment",
+				Namespace: testNamespace,
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset()
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "",
+			expectedError:  "failed to get deployment",
+		},
+		{
+			name: "Error getting client",
+			deployment: &Deployment{
+				Name:      deploymentName1,
+				Namespace: testNamespace,
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				mockCM.On("GetCurrentClient").Return(nil, errors.New("client unavailable"))
+			},
+			expectedResult: "",
+			expectedError:  "error getting client: client unavailable",
+		},
+		{
+			name: "Empty namespace uses current namespace",
+			deployment: &Deployment{
+				Name:      deploymentName1,
+				Namespace: "", // Empty namespace
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+
+				deployment := createDeploymentObj(deploymentName1, defaultNamespace, 1)
+				fakeClient := fake.NewSimpleClientset(deployment)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: deploymentName1,
+			expectedError:  "",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockCM := testmocks.NewMockClusterManager()
+			tc.setupMock(mockCM)
+
+			result, err := tc.deployment.Describe(ctx, mockCM)
+
+			if tc.expectedError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedError)
+			} else {
+				assert.NoError(t, err)
+				assert.Contains(t, result, tc.expectedResult)
+
+				// Additional checks for detailed output
+				if tc.name == "Describe existing deployment" {
+					// Check if detailed sections exist
+					assert.Contains(t, result, "Deployment: "+deploymentName1)
+					assert.Contains(t, result, "Namespace: "+testNamespace)
+					assert.Contains(t, result, "Replicas:")
+					assert.Contains(t, result, "Conditions:")
+					assert.Contains(t, result, "Strategy: RollingUpdate")
+					assert.Contains(t, result, "Max Unavailable: 25%")
+					assert.Contains(t, result, "Max Surge: 25%")
+					assert.Contains(t, result, "Containers:")
+					assert.Contains(t, result, "Image: "+nginxImage)
+					assert.Contains(t, result, "Status Summary:")
+				}
 			}
 
 			mockCM.AssertExpectations(t)
