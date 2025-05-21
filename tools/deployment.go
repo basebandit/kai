@@ -109,6 +109,19 @@ func RegisterDeploymentToolsWithFactory(s kai.ServerInterface, cm kai.ClusterMan
 
 	s.AddTool(createDeploymentTool, createDeploymentHandler(cm, factory))
 
+	getDeploymentTool := mcp.NewTool("get_deployment",
+		mcp.WithDescription("Get basic information about a specific deployment"),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Name of the deployment"),
+		),
+		mcp.WithString("namespace",
+			mcp.Description("Namespace of the deployment (defaults to current namespace)"),
+		),
+	)
+
+	s.AddTool(getDeploymentTool, getDeploymentHandler(cm, factory))
+
 	updateDeploymentTool := mcp.NewTool("update_deployment",
 		mcp.WithDescription("Update an existing deployment"),
 		mcp.WithString("name",
@@ -142,6 +155,40 @@ func RegisterDeploymentToolsWithFactory(s kai.ServerInterface, cm kai.ClusterMan
 	)
 
 	s.AddTool(updateDeploymentTool, updateDeploymentHandler(cm, factory))
+}
+
+// getDeploymentHandler handles the get_deployment tool
+func getDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		nameArg, ok := request.Params.Arguments["name"]
+		if !ok || nameArg == nil {
+			return mcp.NewToolResultText("Required parameter 'name' is missing"), nil
+		}
+
+		name, ok := nameArg.(string)
+		if !ok || name == "" {
+			return mcp.NewToolResultText("Parameter 'name' must be a non-empty string"), nil
+		}
+
+		namespace := cm.GetCurrentNamespace()
+		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+			namespace = namespaceArg
+		}
+
+		params := kai.DeploymentParams{
+			Name:      name,
+			Namespace: namespace,
+		}
+
+		deployment := factory.NewDeployment(params)
+
+		resultText, err := deployment.Get(ctx, cm)
+		if err != nil {
+			return mcp.NewToolResultText(err.Error()), nil
+		}
+
+		return mcp.NewToolResultText(resultText), nil
+	}
 }
 
 // listDeploymentsHandler handles the list_deployments tool
@@ -206,7 +253,8 @@ func describeDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory)
 
 		deployment := factory.NewDeployment(params)
 
-		resultText, err := deployment.Get(ctx, cm)
+		// Use the Describe method instead of Get
+		resultText, err := deployment.Describe(ctx, cm)
 		if err != nil {
 			return mcp.NewToolResultText(err.Error()), nil
 		}

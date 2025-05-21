@@ -45,6 +45,7 @@ type DeploymentOperator interface {
 	Create(ctx context.Context, cm ClusterManager) (string, error)
 	Get(ctx context.Context, cm ClusterManager) (string, error)
 	Update(ctx context.Context, cm ClusterManager) (string, error)
+	Describe(ctx context.Context, cm ClusterManager) (string, error)
 	List(ctx context.Context, cm ClusterManager, allNamespaces bool, labelSelector string) (string, error)
 }
 

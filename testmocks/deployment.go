@@ -25,6 +25,12 @@ func (m *MockDeployment) List(ctx context.Context, cm kai.ClusterManager, allNam
 	return args.String(0), args.Error(1)
 }
 
+// Describe mocks the Describe method
+func (m *MockDeployment) Describe(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	args := m.Called(ctx, cm)
+	return args.String(0), args.Error(1)
+}
+
 // Get mocks the Get method
 func (m *MockDeployment) Get(ctx context.Context, cm kai.ClusterManager) (string, error) {
 	args := m.Called(ctx, cm)
