@@ -2,7 +2,7 @@
   <img src="./kai.jpg" alt="Kai Logo">
 </p>
 
-# KAI - kubernetes MCP server
+# Kai - kubernetes MCP server
 
 A Model Context Protocol (MCP) server for managing a Kubernetes cluster through llm clients like Claude, Ollama.
 
