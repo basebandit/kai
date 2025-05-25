@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/basebandit/kai"
@@ -259,7 +260,7 @@ func (cm *Manager) ListClusters() []string {
 	return clusters
 }
 
-// SetCurrentContext sets the current context
+// SetCurrentContext sets the current context and updates the kubeconfig file
 func (cm *Manager) SetCurrentContext(contextName string) error {
 	if _, exists := cm.clients[contextName]; !exists {
 		return fmt.Errorf("cluster %s not found", contextName)
@@ -274,6 +275,11 @@ func (cm *Manager) SetCurrentContext(contextName string) error {
 	cm.currentContext = contextName
 	if contextInfo, exists := cm.contexts[contextName]; exists {
 		contextInfo.IsActive = true
+
+		// Update the kubeconfig file to reflect the context switch
+		if err := cm.updateKubeconfigCurrentContext(contextName, contextInfo.ConfigPath); err != nil {
+			return fmt.Errorf("failed to update kubeconfig file: %w", err)
+		}
 	}
 
 	return nil
@@ -348,6 +354,41 @@ func extractAllContextsInfo(path, prefix string) (map[string]*kai.ContextInfo, s
 	}
 
 	return contexts, rawConfig.CurrentContext, nil
+}
+
+// updateKubeconfigCurrentContext updates the current-context in the kubeconfig file
+func (cm *Manager) updateKubeconfigCurrentContext(contextName, configPath string) error {
+	kubeconfigBytes, err := os.ReadFile(configPath)
+	if err != nil {
+		return fmt.Errorf("error reading kubeconfig file: %w", err)
+	}
+
+	config, err := clientcmd.Load([]byte(kubeconfigBytes))
+	if err != nil {
+		return fmt.Errorf("error parsing kubeconfig: %w", err)
+	}
+
+	// Find the original context name in the kubeconfig
+	// (since we might have prefixed it in our manager)
+	originalContextName := ""
+	for name := range config.Contexts {
+		if strings.HasSuffix(contextName, name) || contextName == name {
+			originalContextName = name
+			break
+		}
+	}
+
+	if originalContextName == "" {
+		return fmt.Errorf("context %s not found in kubeconfig", contextName)
+	}
+
+	config.CurrentContext = originalContextName
+
+	if err := clientcmd.WriteToFile(*config, configPath); err != nil {
+		return fmt.Errorf("error writing kubeconfig file: %w", err)
+	}
+
+	return nil
 }
 
 // createClients creates Kubernetes clients from the kubeconfig file
