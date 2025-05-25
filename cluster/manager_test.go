@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/basebandit/kai"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -34,6 +35,15 @@ func TestKubeConfigLoading(t *testing.T) {
 	t.Run("ResolvePath", testResolvePath)
 	t.Run("ValidateFile", testValidateFile)
 	t.Run("LoadKubeConfig", testLoadKubeConfig)
+}
+
+func TestExtendedClusterManager(t *testing.T) {
+	t.Run("DeleteContext", testDeleteContext)
+	t.Run("GetContextInfo", testGetContextInfo)
+	t.Run("RenameContext", testRenameContext)
+	t.Run("ListContexts", testListContexts)
+	t.Run("LoadKubeConfigDuplicateName", testLoadKubeConfigDuplicateName)
+	t.Run("SetCurrentContextUpdatesActiveStatus", testSetCurrentContextUpdatesActiveStatus)
 }
 
 func testNewClusterManager(t *testing.T) {
@@ -196,4 +206,310 @@ users:
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "error accessing file")
 	})
+}
+
+func testDeleteContext(t *testing.T) {
+	cm := New()
+
+	t.Run("DeleteNonexistentContext", func(t *testing.T) {
+		err := cm.DeleteContext("nonexistent")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "context nonexistent not found")
+	})
+
+	t.Run("DeleteActiveContext", func(t *testing.T) {
+		fakeClient1 := fake.NewSimpleClientset()
+		fakeClient2 := fake.NewSimpleClientset()
+
+		contextInfo1 := &kai.ContextInfo{
+			Name:      "context1",
+			Cluster:   "cluster1",
+			User:      "user1",
+			Namespace: "default",
+			IsActive:  true,
+		}
+		contextInfo2 := &kai.ContextInfo{
+			Name:      "context2",
+			Cluster:   "cluster2",
+			User:      "user2",
+			Namespace: "default",
+			IsActive:  false,
+		}
+
+		cm.clients["context1"] = fakeClient1
+		cm.clients["context2"] = fakeClient2
+		cm.contexts["context1"] = contextInfo1
+		cm.contexts["context2"] = contextInfo2
+		cm.currentContext = "context1"
+
+		err := cm.DeleteContext("context1")
+		assert.NoError(t, err)
+
+		assert.NotContains(t, cm.contexts, "context1")
+		assert.NotContains(t, cm.clients, "context1")
+		assert.NotEqual(t, "context1", cm.currentContext)
+		assert.True(t, cm.contexts[cm.currentContext].IsActive)
+	})
+
+	t.Run("DeleteInactiveContext", func(t *testing.T) {
+		fakeClient1 := fake.NewSimpleClientset()
+		fakeClient2 := fake.NewSimpleClientset()
+
+		contextInfo1 := &kai.ContextInfo{
+			Name:      "context1",
+			Cluster:   "cluster1",
+			User:      "user1",
+			Namespace: "default",
+			IsActive:  true,
+		}
+		contextInfo2 := &kai.ContextInfo{
+			Name:      "context2",
+			Cluster:   "cluster2",
+			User:      "user2",
+			Namespace: "default",
+			IsActive:  false,
+		}
+
+		cm.clients["context1"] = fakeClient1
+		cm.clients["context2"] = fakeClient2
+		cm.contexts["context1"] = contextInfo1
+		cm.contexts["context2"] = contextInfo2
+		cm.currentContext = "context1"
+
+		err := cm.DeleteContext("context2")
+		assert.NoError(t, err)
+
+		assert.NotContains(t, cm.contexts, "context2")
+		assert.NotContains(t, cm.clients, "context2")
+		assert.Equal(t, "context1", cm.currentContext)
+		assert.True(t, cm.contexts["context1"].IsActive)
+	})
+}
+
+func testGetContextInfo(t *testing.T) {
+	cm := New()
+
+	t.Run("GetNonexistentContext", func(t *testing.T) {
+		_, err := cm.GetContextInfo("nonexistent")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "context nonexistent not found")
+	})
+
+	t.Run("GetExistingContext", func(t *testing.T) {
+		expectedInfo := &kai.ContextInfo{
+			Name:       "test-context",
+			Cluster:    "test-cluster",
+			User:       "test-user",
+			Namespace:  "test-namespace",
+			ServerURL:  "https://example.com:6443",
+			ConfigPath: "/path/to/config",
+			IsActive:   true,
+		}
+
+		cm.contexts["test-context"] = expectedInfo
+
+		actualInfo, err := cm.GetContextInfo("test-context")
+		assert.NoError(t, err)
+		assert.Equal(t, expectedInfo.Name, actualInfo.Name)
+		assert.Equal(t, expectedInfo.Cluster, actualInfo.Cluster)
+		assert.Equal(t, expectedInfo.User, actualInfo.User)
+		assert.Equal(t, expectedInfo.Namespace, actualInfo.Namespace)
+		assert.Equal(t, expectedInfo.ServerURL, actualInfo.ServerURL)
+		assert.Equal(t, expectedInfo.ConfigPath, actualInfo.ConfigPath)
+		assert.Equal(t, expectedInfo.IsActive, actualInfo.IsActive)
+
+		actualInfo.Name = "modified"
+		assert.Equal(t, "test-context", expectedInfo.Name)
+	})
+}
+
+func testRenameContext(t *testing.T) {
+	cm := New()
+
+	t.Run("RenameSameNames", func(t *testing.T) {
+		err := cm.RenameContext("test", "test")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "old and new context names cannot be the same")
+	})
+
+	t.Run("RenameNonexistentContext", func(t *testing.T) {
+		err := cm.RenameContext("nonexistent", "new-name")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "context nonexistent not found")
+	})
+
+	t.Run("RenameToExistingName", func(t *testing.T) {
+		fakeClient := fake.NewSimpleClientset()
+
+		contextInfo1 := &kai.ContextInfo{Name: "context1"}
+		contextInfo2 := &kai.ContextInfo{Name: "context2"}
+
+		cm.clients["context1"] = fakeClient
+		cm.clients["context2"] = fakeClient
+		cm.contexts["context1"] = contextInfo1
+		cm.contexts["context2"] = contextInfo2
+
+		err := cm.RenameContext("context1", "context2")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "context context2 already exists")
+	})
+
+	t.Run("SuccessfulRename", func(t *testing.T) {
+		fakeClient := fake.NewSimpleClientset()
+
+		contextInfo := &kai.ContextInfo{
+			Name:      "old-context",
+			Cluster:   "test-cluster",
+			User:      "test-user",
+			Namespace: "default",
+			IsActive:  false,
+		}
+
+		cm.clients["old-context"] = fakeClient
+		cm.contexts["old-context"] = contextInfo
+		cm.kubeconfigs["old-context"] = "/path/to/config"
+
+		err := cm.RenameContext("old-context", "new-context")
+		assert.NoError(t, err)
+
+		assert.NotContains(t, cm.contexts, "old-context")
+		assert.NotContains(t, cm.clients, "old-context")
+		assert.NotContains(t, cm.kubeconfigs, "old-context")
+
+		assert.Contains(t, cm.contexts, "new-context")
+		assert.Contains(t, cm.clients, "new-context")
+		assert.Contains(t, cm.kubeconfigs, "new-context")
+
+		assert.Equal(t, "new-context", cm.contexts["new-context"].Name)
+	})
+
+	t.Run("RenameActiveContext", func(t *testing.T) {
+		fakeClient := fake.NewSimpleClientset()
+
+		contextInfo := &kai.ContextInfo{
+			Name:     "active-context",
+			IsActive: true,
+		}
+
+		cm.clients["active-context"] = fakeClient
+		cm.contexts["active-context"] = contextInfo
+		cm.currentContext = "active-context"
+
+		err := cm.RenameContext("active-context", "renamed-context")
+		assert.NoError(t, err)
+
+		assert.Equal(t, "renamed-context", cm.currentContext)
+		assert.Equal(t, "renamed-context", cm.contexts["renamed-context"].Name)
+	})
+}
+
+func testListContexts(t *testing.T) {
+	cm := New()
+
+	t.Run("EmptyContexts", func(t *testing.T) {
+		contexts := cm.ListContexts()
+		assert.Empty(t, contexts)
+	})
+
+	t.Run("MultipleContexts", func(t *testing.T) {
+		contextInfo1 := &kai.ContextInfo{
+			Name:      "context1",
+			Cluster:   "cluster1",
+			User:      "user1",
+			Namespace: "default",
+			IsActive:  true,
+		}
+		contextInfo2 := &kai.ContextInfo{
+			Name:      "context2",
+			Cluster:   "cluster2",
+			User:      "user2",
+			Namespace: "kube-system",
+			IsActive:  false,
+		}
+
+		cm.contexts["context1"] = contextInfo1
+		cm.contexts["context2"] = contextInfo2
+
+		contexts := cm.ListContexts()
+		assert.Len(t, contexts, 2)
+
+		contextNames := make(map[string]bool)
+		for _, ctx := range contexts {
+			contextNames[ctx.Name] = true
+			ctx.Name = "modified"
+		}
+
+		assert.True(t, contextNames["context1"])
+		assert.True(t, contextNames["context2"])
+
+		assert.Equal(t, "context1", cm.contexts["context1"].Name)
+		assert.Equal(t, "context2", cm.contexts["context2"].Name)
+	})
+}
+
+func testLoadKubeConfigDuplicateName(t *testing.T) {
+	tempDir := t.TempDir()
+	kubeconfigPath := filepath.Join(tempDir, "config")
+
+	kubeconfigContent := `
+apiVersion: v1
+kind: Config
+current-context: test-context
+contexts:
+- name: test-context
+  context:
+    cluster: test-cluster
+    user: test-user
+clusters:
+- name: test-cluster
+  cluster:
+    server: https://example.com
+users:
+- name: test-user
+  user:
+    token: test-token
+`
+	err := os.WriteFile(kubeconfigPath, []byte(kubeconfigContent), 0600)
+	require.NoError(t, err)
+
+	cm := New()
+
+	fakeClient := fake.NewSimpleClientset()
+	contextInfo := &kai.ContextInfo{Name: "existing-context"}
+
+	cm.clients["existing-context"] = fakeClient
+	cm.contexts["existing-context"] = contextInfo
+
+	err = cm.LoadKubeConfig("existing-context", kubeconfigPath)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "context existing-context already exists")
+}
+
+func testSetCurrentContextUpdatesActiveStatus(t *testing.T) {
+	cm := New()
+
+	fakeClient1 := fake.NewSimpleClientset()
+	fakeClient2 := fake.NewSimpleClientset()
+
+	contextInfo1 := &kai.ContextInfo{
+		Name:     "context1",
+		IsActive: true,
+	}
+	contextInfo2 := &kai.ContextInfo{
+		Name:     "context2",
+		IsActive: false,
+	}
+
+	cm.clients["context1"] = fakeClient1
+	cm.clients["context2"] = fakeClient2
+	cm.contexts["context1"] = contextInfo1
+	cm.contexts["context2"] = contextInfo2
+	cm.currentContext = "context1"
+
+	err := cm.SetCurrentContext("context2")
+	assert.NoError(t, err)
+
+	assert.Equal(t, "context2", cm.currentContext)
+	assert.False(t, cm.contexts["context1"].IsActive)
+	assert.True(t, cm.contexts["context2"].IsActive)
 }

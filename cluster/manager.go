@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/basebandit/kai"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -20,6 +21,7 @@ type Manager struct {
 	kubeconfigs      map[string]string
 	clients          map[string]kubernetes.Interface
 	dynamicClients   map[string]dynamic.Interface
+	contexts         map[string]*kai.ContextInfo
 	currentContext   string
 	currentNamespace string
 }
@@ -30,6 +32,7 @@ func New() *Manager {
 		kubeconfigs:      make(map[string]string),
 		clients:          make(map[string]kubernetes.Interface),
 		dynamicClients:   make(map[string]dynamic.Interface),
+		contexts:         make(map[string]*kai.ContextInfo),
 		currentNamespace: "default",
 	}
 }
@@ -49,11 +52,15 @@ func (cm *Manager) LoadKubeConfig(name, path string) error {
 		return err
 	}
 
-	contextName, err := extractContextName(resolvedPath)
+	if _, exists := cm.contexts[name]; exists {
+		return fmt.Errorf("context %s already exists", name)
+	}
+
+	// Load all contexts from the kubeconfig file
+	allContexts, currentContext, err := extractAllContextsInfo(resolvedPath, name)
 	if err != nil {
 		return err
 	}
-	cm.currentContext = contextName
 
 	clientset, dynamicClient, err := createClients(resolvedPath)
 	if err != nil {
@@ -64,19 +71,118 @@ func (cm *Manager) LoadKubeConfig(name, path string) error {
 		return err
 	}
 
-	// Store the configuration
-	// If a context with the same name already exists, remove it first
-	if _, exists := cm.clients[name]; exists {
+	// Store all contexts from this kubeconfig
+	for contextName, contextInfo := range allContexts {
+		uniqueName := contextName
+		if name != "" {
+			uniqueName = fmt.Sprintf("%s-%s", name, contextName)
+		}
+
+		if _, exists := cm.contexts[uniqueName]; !exists {
+			cm.kubeconfigs[uniqueName] = resolvedPath
+			cm.clients[uniqueName] = clientset
+			cm.dynamicClients[uniqueName] = dynamicClient
+			cm.contexts[uniqueName] = contextInfo
+			contextInfo.Name = uniqueName
+		}
+	}
+
+	// Set the current context from the kubeconfig as active
+	if currentContext != "" {
+		currentUniqueName := currentContext
+		if name != "" {
+			currentUniqueName = fmt.Sprintf("%s-%s", name, currentContext)
+		}
+
+		if cm.currentContext == "" && cm.contexts[currentUniqueName] != nil {
+			cm.currentContext = currentUniqueName
+		}
+	}
+
+	return nil
+}
+
+// DeleteContext removes a context from the manager
+func (cm *Manager) DeleteContext(name string) error {
+	if _, exists := cm.contexts[name]; !exists {
+		return fmt.Errorf("context %s not found", name)
+	}
+
+	if cm.currentContext == name {
+		delete(cm.contexts, name)
 		delete(cm.clients, name)
 		delete(cm.dynamicClients, name)
 		delete(cm.kubeconfigs, name)
+
+		cm.currentContext = ""
+		for contextName := range cm.contexts {
+			cm.currentContext = contextName
+			cm.contexts[contextName].IsActive = true
+			break
+		}
+		return nil
 	}
 
-	cm.kubeconfigs[name] = path
-	cm.clients[name] = clientset
-	cm.dynamicClients[name] = dynamicClient
+	delete(cm.contexts, name)
+	delete(cm.clients, name)
+	delete(cm.dynamicClients, name)
+	delete(cm.kubeconfigs, name)
 
 	return nil
+}
+
+// GetContextInfo returns detailed information about a specific context
+func (cm *Manager) GetContextInfo(name string) (*kai.ContextInfo, error) {
+	contextInfo, exists := cm.contexts[name]
+	if !exists {
+		return nil, fmt.Errorf("context %s not found", name)
+	}
+
+	contextCopy := *contextInfo
+	return &contextCopy, nil
+}
+
+// RenameContext renames an existing context
+func (cm *Manager) RenameContext(oldName, newName string) error {
+	if oldName == newName {
+		return errors.New("old and new context names cannot be the same")
+	}
+
+	contextInfo, exists := cm.contexts[oldName]
+	if !exists {
+		return fmt.Errorf("context %s not found", oldName)
+	}
+
+	if _, exists := cm.contexts[newName]; exists {
+		return fmt.Errorf("context %s already exists", newName)
+	}
+
+	contextInfo.Name = newName
+	cm.contexts[newName] = contextInfo
+	cm.clients[newName] = cm.clients[oldName]
+	cm.dynamicClients[newName] = cm.dynamicClients[oldName]
+	cm.kubeconfigs[newName] = cm.kubeconfigs[oldName]
+
+	delete(cm.contexts, oldName)
+	delete(cm.clients, oldName)
+	delete(cm.dynamicClients, oldName)
+	delete(cm.kubeconfigs, oldName)
+
+	if cm.currentContext == oldName {
+		cm.currentContext = newName
+	}
+
+	return nil
+}
+
+// ListContexts returns all available contexts
+func (cm *Manager) ListContexts() []*kai.ContextInfo {
+	contexts := make([]*kai.ContextInfo, 0, len(cm.contexts))
+	for _, contextInfo := range cm.contexts {
+		contextCopy := *contextInfo
+		contexts = append(contexts, &contextCopy)
+	}
+	return contexts
 }
 
 // GetClient returns the Kubernetes client for a specific cluster
@@ -103,12 +209,10 @@ func (cm *Manager) GetCurrentClient() (kubernetes.Interface, error) {
 		return nil, errors.New("no clusters configured - use the load_kubeconfig tool first")
 	}
 
-	// First try to get the client for the current context
 	if client, exists := cm.clients[cm.currentContext]; exists {
 		return client, nil
 	}
 
-	// Fall back to the first client if the current context isn't found
 	for _, client := range cm.clients {
 		return client, nil
 	}
@@ -122,12 +226,10 @@ func (cm *Manager) GetCurrentDynamicClient() (dynamic.Interface, error) {
 		return nil, errors.New("no clusters configured - use the load_kubeconfig tool first")
 	}
 
-	// First try to get the client for the current context
 	if client, exists := cm.dynamicClients[cm.currentContext]; exists {
 		return client, nil
 	}
 
-	// Fall back to the first client if the current context isn't found
 	for _, client := range cm.dynamicClients {
 		return client, nil
 	}
@@ -162,7 +264,18 @@ func (cm *Manager) SetCurrentContext(contextName string) error {
 	if _, exists := cm.clients[contextName]; !exists {
 		return fmt.Errorf("cluster %s not found", contextName)
 	}
+
+	if cm.currentContext != "" {
+		if currentInfo, exists := cm.contexts[cm.currentContext]; exists {
+			currentInfo.IsActive = false
+		}
+	}
+
 	cm.currentContext = contextName
+	if contextInfo, exists := cm.contexts[contextName]; exists {
+		contextInfo.IsActive = true
+	}
+
 	return nil
 }
 
@@ -181,7 +294,6 @@ func validateInputs(name, path string) error {
 
 // resolvePath resolves the kubeconfig path
 func resolvePath(path string) (string, error) {
-	// If path is empty, try to use the default kubeconfig path
 	if path == "" {
 		if home := homedir.HomeDir(); home != "" {
 			return filepath.Join(home, ".kube", "config"), nil
@@ -192,31 +304,50 @@ func resolvePath(path string) (string, error) {
 	return path, nil
 }
 
-// extractContextName reads the kubeconfig file and extracts the current context name
-func extractContextName(path string) (string, error) {
+// extractAllContextsInfo reads the kubeconfig file and extracts all context information
+func extractAllContextsInfo(path, prefix string) (map[string]*kai.ContextInfo, string, error) {
 	cleanPath := filepath.Clean(path)
 
 	kubeconfigBytes, err := os.ReadFile(cleanPath)
 	if err != nil {
-		return "", fmt.Errorf("error reading kubeconfig file: %w", err)
+		return nil, "", fmt.Errorf("error reading kubeconfig file: %w", err)
 	}
 
 	clientConfig, err := clientcmd.NewClientConfigFromBytes(kubeconfigBytes)
 	if err != nil {
-		return "", fmt.Errorf("error creating client config: %w", err)
+		return nil, "", fmt.Errorf("error creating client config: %w", err)
 	}
 
 	rawConfig, err := clientConfig.RawConfig()
 	if err != nil {
-		return "", fmt.Errorf("error getting raw config: %w", err)
+		return nil, "", fmt.Errorf("error getting raw config: %w", err)
 	}
 
-	contextName := rawConfig.CurrentContext
-	if contextName == "" {
-		return "", errors.New("no current context found in kubeconfig file")
+	contexts := make(map[string]*kai.ContextInfo)
+
+	for contextName, context := range rawConfig.Contexts {
+		cluster, exists := rawConfig.Clusters[context.Cluster]
+		if !exists {
+			continue // Skip contexts with missing clusters
+		}
+
+		namespace := context.Namespace
+		if namespace == "" {
+			namespace = "default"
+		}
+
+		contexts[contextName] = &kai.ContextInfo{
+			Name:       contextName,
+			Cluster:    context.Cluster,
+			User:       context.AuthInfo,
+			Namespace:  namespace,
+			ServerURL:  cluster.Server,
+			ConfigPath: cleanPath,
+			IsActive:   false,
+		}
 	}
 
-	return contextName, nil
+	return contexts, rawConfig.CurrentContext, nil
 }
 
 // createClients creates Kubernetes clients from the kubeconfig file
@@ -226,7 +357,6 @@ func createClients(path string) (kubernetes.Interface, dynamic.Interface, error)
 		return nil, nil, fmt.Errorf("error building config from flags: %w", err)
 	}
 
-	// Increase timeouts for stability
 	config.Timeout = 30 * time.Second
 
 	clientset, err := kubernetes.NewForConfig(config)
