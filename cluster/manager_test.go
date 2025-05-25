@@ -12,6 +12,7 @@ import (
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 // MockKubernetesInterface is a mock for kubernetes.Interface
@@ -44,6 +45,7 @@ func TestExtendedClusterManager(t *testing.T) {
 	t.Run("ListContexts", testListContexts)
 	t.Run("LoadKubeConfigDuplicateName", testLoadKubeConfigDuplicateName)
 	t.Run("SetCurrentContextUpdatesActiveStatus", testSetCurrentContextUpdatesActiveStatus)
+	t.Run("UpdateKubeconfigCurrentContext", testUpdateKubeconfigCurrentContext)
 }
 
 func testNewClusterManager(t *testing.T) {
@@ -486,18 +488,55 @@ users:
 }
 
 func testSetCurrentContextUpdatesActiveStatus(t *testing.T) {
+	tempDir := t.TempDir()
+	kubeconfigPath := filepath.Join(tempDir, "config")
+
+	// Create a test kubeconfig file
+	kubeconfigContent := `
+apiVersion: v1
+kind: Config
+current-context: context1
+contexts:
+- name: context1
+  context:
+    cluster: cluster1
+    user: user1
+- name: context2
+  context:
+    cluster: cluster2
+    user: user2
+clusters:
+- name: cluster1
+  cluster:
+    server: https://example1.com
+- name: cluster2
+  cluster:
+    server: https://example2.com
+users:
+- name: user1
+  user:
+    token: token1
+- name: user2
+  user:
+    token: token2
+`
+	err := os.WriteFile(kubeconfigPath, []byte(kubeconfigContent), 0600)
+	require.NoError(t, err)
+
 	cm := New()
 
 	fakeClient1 := fake.NewSimpleClientset()
 	fakeClient2 := fake.NewSimpleClientset()
 
 	contextInfo1 := &kai.ContextInfo{
-		Name:     "context1",
-		IsActive: true,
+		Name:       "context1",
+		ConfigPath: kubeconfigPath,
+		IsActive:   true,
 	}
 	contextInfo2 := &kai.ContextInfo{
-		Name:     "context2",
-		IsActive: false,
+		Name:       "context2",
+		ConfigPath: kubeconfigPath,
+		IsActive:   false,
 	}
 
 	cm.clients["context1"] = fakeClient1
@@ -506,10 +545,95 @@ func testSetCurrentContextUpdatesActiveStatus(t *testing.T) {
 	cm.contexts["context2"] = contextInfo2
 	cm.currentContext = "context1"
 
-	err := cm.SetCurrentContext("context2")
+	err = cm.SetCurrentContext("context2")
 	assert.NoError(t, err)
 
 	assert.Equal(t, "context2", cm.currentContext)
 	assert.False(t, cm.contexts["context1"].IsActive)
 	assert.True(t, cm.contexts["context2"].IsActive)
+
+	// Verify that the kubeconfig file was updated
+	updatedBytes, err := os.ReadFile(kubeconfigPath)
+	assert.NoError(t, err)
+
+	config, err := clientcmd.Load(updatedBytes)
+	assert.NoError(t, err)
+	assert.Equal(t, "context2", config.CurrentContext)
+}
+
+func testUpdateKubeconfigCurrentContext(t *testing.T) {
+	tempDir := t.TempDir()
+	kubeconfigPath := filepath.Join(tempDir, "config")
+
+	// Create initial kubeconfig with context1 as current
+	kubeconfigContent := `
+apiVersion: v1
+kind: Config
+current-context: context1
+contexts:
+- name: context1
+  context:
+    cluster: cluster1
+    user: user1
+- name: context2
+  context:
+    cluster: cluster2
+    user: user2
+clusters:
+- name: cluster1
+  cluster:
+    server: https://example1.com
+- name: cluster2
+  cluster:
+    server: https://example2.com
+users:
+- name: user1
+  user:
+    token: token1
+- name: user2
+  user:
+    token: token2
+`
+	err := os.WriteFile(kubeconfigPath, []byte(kubeconfigContent), 0600)
+	require.NoError(t, err)
+
+	cm := New()
+
+	t.Run("UpdateToExistingContext", func(t *testing.T) {
+		err := cm.updateKubeconfigCurrentContext("context2", kubeconfigPath)
+		assert.NoError(t, err)
+
+		// Verify the file was updated
+		updatedBytes, err := os.ReadFile(kubeconfigPath)
+		assert.NoError(t, err)
+
+		config, err := clientcmd.Load(updatedBytes)
+		assert.NoError(t, err)
+		assert.Equal(t, "context2", config.CurrentContext)
+	})
+
+	t.Run("UpdateToNonexistentContext", func(t *testing.T) {
+		err := cm.updateKubeconfigCurrentContext("nonexistent", kubeconfigPath)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "context nonexistent not found in kubeconfig")
+	})
+
+	t.Run("UpdateWithPrefixedContextName", func(t *testing.T) {
+		// Test when our internal context name has a prefix
+		err := cm.updateKubeconfigCurrentContext("prefix-context1", kubeconfigPath)
+		assert.NoError(t, err)
+
+		updatedBytes, err := os.ReadFile(kubeconfigPath)
+		assert.NoError(t, err)
+
+		config, err := clientcmd.Load(updatedBytes)
+		assert.NoError(t, err)
+		assert.Equal(t, "context1", config.CurrentContext)
+	})
+
+	t.Run("UpdateNonexistentFile", func(t *testing.T) {
+		err := cm.updateKubeconfigCurrentContext("context1", "/nonexistent/path")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "error reading kubeconfig file")
+	})
 }
