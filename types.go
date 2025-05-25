@@ -1,5 +1,16 @@
 package kai
 
+// ContextInfo holds detailed information about the cluster.
+type ContextInfo struct {
+	Name       string
+	Cluster    string
+	User       string
+	Namespace  string
+	ServerURL  string
+	ConfigPath string
+	IsActive   bool
+}
+
 // DeploymentParams holds all possible deployment configuration parameters
 type DeploymentParams struct {
 	Name             string
