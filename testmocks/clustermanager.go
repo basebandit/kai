@@ -1,6 +1,7 @@
 package testmocks
 
 import (
+	"github.com/basebandit/kai"
 	"github.com/stretchr/testify/mock"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
@@ -59,8 +60,6 @@ func (m *MockClusterManager) GetCurrentDynamicClient() (dynamic.Interface, error
 
 func (m *MockClusterManager) SetCurrentNamespace(namespace string) {
 	m.Called(namespace)
-	// Additionally track the current namespace value in the mock
-	// to mimic the real implementation's behavior
 	if namespace == "" {
 		m.currentNamespace = "default"
 	} else {
@@ -86,4 +85,27 @@ func (m *MockClusterManager) SetCurrentContext(contextName string) error {
 func (m *MockClusterManager) GetCurrentContext() string {
 	args := m.Called()
 	return args.String(0)
+}
+
+func (m *MockClusterManager) DeleteContext(name string) error {
+	args := m.Called(name)
+	return args.Error(0)
+}
+
+func (m *MockClusterManager) GetContextInfo(name string) (*kai.ContextInfo, error) {
+	args := m.Called(name)
+	if contextInfo, ok := args.Get(0).(*kai.ContextInfo); ok {
+		return contextInfo, args.Error(1)
+	}
+	return nil, args.Error(1)
+}
+
+func (m *MockClusterManager) RenameContext(oldName, newName string) error {
+	args := m.Called(oldName, newName)
+	return args.Error(0)
+}
+
+func (m *MockClusterManager) ListContexts() []*kai.ContextInfo {
+	args := m.Called()
+	return args.Get(0).([]*kai.ContextInfo)
 }
