@@ -28,6 +28,10 @@ type ClusterManager interface {
 	ListClusters() []string
 	LoadKubeConfig(string, string) error
 	SetCurrentContext(string) error
+	DeleteContext(string) error
+	GetContextInfo(string) (*ContextInfo, error)
+	RenameContext(string, string) error
+	ListContexts() []*ContextInfo
 	SetCurrentNamespace(string)
 }
 
