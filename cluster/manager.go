@@ -57,7 +57,6 @@ func (cm *Manager) LoadKubeConfig(name, path string) error {
 		return fmt.Errorf("context %s already exists", name)
 	}
 
-	// Load all contexts from the kubeconfig file
 	allContexts, currentContext, err := extractAllContextsInfo(resolvedPath, name)
 	if err != nil {
 		return err
@@ -97,6 +96,7 @@ func (cm *Manager) LoadKubeConfig(name, path string) error {
 
 		if cm.currentContext == "" && cm.contexts[currentUniqueName] != nil {
 			cm.currentContext = currentUniqueName
+			cm.contexts[currentUniqueName].IsActive = true
 		}
 	}
 
@@ -346,7 +346,7 @@ func extractAllContextsInfo(path, prefix string) (map[string]*kai.ContextInfo, s
 			Name:       contextName,
 			Cluster:    context.Cluster,
 			User:       context.AuthInfo,
-			Namespace:  namespace,
+			Namespace:  context.Namespace,
 			ServerURL:  cluster.Server,
 			ConfigPath: cleanPath,
 			IsActive:   false,
