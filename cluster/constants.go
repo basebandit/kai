@@ -38,7 +38,24 @@ const (
 	registrySecret     = "registry-secret"
 
 	// Test cluster constant
-	testClusterName = "test-cluster"
+	testCluster  = "test-cluster"
+	testCluster1 = "cluster1"
+	testCluster2 = "cluster2"
+
+	// Test cluster context
+	testContext     = "test-context"
+	testContext1    = "context1"
+	testContext2    = "context2"
+	newContext      = "new-context"
+	oldContext      = "old-context"
+	activeContext   = "active-context"
+	renamedContext  = "rename-context"
+	existingContext = "existing-context"
+
+	// Test cluster user
+	testUser  = "test-user"
+	testUser1 = "user1"
+	testUser2 = "user2"
 
 	// Message templates
 	podCreatedFmt    = "Pod %q created successfully"

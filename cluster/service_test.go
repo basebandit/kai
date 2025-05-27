@@ -251,7 +251,7 @@ func testCreateServices(t *testing.T) {
 				assert.Contains(t, result, tc.expectedText)
 
 				// Verify service was created
-				fakeClient := cm.clients[testClusterName]
+				fakeClient := cm.clients[testCluster]
 				service, err := fakeClient.CoreV1().Services(tc.service.Namespace).Get(ctx, tc.service.Name, metav1.GetOptions{})
 				require.NoError(t, err)
 				assert.Equal(t, tc.service.Name, service.Name)

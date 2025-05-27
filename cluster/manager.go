@@ -358,6 +358,7 @@ func extractAllContextsInfo(path, prefix string) (map[string]*kai.ContextInfo, s
 
 // updateKubeconfigCurrentContext updates the current-context in the kubeconfig file
 func (cm *Manager) updateKubeconfigCurrentContext(contextName, configPath string) error {
+	// #nosec G304
 	kubeconfigBytes, err := os.ReadFile(configPath)
 	if err != nil {
 		return fmt.Errorf("error reading kubeconfig file: %w", err)
