@@ -69,11 +69,11 @@ func testNamespaceOperations(t *testing.T) {
 func testContextOperations(t *testing.T) {
 	cm := New()
 	fakeClient := fake.NewSimpleClientset()
-	cm.clients[testClusterName] = fakeClient
+	cm.clients[testCluster] = fakeClient
 
-	err := cm.SetCurrentContext(testClusterName)
+	err := cm.SetCurrentContext(testCluster)
 	assert.NoError(t, err)
-	assert.Equal(t, testClusterName, cm.GetCurrentContext())
+	assert.Equal(t, testCluster, cm.GetCurrentContext())
 
 	err = cm.SetCurrentContext("nonexistent-cluster")
 	assert.Error(t, err)
@@ -87,14 +87,14 @@ func testClientOperations(t *testing.T) {
 	assert.Nil(t, client)
 
 	fakeClient := fake.NewSimpleClientset()
-	cm.clients[testClusterName] = fakeClient
-	cm.currentContext = testClusterName
+	cm.clients[testCluster] = fakeClient
+	cm.currentContext = testCluster
 
 	client, err = cm.GetCurrentClient()
 	assert.NoError(t, err)
 	assert.Equal(t, fakeClient, client)
 
-	client, err = cm.GetClient(testClusterName)
+	client, err = cm.GetClient(testCluster)
 	assert.NoError(t, err)
 	assert.Equal(t, fakeClient, client)
 
@@ -112,13 +112,13 @@ func testListClusters(t *testing.T) {
 	clusters := cm.ListClusters()
 	assert.Empty(t, clusters)
 
-	cm.clients["cluster1"] = fake.NewSimpleClientset()
-	cm.clients["cluster2"] = fake.NewSimpleClientset()
+	cm.clients[testCluster1] = fake.NewSimpleClientset()
+	cm.clients[testCluster2] = fake.NewSimpleClientset()
 
 	clusters = cm.ListClusters()
 	assert.Len(t, clusters, 2)
-	assert.Contains(t, clusters, "cluster1")
-	assert.Contains(t, clusters, "cluster2")
+	assert.Contains(t, clusters, testCluster1)
+	assert.Contains(t, clusters, testCluster2)
 }
 
 func testValidateInputs(t *testing.T) {
@@ -126,7 +126,7 @@ func testValidateInputs(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "cluster name cannot be empty")
 
-	err = validateInputs(testClusterName, "/path/to/config")
+	err = validateInputs(testCluster, "/path/to/config")
 	assert.NoError(t, err)
 }
 
@@ -199,7 +199,7 @@ users:
 		// This test might pass or fail depending on whether you have a valid kubeconfig in the default location
 		// So we'll just make sure it doesn't panic
 		cm := New()
-		_ = cm.LoadKubeConfig("default", "")
+		_ = cm.LoadKubeConfig(testNamespace, "")
 	})
 
 	t.Run("NonExistentFile", func(t *testing.T) {
@@ -224,32 +224,32 @@ func testDeleteContext(t *testing.T) {
 		fakeClient2 := fake.NewSimpleClientset()
 
 		contextInfo1 := &kai.ContextInfo{
-			Name:      "context1",
-			Cluster:   "cluster1",
-			User:      "user1",
-			Namespace: "default",
+			Name:      testContext1,
+			Cluster:   testCluster1,
+			User:      testUser1,
+			Namespace: testNamespace,
 			IsActive:  true,
 		}
 		contextInfo2 := &kai.ContextInfo{
-			Name:      "context2",
-			Cluster:   "cluster2",
-			User:      "user2",
-			Namespace: "default",
+			Name:      testContext2,
+			Cluster:   testCluster2,
+			User:      testUser2,
+			Namespace: testNamespace,
 			IsActive:  false,
 		}
 
-		cm.clients["context1"] = fakeClient1
-		cm.clients["context2"] = fakeClient2
-		cm.contexts["context1"] = contextInfo1
-		cm.contexts["context2"] = contextInfo2
-		cm.currentContext = "context1"
+		cm.clients[testContext1] = fakeClient1
+		cm.clients[testContext2] = fakeClient2
+		cm.contexts[testContext1] = contextInfo1
+		cm.contexts[testContext2] = contextInfo2
+		cm.currentContext = testContext1
 
-		err := cm.DeleteContext("context1")
+		err := cm.DeleteContext(testContext1)
 		assert.NoError(t, err)
 
-		assert.NotContains(t, cm.contexts, "context1")
-		assert.NotContains(t, cm.clients, "context1")
-		assert.NotEqual(t, "context1", cm.currentContext)
+		assert.NotContains(t, cm.contexts, testContext1)
+		assert.NotContains(t, cm.clients, testContext1)
+		assert.NotEqual(t, testContext1, cm.currentContext)
 		assert.True(t, cm.contexts[cm.currentContext].IsActive)
 	})
 
@@ -258,33 +258,33 @@ func testDeleteContext(t *testing.T) {
 		fakeClient2 := fake.NewSimpleClientset()
 
 		contextInfo1 := &kai.ContextInfo{
-			Name:      "context1",
-			Cluster:   "cluster1",
-			User:      "user1",
-			Namespace: "default",
+			Name:      testContext1,
+			Cluster:   testCluster1,
+			User:      testUser1,
+			Namespace: testNamespace,
 			IsActive:  true,
 		}
 		contextInfo2 := &kai.ContextInfo{
-			Name:      "context2",
-			Cluster:   "cluster2",
-			User:      "user2",
-			Namespace: "default",
+			Name:      testContext2,
+			Cluster:   testCluster2,
+			User:      testUser2,
+			Namespace: testNamespace,
 			IsActive:  false,
 		}
 
-		cm.clients["context1"] = fakeClient1
-		cm.clients["context2"] = fakeClient2
-		cm.contexts["context1"] = contextInfo1
-		cm.contexts["context2"] = contextInfo2
-		cm.currentContext = "context1"
+		cm.clients[testContext1] = fakeClient1
+		cm.clients[testContext2] = fakeClient2
+		cm.contexts[testContext1] = contextInfo1
+		cm.contexts[testContext2] = contextInfo2
+		cm.currentContext = testContext1
 
-		err := cm.DeleteContext("context2")
+		err := cm.DeleteContext(testContext2)
 		assert.NoError(t, err)
 
-		assert.NotContains(t, cm.contexts, "context2")
-		assert.NotContains(t, cm.clients, "context2")
-		assert.Equal(t, "context1", cm.currentContext)
-		assert.True(t, cm.contexts["context1"].IsActive)
+		assert.NotContains(t, cm.contexts, testContext2)
+		assert.NotContains(t, cm.clients, testContext2)
+		assert.Equal(t, testContext1, cm.currentContext)
+		assert.True(t, cm.contexts[testContext1].IsActive)
 	})
 }
 
@@ -299,18 +299,18 @@ func testGetContextInfo(t *testing.T) {
 
 	t.Run("GetExistingContext", func(t *testing.T) {
 		expectedInfo := &kai.ContextInfo{
-			Name:       "test-context",
-			Cluster:    "test-cluster",
-			User:       "test-user",
-			Namespace:  "test-namespace",
+			Name:       testContext,
+			Cluster:    testCluster,
+			User:       testUser,
+			Namespace:  testNamespace,
 			ServerURL:  "https://example.com:6443",
 			ConfigPath: "/path/to/config",
 			IsActive:   true,
 		}
 
-		cm.contexts["test-context"] = expectedInfo
+		cm.contexts[testContext] = expectedInfo
 
-		actualInfo, err := cm.GetContextInfo("test-context")
+		actualInfo, err := cm.GetContextInfo(testContext)
 		assert.NoError(t, err)
 		assert.Equal(t, expectedInfo.Name, actualInfo.Name)
 		assert.Equal(t, expectedInfo.Cluster, actualInfo.Cluster)
@@ -321,7 +321,7 @@ func testGetContextInfo(t *testing.T) {
 		assert.Equal(t, expectedInfo.IsActive, actualInfo.IsActive)
 
 		actualInfo.Name = "modified"
-		assert.Equal(t, "test-context", expectedInfo.Name)
+		assert.Equal(t, testContext, expectedInfo.Name)
 	})
 }
 
@@ -343,15 +343,15 @@ func testRenameContext(t *testing.T) {
 	t.Run("RenameToExistingName", func(t *testing.T) {
 		fakeClient := fake.NewSimpleClientset()
 
-		contextInfo1 := &kai.ContextInfo{Name: "context1"}
-		contextInfo2 := &kai.ContextInfo{Name: "context2"}
+		contextInfo1 := &kai.ContextInfo{Name: testContext1}
+		contextInfo2 := &kai.ContextInfo{Name: testContext2}
 
-		cm.clients["context1"] = fakeClient
-		cm.clients["context2"] = fakeClient
-		cm.contexts["context1"] = contextInfo1
-		cm.contexts["context2"] = contextInfo2
+		cm.clients[testContext1] = fakeClient
+		cm.clients[testContext2] = fakeClient
+		cm.contexts[testContext1] = contextInfo1
+		cm.contexts[testContext2] = contextInfo2
 
-		err := cm.RenameContext("context1", "context2")
+		err := cm.RenameContext(testContext1, testContext2)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "context context2 already exists")
 	})
@@ -360,48 +360,48 @@ func testRenameContext(t *testing.T) {
 		fakeClient := fake.NewSimpleClientset()
 
 		contextInfo := &kai.ContextInfo{
-			Name:      "old-context",
-			Cluster:   "test-cluster",
-			User:      "test-user",
-			Namespace: "default",
+			Name:      oldContext,
+			Cluster:   testCluster,
+			User:      testUser,
+			Namespace: testNamespace,
 			IsActive:  false,
 		}
 
-		cm.clients["old-context"] = fakeClient
-		cm.contexts["old-context"] = contextInfo
-		cm.kubeconfigs["old-context"] = "/path/to/config"
+		cm.clients[oldContext] = fakeClient
+		cm.contexts[oldContext] = contextInfo
+		cm.kubeconfigs[oldContext] = "/path/to/config"
 
-		err := cm.RenameContext("old-context", "new-context")
+		err := cm.RenameContext(oldContext, newContext)
 		assert.NoError(t, err)
 
-		assert.NotContains(t, cm.contexts, "old-context")
-		assert.NotContains(t, cm.clients, "old-context")
-		assert.NotContains(t, cm.kubeconfigs, "old-context")
+		assert.NotContains(t, cm.contexts, oldContext)
+		assert.NotContains(t, cm.clients, oldContext)
+		assert.NotContains(t, cm.kubeconfigs, oldContext)
 
-		assert.Contains(t, cm.contexts, "new-context")
-		assert.Contains(t, cm.clients, "new-context")
-		assert.Contains(t, cm.kubeconfigs, "new-context")
+		assert.Contains(t, cm.contexts, newContext)
+		assert.Contains(t, cm.clients, newContext)
+		assert.Contains(t, cm.kubeconfigs, newContext)
 
-		assert.Equal(t, "new-context", cm.contexts["new-context"].Name)
+		assert.Equal(t, newContext, cm.contexts[newContext].Name)
 	})
 
 	t.Run("RenameActiveContext", func(t *testing.T) {
 		fakeClient := fake.NewSimpleClientset()
 
 		contextInfo := &kai.ContextInfo{
-			Name:     "active-context",
+			Name:     activeContext,
 			IsActive: true,
 		}
 
-		cm.clients["active-context"] = fakeClient
-		cm.contexts["active-context"] = contextInfo
-		cm.currentContext = "active-context"
+		cm.clients[activeContext] = fakeClient
+		cm.contexts[activeContext] = contextInfo
+		cm.currentContext = activeContext
 
-		err := cm.RenameContext("active-context", "renamed-context")
+		err := cm.RenameContext(activeContext, renamedContext)
 		assert.NoError(t, err)
 
-		assert.Equal(t, "renamed-context", cm.currentContext)
-		assert.Equal(t, "renamed-context", cm.contexts["renamed-context"].Name)
+		assert.Equal(t, renamedContext, cm.currentContext)
+		assert.Equal(t, renamedContext, cm.contexts[renamedContext].Name)
 	})
 }
 
@@ -415,22 +415,22 @@ func testListContexts(t *testing.T) {
 
 	t.Run("MultipleContexts", func(t *testing.T) {
 		contextInfo1 := &kai.ContextInfo{
-			Name:      "context1",
-			Cluster:   "cluster1",
-			User:      "user1",
-			Namespace: "default",
+			Name:      testContext1,
+			Cluster:   testCluster1,
+			User:      testUser1,
+			Namespace: testNamespace,
 			IsActive:  true,
 		}
 		contextInfo2 := &kai.ContextInfo{
-			Name:      "context2",
-			Cluster:   "cluster2",
-			User:      "user2",
+			Name:      testContext2,
+			Cluster:   testCluster2,
+			User:      testUser2,
 			Namespace: "kube-system",
 			IsActive:  false,
 		}
 
-		cm.contexts["context1"] = contextInfo1
-		cm.contexts["context2"] = contextInfo2
+		cm.contexts[testContext1] = contextInfo1
+		cm.contexts[testContext2] = contextInfo2
 
 		contexts := cm.ListContexts()
 		assert.Len(t, contexts, 2)
@@ -441,11 +441,11 @@ func testListContexts(t *testing.T) {
 			ctx.Name = "modified"
 		}
 
-		assert.True(t, contextNames["context1"])
-		assert.True(t, contextNames["context2"])
+		assert.True(t, contextNames[testContext1])
+		assert.True(t, contextNames[testContext2])
 
-		assert.Equal(t, "context1", cm.contexts["context1"].Name)
-		assert.Equal(t, "context2", cm.contexts["context2"].Name)
+		assert.Equal(t, testContext1, cm.contexts[testContext1].Name)
+		assert.Equal(t, testContext2, cm.contexts[testContext2].Name)
 	})
 }
 
@@ -477,12 +477,12 @@ users:
 	cm := New()
 
 	fakeClient := fake.NewSimpleClientset()
-	contextInfo := &kai.ContextInfo{Name: "existing-context"}
+	contextInfo := &kai.ContextInfo{Name: existingContext}
 
-	cm.clients["existing-context"] = fakeClient
-	cm.contexts["existing-context"] = contextInfo
+	cm.clients[existingContext] = fakeClient
+	cm.contexts[existingContext] = contextInfo
 
-	err = cm.LoadKubeConfig("existing-context", kubeconfigPath)
+	err = cm.LoadKubeConfig(existingContext, kubeconfigPath)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "context existing-context already exists")
 }
@@ -529,36 +529,36 @@ users:
 	fakeClient2 := fake.NewSimpleClientset()
 
 	contextInfo1 := &kai.ContextInfo{
-		Name:       "context1",
+		Name:       testContext1,
 		ConfigPath: kubeconfigPath,
 		IsActive:   true,
 	}
 	contextInfo2 := &kai.ContextInfo{
-		Name:       "context2",
+		Name:       testContext2,
 		ConfigPath: kubeconfigPath,
 		IsActive:   false,
 	}
 
-	cm.clients["context1"] = fakeClient1
-	cm.clients["context2"] = fakeClient2
-	cm.contexts["context1"] = contextInfo1
-	cm.contexts["context2"] = contextInfo2
-	cm.currentContext = "context1"
+	cm.clients[testContext1] = fakeClient1
+	cm.clients[testContext2] = fakeClient2
+	cm.contexts[testContext1] = contextInfo1
+	cm.contexts[testContext2] = contextInfo2
+	cm.currentContext = testContext1
 
-	err = cm.SetCurrentContext("context2")
+	err = cm.SetCurrentContext(testContext2)
 	assert.NoError(t, err)
 
-	assert.Equal(t, "context2", cm.currentContext)
-	assert.False(t, cm.contexts["context1"].IsActive)
-	assert.True(t, cm.contexts["context2"].IsActive)
+	assert.Equal(t, testContext2, cm.currentContext)
+	assert.False(t, cm.contexts[testContext1].IsActive)
+	assert.True(t, cm.contexts[testContext2].IsActive)
 
-	// Verify that the kubeconfig file was updated
+	// #nosec G304 - we are writing in a temp dir
 	updatedBytes, err := os.ReadFile(kubeconfigPath)
 	assert.NoError(t, err)
 
 	config, err := clientcmd.Load(updatedBytes)
 	assert.NoError(t, err)
-	assert.Equal(t, "context2", config.CurrentContext)
+	assert.Equal(t, testContext2, config.CurrentContext)
 }
 
 func testUpdateKubeconfigCurrentContext(t *testing.T) {
@@ -600,16 +600,16 @@ users:
 	cm := New()
 
 	t.Run("UpdateToExistingContext", func(t *testing.T) {
-		err := cm.updateKubeconfigCurrentContext("context2", kubeconfigPath)
+		err := cm.updateKubeconfigCurrentContext(testContext2, kubeconfigPath)
 		assert.NoError(t, err)
 
-		// Verify the file was updated
+		// #nosec G304
 		updatedBytes, err := os.ReadFile(kubeconfigPath)
 		assert.NoError(t, err)
 
 		config, err := clientcmd.Load(updatedBytes)
 		assert.NoError(t, err)
-		assert.Equal(t, "context2", config.CurrentContext)
+		assert.Equal(t, testContext2, config.CurrentContext)
 	})
 
 	t.Run("UpdateToNonexistentContext", func(t *testing.T) {
@@ -623,16 +623,17 @@ users:
 		err := cm.updateKubeconfigCurrentContext("prefix-context1", kubeconfigPath)
 		assert.NoError(t, err)
 
+		// #nosec G304
 		updatedBytes, err := os.ReadFile(kubeconfigPath)
 		assert.NoError(t, err)
 
 		config, err := clientcmd.Load(updatedBytes)
 		assert.NoError(t, err)
-		assert.Equal(t, "context1", config.CurrentContext)
+		assert.Equal(t, testContext1, config.CurrentContext)
 	})
 
 	t.Run("UpdateNonexistentFile", func(t *testing.T) {
-		err := cm.updateKubeconfigCurrentContext("context1", "/nonexistent/path")
+		err := cm.updateKubeconfigCurrentContext(testContext1, "/nonexistent/path")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "error reading kubeconfig file")
 	})

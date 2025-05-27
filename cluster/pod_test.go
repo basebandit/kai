@@ -86,8 +86,8 @@ func createPodWithLabels(name, namespace string, labels map[string]string) *core
 func setupTestCluster(objects ...runtime.Object) *Manager {
 	cm := New()
 	fakeClient := fake.NewSimpleClientset(objects...)
-	cm.clients[testClusterName] = fakeClient
-	cm.currentContext = testClusterName
+	cm.clients[testCluster] = fakeClient
+	cm.currentContext = testCluster
 	return cm
 }
 
@@ -180,7 +180,7 @@ func testCreatePods(t *testing.T) {
 				assert.NoError(t, err)
 				assert.Contains(t, result, tc.expectedText)
 
-				fakeClient := cm.clients[testClusterName]
+				fakeClient := cm.clients[testCluster]
 				pod, err := fakeClient.CoreV1().Pods(tc.pod.Namespace).Get(ctx, tc.pod.Name, metav1.GetOptions{})
 				require.NoError(t, err)
 				assert.Equal(t, tc.pod.Name, pod.Name)
@@ -467,7 +467,7 @@ func testDeletePod(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			cm := setupTestCluster(tc.setupObjects...)
-			fakeClient := cm.clients[testClusterName]
+			fakeClient := cm.clients[testCluster]
 
 			result, err := tc.pod.Delete(ctx, cm, tc.force)
 
