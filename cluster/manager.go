@@ -337,11 +337,6 @@ func extractAllContextsInfo(path, prefix string) (map[string]*kai.ContextInfo, s
 			continue // Skip contexts with missing clusters
 		}
 
-		namespace := context.Namespace
-		if namespace == "" {
-			namespace = "default"
-		}
-
 		contexts[contextName] = &kai.ContextInfo{
 			Name:       contextName,
 			Cluster:    context.Cluster,
