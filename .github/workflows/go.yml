@@ -11,6 +11,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Needed for SonarCloud
       
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -22,6 +24,13 @@ jobs:
 
       - name: Run tests 
         run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+      
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.out
+          retention-days: 1
    
   build: 
     name: Build
@@ -30,20 +39,43 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: "go.mod"
+
       - name: Build
         run: go build -v ./cmd/kai
 
   sonarscan:
     name: Sonarcloud Scan
     runs-on: ubuntu-latest
+    needs: test 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0 
+
+      - name: Download coverage artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+          path: .
+
+      - name: Verify coverage file exists
+        run: |
+          if [ -f coverage.out ]; then
+            echo "Coverage file found"
+            head -5 coverage.out
+          else
+            echo "Coverage file not found!"
+            ls -la
+            exit 1
+          fi
 
       - name: SonarCloud Scan
         uses: SonarSource/sonarqube-scan-action@v5.2.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }} 
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
