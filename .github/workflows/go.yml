@@ -5,14 +5,14 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    name: Unit Test
+  test-and-scan:
+    name: Test and SonarCloud Scan
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Needed for SonarCloud
+          fetch-depth: 0
       
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -22,15 +22,49 @@ jobs:
       - name: Download dependencies
         run: go mod download
 
-      - name: Run tests 
-        run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+      - name: Run tests with coverage
+        run: |
+          echo "Running tests with coverage..."
+          go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+          echo "Test run completed"
       
-      - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage.out
-          retention-days: 1
+      # 🔍 DEBUG SECTION - Remove after fixing
+      - name: Debug coverage file
+        run: |
+          echo "=== Coverage File Debug ==="
+          if [ -f coverage.out ]; then
+            echo "✅ Coverage file exists"
+            echo "File size: $(wc -l coverage.out)"
+            echo "First 15 lines:"
+            head -15 coverage.out
+            echo "Last 5 lines:"
+            tail -5 coverage.out
+            echo "=== Coverage Summary ==="
+            go tool cover -func=coverage.out | tail -1
+          else
+            echo "❌ Coverage file NOT found!"
+            echo "Files in current directory:"
+            ls -la
+            exit 1
+          fi
+
+      # 🔧 FIX ATTEMPT 1: Clean up coverage paths
+      - name: Fix coverage file paths
+        run: |
+          if [ -f coverage.out ]; then
+            echo "Original coverage file:"
+            head -5 coverage.out
+            # Remove module prefix to make paths relative
+            sed -i 's|github.com/basebandit/kai/||g' coverage.out
+            echo "Modified coverage file:"
+            head -5 coverage.out
+          fi
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarqube-scan-action@v5.2.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
    
   build: 
     name: Build
@@ -46,36 +80,3 @@ jobs:
 
       - name: Build
         run: go build -v ./cmd/kai
-
-  sonarscan:
-    name: Sonarcloud Scan
-    runs-on: ubuntu-latest
-    needs: test 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 
-
-      - name: Download coverage artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: coverage-report
-          path: .
-
-      - name: Verify coverage file exists
-        run: |
-          if [ -f coverage.out ]; then
-            echo "Coverage file found"
-            head -5 coverage.out
-          else
-            echo "Coverage file not found!"
-            ls -la
-            exit 1
-          fi
-
-      - name: SonarCloud Scan
-        uses: SonarSource/sonarqube-scan-action@v5.2.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
