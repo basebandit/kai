@@ -35,6 +35,14 @@ type ClusterManager interface {
 	SetCurrentNamespace(string)
 }
 
+// NamespaceOperator defines the operations needed for namespace management
+type NamespaceOperator interface {
+	Create(ctx context.Context, cm ClusterManager) (string, error)
+	Get(ctx context.Context, cm ClusterManager) (string, error)
+	List(ctx context.Context, cm ClusterManager, labelSelector string) (string, error)
+	Delete(ctx context.Context, cm ClusterManager) (string, error)
+}
+
 // PodOperator defines the operations needed for pod management
 type PodOperator interface {
 	Create(ctx context.Context, cm ClusterManager) (string, error)
