@@ -66,3 +66,10 @@ type ServicePort struct {
 	NodePort   int32
 	Protocol   string
 }
+
+// NamespaceParams holds all possible namespace configuration parameters
+type NamespaceParams struct {
+	Name        string
+	Labels      map[string]interface{}
+	Annotations map[string]interface{}
+}
