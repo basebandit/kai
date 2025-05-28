@@ -574,3 +574,57 @@ func convertToStringMap(input map[string]interface{}) map[string]string {
 	}
 	return result
 }
+
+func formatNamespace(ns *corev1.Namespace) string {
+	result := fmt.Sprintf("Namespace: %s\n", ns.Name)
+	result += fmt.Sprintf("Status: %s\n", ns.Status.Phase)
+	result += fmt.Sprintf("Created: %s\n", ns.CreationTimestamp.Time.Format(time.RFC3339))
+
+	if len(ns.Labels) > 0 {
+		result += "\nLabels:\n"
+		for k, v := range ns.Labels {
+			result += fmt.Sprintf("- %s: %s\n", k, v)
+		}
+	}
+
+	if len(ns.Annotations) > 0 {
+		result += "\nAnnotations:\n"
+		for k, v := range ns.Annotations {
+			result += fmt.Sprintf("- %s: %s\n", k, v)
+		}
+	}
+
+	return result
+}
+
+func formatNamespaceList(namespaces *corev1.NamespaceList, labelSelector string) string {
+	var result strings.Builder
+
+	if labelSelector != "" {
+		result.WriteString(fmt.Sprintf("Namespaces matching label selector '%s':\n", labelSelector))
+	} else {
+		result.WriteString("Namespaces:\n")
+	}
+
+	for _, ns := range namespaces.Items {
+		age := time.Since(ns.CreationTimestamp.Time).Round(time.Second)
+		status := string(ns.Status.Phase)
+		if status == "" {
+			status = "Active"
+		}
+
+		result.WriteString(fmt.Sprintf("• %s: Status=%s, Age=%s",
+			ns.Name, status, formatDuration(age)))
+
+		if len(ns.Labels) > 0 {
+			labelCount := len(ns.Labels)
+			result.WriteString(fmt.Sprintf(" - Labels: %d", labelCount))
+		}
+
+		result.WriteString("\n")
+	}
+
+	result.WriteString(fmt.Sprintf("\nTotal: %d namespace(s)", len(namespaces.Items)))
+
+	return result.String()
+}
