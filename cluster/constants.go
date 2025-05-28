@@ -67,4 +67,9 @@ const (
 	deploymentName1 = "deployment1"
 	deploymentName2 = "deployment2"
 	deploymentName3 = "deployment3"
+
+	// Namespace test constants
+	testNamespace1 = "test-ns-1"
+	testNamespace2 = "test-ns-2"
+	testNamespace3 = "prod-ns"
 )

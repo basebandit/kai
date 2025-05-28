@@ -288,23 +288,23 @@ func testDeleteNamespace(t *testing.T) {
 				},
 			},
 			setupObjects: []runtime.Object{
-				createNamespaceObj("test-ns-1", map[string]string{"env": "test"}),
-				createNamespaceObj("test-ns-2", map[string]string{"env": "test"}),
-				createNamespaceObj("prod-ns", map[string]string{"env": "prod"}),
+				createNamespaceObj(testNamespace1, map[string]string{"env": "test"}),
+				createNamespaceObj(testNamespace2, map[string]string{"env": "test"}),
+				createNamespaceObj(testNamespace3, map[string]string{"env": "prod"}),
 			},
 			expectError: false,
 			validate: func(t *testing.T, ctx context.Context, cm *Manager) {
 				client, err := cm.GetCurrentClient()
 				require.NoError(t, err)
 
-				_, err1 := client.CoreV1().Namespaces().Get(ctx, "test-ns-1", metav1.GetOptions{})
-				_, err2 := client.CoreV1().Namespaces().Get(ctx, "test-ns-2", metav1.GetOptions{})
+				_, err1 := client.CoreV1().Namespaces().Get(ctx, testNamespace1, metav1.GetOptions{})
+				_, err2 := client.CoreV1().Namespaces().Get(ctx, testNamespace2, metav1.GetOptions{})
 				assert.Error(t, err1)
 				assert.Error(t, err2)
 
-				prodNs, err3 := client.CoreV1().Namespaces().Get(ctx, "prod-ns", metav1.GetOptions{})
+				prodNs, err3 := client.CoreV1().Namespaces().Get(ctx, testNamespace3, metav1.GetOptions{})
 				assert.NoError(t, err3)
-				assert.Equal(t, "prod-ns", prodNs.Name)
+				assert.Equal(t, testNamespace3, prodNs.Name)
 			},
 		},
 		{
