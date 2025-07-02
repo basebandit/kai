@@ -2,8 +2,6 @@ package tools
 
 import (
 	"context"
-	"fmt"
-	"strings"
 
 	"github.com/basebandit/kai"
 	"github.com/basebandit/kai/cluster"
@@ -299,11 +297,11 @@ func createDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) f
 		}
 
 		if containerPortArg, ok := request.Params.Arguments["container_port"].(string); ok && containerPortArg != "" {
-			if valid, errMsg := validateContainerPort(containerPortArg); valid {
-				params.ContainerPort = containerPortArg
-			} else {
-				return mcp.NewToolResultText(errMsg), nil
+			errMsg := validateContainerPort(containerPortArg)
+			if errMsg != nil {
+				return mcp.NewToolResultText(errMsg.Error()), nil
 			}
+			params.ContainerPort = containerPortArg
 		}
 
 		if envArg, ok := request.Params.Arguments["env"].(map[string]interface{}); ok {
@@ -379,12 +377,12 @@ func updateDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) f
 		}
 
 		if containerPortArg, ok := request.Params.Arguments["container_port"].(string); ok && containerPortArg != "" {
-			if valid, errMsg := validateContainerPort(containerPortArg); valid {
-				params.ContainerPort = containerPortArg
-				hasUpdateParams = true
-			} else {
-				return mcp.NewToolResultText(errMsg), nil
+			errMsg := validateContainerPort(containerPortArg)
+			if errMsg != nil {
+				return mcp.NewToolResultText(errMsg.Error()), nil
 			}
+			params.ContainerPort = containerPortArg
+			hasUpdateParams = true
 		}
 
 		if envArg, ok := request.Params.Arguments["env"].(map[string]interface{}); ok {
@@ -414,32 +412,4 @@ func updateDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) f
 
 		return mcp.NewToolResultText(resultText), nil
 	}
-}
-
-// validateContainerPort checks if the containerPort string has the correct format
-// Returns true if valid, false if invalid
-func validateContainerPort(portStr string) (bool, string) {
-	parts := strings.Split(portStr, "/")
-
-	// Check basic format: should be "port" or "port/protocol"
-	if len(parts) != 1 && len(parts) != 2 {
-		return false, "Container port should be in format 'port' or 'port/protocol'"
-	}
-
-	// Validate port part is a number
-	var port int
-	if _, err := fmt.Sscanf(parts[0], "%d", &port); err != nil {
-		return false, "Port must be a number"
-	}
-
-	// Validate protocol if provided
-	if len(parts) == 2 {
-		protocol := strings.ToUpper(parts[1])
-		validProtocols := map[string]bool{"TCP": true, "UDP": true, "SCTP": true}
-		if !validProtocols[protocol] {
-			return false, fmt.Sprintf("Protocol %s is not valid. Must be one of: TCP, UDP, SCTP", parts[1])
-		}
-	}
-
-	return true, ""
 }
