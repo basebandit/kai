@@ -1,5 +1,11 @@
 name: Go
-on: [push, pull_request]
+on: 
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: read
@@ -51,6 +57,7 @@ jobs:
     name: Sonarcloud Scan
     runs-on: ubuntu-latest
     needs: test 
+    if: github.ref == 'refs/heads/main' || github.event_name == 'pull_request'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
