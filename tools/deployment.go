@@ -160,12 +160,12 @@ func getDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) func
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
-			return mcp.NewToolResultText("Required parameter 'name' is missing"), nil
+			return mcp.NewToolResultText(errMissingName), nil
 		}
 
 		name, ok := nameArg.(string)
 		if !ok || name == "" {
-			return mcp.NewToolResultText("Parameter 'name' must be a non-empty string"), nil
+			return mcp.NewToolResultText(errEmptyName), nil
 		}
 
 		namespace := cm.GetCurrentNamespace()
@@ -231,12 +231,12 @@ func describeDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory)
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
-			return mcp.NewToolResultText("Required parameter 'name' is missing"), nil
+			return mcp.NewToolResultText(errMissingName), nil
 		}
 
 		name, ok := nameArg.(string)
 		if !ok || name == "" {
-			return mcp.NewToolResultText("Parameter 'name' must be a non-empty string"), nil
+			return mcp.NewToolResultText(errEmptyName), nil
 		}
 
 		namespace := cm.GetCurrentNamespace()
@@ -270,22 +270,22 @@ func createDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) f
 
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
-			return mcp.NewToolResultText("Required parameter 'name' is missing"), nil
+			return mcp.NewToolResultText(errMissingName), nil
 		}
 
 		name, ok := nameArg.(string)
 		if !ok || name == "" {
-			return mcp.NewToolResultText("Parameter 'name' must be a non-empty string"), nil
+			return mcp.NewToolResultText(errEmptyName), nil
 		}
 
 		imageArg, ok := request.Params.Arguments["image"]
 		if !ok || imageArg == nil {
-			return mcp.NewToolResultText("Required parameter 'image' is missing"), nil
+			return mcp.NewToolResultText(errMissingImage), nil
 		}
 
 		image, ok := imageArg.(string)
 		if !ok || image == "" {
-			return mcp.NewToolResultText("Parameter 'image' must be a non-empty string"), nil
+			return mcp.NewToolResultText(errEmptyImage), nil
 		}
 
 		if replicasArg, ok := request.Params.Arguments["replicas"].(float64); ok {
@@ -347,12 +347,12 @@ func updateDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) f
 
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
-			return mcp.NewToolResultText("Required parameter 'name' is missing"), nil
+			return mcp.NewToolResultText(errMissingName), nil
 		}
 
 		name, ok := nameArg.(string)
 		if !ok || name == "" {
-			return mcp.NewToolResultText("Parameter 'name' must be a non-empty string"), nil
+			return mcp.NewToolResultText(errEmptyName), nil
 		}
 
 		params.Name = name
@@ -409,7 +409,7 @@ func updateDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) f
 		}
 
 		if !hasUpdateParams {
-			return mcp.NewToolResultText("At least one field to update must be specified"), nil
+			return mcp.NewToolResultText(errNoUpdateParams), nil
 		}
 
 		deployment := factory.NewDeployment(params)

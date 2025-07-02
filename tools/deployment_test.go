@@ -123,7 +123,7 @@ func TestCreateDeploymentHandler(t *testing.T) {
 			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
 				// No setup needed
 			},
-			expectedOutput:           missingNameError,
+			expectedOutput:           errMissingName,
 			expectDeploymentCreation: false,
 		},
 		{
@@ -136,7 +136,7 @@ func TestCreateDeploymentHandler(t *testing.T) {
 			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
 				// No setup needed
 			},
-			expectedOutput:           emptyNameError,
+			expectedOutput:           errEmptyName,
 			expectDeploymentCreation: false,
 		},
 		{
@@ -148,7 +148,7 @@ func TestCreateDeploymentHandler(t *testing.T) {
 			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
 				// No setup needed
 			},
-			expectedOutput:           missingImageError,
+			expectedOutput:           errMissingImage,
 			expectDeploymentCreation: false,
 		},
 		{
@@ -161,7 +161,7 @@ func TestCreateDeploymentHandler(t *testing.T) {
 			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
 				// No setup needed
 			},
-			expectedOutput:           emptyImageError,
+			expectedOutput:           errEmptyImage,
 			expectDeploymentCreation: false,
 		},
 		{
@@ -193,9 +193,9 @@ func TestCreateDeploymentHandler(t *testing.T) {
 			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
 				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
 				mockDeployment.On("Create", mock.Anything, mockCM).
-					Return("", errors.New(quotaExceededError))
+					Return("", errors.New(errQuotaExceeded))
 			},
-			expectedOutput:           quotaExceededError,
+			expectedOutput:           errQuotaExceeded,
 			expectDeploymentCreation: true,
 		},
 	}

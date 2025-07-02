@@ -174,12 +174,12 @@ func createPodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx contex
 
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
-			return mcp.NewToolResultText("Required parameter 'name' is missing"), nil
+			return mcp.NewToolResultText(errMissingName), nil
 		}
 
 		name, ok := nameArg.(string)
 		if !ok || name == "" {
-			return mcp.NewToolResultText("Parameter 'name' must be a non-empty string"), nil
+			return mcp.NewToolResultText(errEmptyName), nil
 		}
 
 		imageArg, ok := request.Params.Arguments["image"]
@@ -330,12 +330,12 @@ func getPodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx context.C
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
-			return mcp.NewToolResultText("Required parameter 'name' is missing"), nil
+			return mcp.NewToolResultText(errMissingName), nil
 		}
 
 		name, ok := nameArg.(string)
 		if !ok || name == "" {
-			return mcp.NewToolResultText("Parameter 'name' must be a non-empty string"), nil
+			return mcp.NewToolResultText(errEmptyName), nil
 		}
 
 		namespace := cm.GetCurrentNamespace()
@@ -364,12 +364,12 @@ func deletePodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx contex
 
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
-			return mcp.NewToolResultText("Required parameter 'name' is missing"), nil
+			return mcp.NewToolResultText(errMissingName), nil
 		}
 
 		name, ok := nameArg.(string)
 		if !ok || name == "" {
-			return mcp.NewToolResultText("Parameter 'name' must be anon-empty string"), nil
+			return mcp.NewToolResultText(errEmptyName), nil
 		}
 
 		namespace := cm.GetCurrentNamespace()
@@ -402,12 +402,12 @@ func streamLogsHandler(cm kai.ClusterManager, factory PodFactory) func(ctx conte
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		podArg, ok := request.Params.Arguments["pod"]
 		if !ok || podArg == nil {
-			return mcp.NewToolResultText("Required parameter 'pod' is missing"), nil
+			return mcp.NewToolResultText(errMissingPod), nil
 		}
 
 		podName, ok := podArg.(string)
 		if !ok || podName == "" {
-			return mcp.NewToolResultText("Parameter 'pod' must be a non-empty string"), nil
+			return mcp.NewToolResultText(errEmptyPod), nil
 		}
 
 		namespace := cm.GetCurrentNamespace()

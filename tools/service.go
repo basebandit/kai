@@ -182,12 +182,12 @@ func getServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ctx c
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
-			return mcp.NewToolResultText("Required parameter 'name' is missing"), nil
+			return mcp.NewToolResultText(errMissingName), nil
 		}
 
 		name, ok := nameArg.(string)
 		if !ok || name == "" {
-			return mcp.NewToolResultText("Parameter 'name' must be a non-empty string"), nil
+			return mcp.NewToolResultText(errEmptyName), nil
 		}
 
 		namespace := cm.GetCurrentNamespace()
@@ -218,22 +218,22 @@ func createServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ct
 
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
-			return mcp.NewToolResultText("Required parameter 'name' is missing"), nil
+			return mcp.NewToolResultText(errMissingName), nil
 		}
 
 		name, ok := nameArg.(string)
 		if !ok || name == "" {
-			return mcp.NewToolResultText("Parameter 'name' must be a non-empty string"), nil
+			return mcp.NewToolResultText(errEmptyName), nil
 		}
 
 		portsArg, ok := request.Params.Arguments["ports"]
 		if !ok || portsArg == nil {
-			return mcp.NewToolResultText("Required parameter 'ports' is missing"), nil
+			return mcp.NewToolResultText(errMissingPorts), nil
 		}
 
 		portsArray, ok := portsArg.([]interface{})
 		if !ok || len(portsArray) == 0 {
-			return mcp.NewToolResultText("Parameter 'ports' must be a non-empty array"), nil
+			return mcp.NewToolResultText(errEmptyPorts), nil
 		}
 
 		ports, err := processPortsArray(portsArray)
@@ -343,7 +343,7 @@ func deleteServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ct
 		if nameOk && nameArg != nil {
 			name, ok := nameArg.(string)
 			if !ok || name == "" {
-				return mcp.NewToolResultText("Parameter 'name' must be a non-empty string"), nil
+				return mcp.NewToolResultText(errEmptyName), nil
 			}
 			params.Name = name
 		}
@@ -352,16 +352,16 @@ func deleteServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ct
 		if labelsOk && labelsArg != nil {
 			labels, ok := labelsArg.(map[string]interface{})
 			if !ok {
-				return mcp.NewToolResultText("Parameter 'labels' must be an object"), nil
+				return mcp.NewToolResultText(errMissingLabels), nil
 			}
 			if len(labels) == 0 {
-				return mcp.NewToolResultText("Parameter 'labels' must be a non-empty object"), nil
+				return mcp.NewToolResultText(errEmptyLabels), nil
 			}
 			params.Labels = labels
 		}
 
 		if !nameOk && !labelsOk {
-			return mcp.NewToolResultText("Either 'name' or 'labels' parameter must be provided"), nil
+			return mcp.NewToolResultText(errNoNameOrLabelsParams), nil
 		}
 
 		service := factory.NewService(params)
