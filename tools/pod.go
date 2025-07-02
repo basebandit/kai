@@ -230,11 +230,11 @@ func createPodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx contex
 		}
 
 		if containerPortArg, ok := request.Params.Arguments["container_port"].(string); ok && containerPortArg != "" {
-			if valid, errMsg := validateContainerPort(containerPortArg); valid {
-				params.ContainerPort = containerPortArg
-			} else {
-				return mcp.NewToolResultText(errMsg), nil
+			errMsg := validateContainerPort(containerPortArg)
+			if errMsg != nil {
+				return mcp.NewToolResultText(errMsg.Error()), nil
 			}
+			params.ContainerPort = containerPortArg
 		}
 
 		if envArg, ok := request.Params.Arguments["env"].(map[string]interface{}); ok {
