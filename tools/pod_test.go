@@ -163,7 +163,7 @@ func TestCreatePodHandler(t *testing.T) {
 			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockPodFactory, mockPod *testmocks.MockPod) {
 				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
 			},
-			expectedOutput:    "Invalid image_pull_policy",
+			expectedOutput:    "invalid image_pull_policy",
 			expectPodCreation: false,
 		},
 		{
@@ -177,7 +177,7 @@ func TestCreatePodHandler(t *testing.T) {
 			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockPodFactory, mockPod *testmocks.MockPod) {
 				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
 			},
-			expectedOutput:    "Invalid restart_policy",
+			expectedOutput:    "invalid restart_policy",
 			expectPodCreation: false,
 		},
 		{
@@ -191,7 +191,7 @@ func TestCreatePodHandler(t *testing.T) {
 			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockPodFactory, mockPod *testmocks.MockPod) {
 				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
 			},
-			expectedOutput:    "Port must be a number",
+			expectedOutput:    "invalid port",
 			expectPodCreation: false,
 		},
 		{

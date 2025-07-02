@@ -313,6 +313,10 @@ func createDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) f
 		}
 
 		if imagePullPolicyArg, ok := request.Params.Arguments["image_pull_policy"].(string); ok {
+			errMsg := validateImagePullPolicy(imagePullPolicyArg)
+			if errMsg != nil {
+				return mcp.NewToolResultText(errMsg.Error()), nil
+			}
 			params.ImagePullPolicy = imagePullPolicyArg
 		}
 
@@ -396,6 +400,10 @@ func updateDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) f
 		}
 
 		if imagePullPolicyArg, ok := request.Params.Arguments["image_pull_policy"].(string); ok {
+			errMsg := validateImagePullPolicy(imagePullPolicyArg)
+			if errMsg != nil {
+				return mcp.NewToolResultText(errMsg.Error()), nil
+			}
 			params.ImagePullPolicy = imagePullPolicyArg
 			hasUpdateParams = true
 		}
