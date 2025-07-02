@@ -134,9 +134,9 @@ func TestListServicesHandler(t *testing.T) {
 			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockServiceFactory, mockService *testmocks.MockService) {
 				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
 				mockService.On("List", mock.Anything, mockCM, false, "").
-					Return("", errors.New(connectionFailedError))
+					Return("", errors.New(errConnectionFailed))
 			},
-			expectedOutput: connectionFailedError,
+			expectedOutput: errConnectionFailed,
 		},
 	}
 

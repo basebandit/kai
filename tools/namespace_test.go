@@ -31,13 +31,13 @@ func testCreateNamespaceHandler(t *testing.T) {
 			name:           "MissingName",
 			args:           map[string]interface{}{},
 			setupMock:      func(mockNS *testmocks.MockNamespace) {},
-			expectedOutput: missingNameError,
+			expectedOutput: errMissingName,
 		},
 		{
 			name:           "EmptyName",
 			args:           map[string]interface{}{"name": ""},
 			setupMock:      func(mockNS *testmocks.MockNamespace) {},
-			expectedOutput: emptyNameError,
+			expectedOutput: errEmptyName,
 		},
 		{
 			name: "SuccessfulCreate",
@@ -113,13 +113,13 @@ func testGetNamespaceHandler(t *testing.T) {
 			name:           "MissingName",
 			args:           map[string]interface{}{},
 			setupMock:      func(mockNS *testmocks.MockNamespace) {},
-			expectedOutput: missingNameError,
+			expectedOutput: errMissingName,
 		},
 		{
 			name:           "EmptyName",
 			args:           map[string]interface{}{"name": ""},
 			setupMock:      func(mockNS *testmocks.MockNamespace) {},
-			expectedOutput: emptyNameError,
+			expectedOutput: errEmptyName,
 		},
 		{
 			name: "SuccessfulGet",
@@ -324,12 +324,12 @@ func createNamespaceHandlerWithFactory(cm kai.ClusterManager, factory testmocks.
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
-			return mcp.NewToolResultText(missingNameError), nil
+			return mcp.NewToolResultText(errMissingName), nil
 		}
 
 		name, ok := nameArg.(string)
 		if !ok || name == "" {
-			return mcp.NewToolResultText(emptyNameError), nil
+			return mcp.NewToolResultText(errEmptyName), nil
 		}
 
 		params := kai.NamespaceParams{
@@ -359,12 +359,12 @@ func getNamespaceHandlerWithFactory(cm kai.ClusterManager, factory testmocks.Nam
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
-			return mcp.NewToolResultText(missingNameError), nil
+			return mcp.NewToolResultText(errMissingName), nil
 		}
 
 		name, ok := nameArg.(string)
 		if !ok || name == "" {
-			return mcp.NewToolResultText(emptyNameError), nil
+			return mcp.NewToolResultText(errEmptyName), nil
 		}
 
 		params := kai.NamespaceParams{

@@ -58,12 +58,12 @@ func createNamespaceHandler(cm kai.ClusterManager) func(ctx context.Context, req
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
-			return mcp.NewToolResultText(missingNameError), nil
+			return mcp.NewToolResultText(errMissingName), nil
 		}
 
 		name, ok := nameArg.(string)
 		if !ok || name == "" {
-			return mcp.NewToolResultText(emptyNameError), nil
+			return mcp.NewToolResultText(errEmptyName), nil
 		}
 
 		namespace := cluster.Namespace{
@@ -91,12 +91,12 @@ func getNamespaceHandler(cm kai.ClusterManager) func(ctx context.Context, reques
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
-			return mcp.NewToolResultText(missingNameError), nil
+			return mcp.NewToolResultText(errMissingName), nil
 		}
 
 		name, ok := nameArg.(string)
 		if !ok || name == "" {
-			return mcp.NewToolResultText(emptyNameError), nil
+			return mcp.NewToolResultText(errEmptyName), nil
 		}
 
 		namespace := cluster.Namespace{
