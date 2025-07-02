@@ -16,7 +16,7 @@ Kai MCP server provides a bridge between large language models (LLMs) clients an
 - [x] **Deployments** - Create, list, describe, and update deployments
 - [x] **Services** - Create, get, list, and delete services
 - [ ] **Cluster Management** - Connect, list, switch, and monitor clusters
-- [ ] **Namespaces** - Create, list, update, and delete namespaces
+- [x] **Namespaces** - Create, list, update, and delete namespaces
 - [ ] **Ingress** - HTTP/HTTPS routing and TLS configuration
 - [ ] **ConfigMaps & Secrets** - Configuration and secret management
 - [ ] **Jobs & CronJobs** - Batch workload orchestration
