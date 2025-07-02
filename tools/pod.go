@@ -241,26 +241,24 @@ func createPodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx contex
 			params.Env = envArg
 		}
 
-		if imagePullPolicyArg, ok := request.Params.Arguments["image_pull_policy"].(string); ok && imagePullPolicyArg != "" {
-			validPolicies := map[string]bool{"Always": true, "IfNotPresent": true, "Never": true}
-			if validPolicies[imagePullPolicyArg] {
-				params.ImagePullPolicy = imagePullPolicyArg
-			} else {
-				return mcp.NewToolResultText("Invalid image_pull_policy. Must be one of: Always, IfNotPresent, Never"), nil
+		if imagePullPolicyArg, ok := request.Params.Arguments["image_pull_policy"].(string); ok {
+			errMsg := validateImagePullPolicy(imagePullPolicyArg)
+			if errMsg != nil {
+				return mcp.NewToolResultText(errMsg.Error()), nil
 			}
+			params.ImagePullPolicy = imagePullPolicyArg
 		}
 
 		if imagePullSecretsArg, ok := request.Params.Arguments["image_pull_secrets"].([]interface{}); ok {
 			params.ImagePullSecrets = imagePullSecretsArg
 		}
 
-		if restartPolicyArg, ok := request.Params.Arguments["restart_policy"].(string); ok && restartPolicyArg != "" {
-			validPolicies := map[string]bool{"Always": true, "OnFailure": true, "Never": true}
-			if validPolicies[restartPolicyArg] {
-				params.RestartPolicy = restartPolicyArg
-			} else {
-				return mcp.NewToolResultText("Invalid restart_policy. Must be one of: Always, OnFailure, Never"), nil
+		if restartPolicyArg, ok := request.Params.Arguments["restart_policy"].(string); ok {
+			errMsg := validateRestartPolicy(restartPolicyArg)
+			if errMsg != nil {
+				return mcp.NewToolResultText(errMsg.Error()), nil
 			}
+			params.RestartPolicy = restartPolicyArg
 		}
 
 		if nodeSelectorArg, ok := request.Params.Arguments["node_selector"].(map[string]interface{}); ok {

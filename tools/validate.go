@@ -16,7 +16,7 @@ func validateContainerPort(port string) error {
 
 	portNum, err := strconv.Atoi(parts[0])
 	if err != nil || portNum <= 0 || portNum > 65535 {
-		return fmt.Errorf("invalid Port %v:%w, Port must be a number between 1 and 65535", parts[0], err)
+		return fmt.Errorf("invalid port %v:%w, Port must be a number between 1 and 65535", parts[0], err)
 	}
 
 	if len(parts) == 2 {
