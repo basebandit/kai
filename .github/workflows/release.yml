@@ -19,14 +19,15 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "go.mod"
+          go-version-file: "go.mod"
       - name: Run Goreleaser
         uses: goreleaser/goreleaser-action@v6
         with:
           # either 'goreleaser' or 'goreleaser-pro'
           distribution: goreleaser
-          # 'latest', 'nightly' or a semver version like 'v1.0.0'
-          version: "~> v1"
+          # 'latest', 'nightly' or a semver version like 'v2.0.0'
+          version: "~> v2"
           args: release --clean
+          workdir: .
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
