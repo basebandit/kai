@@ -13,50 +13,76 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/dynamic"
+	dynamicfake "k8s.io/client-go/dynamic/fake"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 )
 
-// TestNewDeployment tests deployment creation with defaults
-func TestNewDeployment(t *testing.T) {
-	deployment := &Deployment{
-		Name:      deploymentName1,
-		Namespace: defaultNamespace,
-		Replicas:  1, // Default to 1 replica
-	}
-
-	assert.Equal(t, deploymentName1, deployment.Name)
-	assert.Equal(t, defaultNamespace, deployment.Namespace)
-	assert.Equal(t, float64(1), deployment.Replicas) // Default value
-	assert.Nil(t, deployment.Labels)
-	assert.Empty(t, deployment.ContainerPort)
-	assert.Nil(t, deployment.Env)
-	assert.Empty(t, deployment.ImagePullPolicy)
-	assert.Nil(t, deployment.ImagePullSecrets)
-}
-
-// TestDeployment_Create tests the Create method's error paths
+// TestDeployment_Create tests the Create method
 func TestDeployment_Create(t *testing.T) {
 	ctx := context.Background()
 
-	t.Run("Error getting dynamic client", func(t *testing.T) {
-		deployment := &Deployment{
-			Name:      deploymentName1,
-			Namespace: defaultNamespace,
-			Replicas:  1, // Default to 1 replica,
-			Image:     nginxImage,
-		}
+	scheme := runtime.NewScheme()
 
-		mockCM := testmocks.NewMockClusterManager()
-		mockCM.On("GetCurrentDynamicClient").Return(nil, errors.New("client unavailable"))
+	testCases := []struct {
+		name           string
+		deployment     *Deployment
+		setupMock      func(*testmocks.MockClusterManager) dynamic.Interface
+		expectedResult string
+		expectedError  string
+	}{
+		{
+			name: "Successful deployment creation",
+			deployment: &Deployment{
+				Name:            nginxDeployment,
+				Namespace:       defaultNamespace,
+				Replicas:        2,
+				Image:           nginxImage,
+				ContainerPort:   "80/TCP",
+				ImagePullPolicy: "IfNotPresent",
+			},
+			setupMock: func(cm *testmocks.MockClusterManager) dynamic.Interface {
+				dynClient := dynamicfake.NewSimpleDynamicClient(scheme)
+				cm.On("GetCurrentDynamicClient").Return(dynClient, nil)
+				return dynClient
+			},
+			expectedResult: fmt.Sprintf("Deployment %q created successfully in namespace %q with 2 replica(s)", nginxDeployment, defaultNamespace),
+		},
+		{
+			name: "Dynamic client error",
+			deployment: &Deployment{
+				Name:      nginxDeployment,
+				Namespace: defaultNamespace,
+				Replicas:  1,
+				Image:     nginxImage,
+			},
+			setupMock: func(cm *testmocks.MockClusterManager) dynamic.Interface {
+				cm.On("GetCurrentDynamicClient").Return(nil, errors.New("client error"))
+				return nil
+			},
+			expectedError: "failed to get a dynamic client: client error",
+		},
+	}
 
-		result, err := deployment.Create(ctx, mockCM)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "failed to get a dynamic client: client unavailable")
-		assert.Empty(t, result)
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockCM := testmocks.NewMockClusterManager()
+			_ = tc.setupMock(mockCM)
 
-		mockCM.AssertExpectations(t)
-	})
+			result, err := tc.deployment.Create(ctx, mockCM)
+
+			if tc.expectedError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedError)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedResult, result)
+			}
+
+			mockCM.AssertExpectations(t)
+		})
+	}
 }
 
 // TestDeployment_Update tests the Update method
