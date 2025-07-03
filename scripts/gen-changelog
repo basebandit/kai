@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+mkdir -p dist
+CHANGELOG_FILE="dist/changelog.md"
+
+# Get the latest tag (if any)
+TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+
+# Get commits in range (if tag exists), excluding noisy patterns
+COMMITS=$(git log ${TAG:+$TAG..HEAD} --pretty=format:'%h %s' | grep -Ev '^(Merge|Initial|Revert)' || true)
+
+# Group by real work categories — loose matching to catch real effort
+FEATURE=$(echo "$COMMITS" | grep -Ei 'add|create|tool|feature|handler|stream|context|namespace|deployment|pod' | head -n 40)
+FIXES=$(echo "$COMMITS" | grep -Ei 'fix|fail|error|bug|typo' | head -n 30)
+DEPS=$(echo "$COMMITS" | grep -Ei 'bump|upgrade|dependabot' | head -n 20)
+
+# Deduplicate and find remaining commits not already included
+INCLUDED=$(echo "$FEATURE"$'\n'"$FIXES"$'\n'"$DEPS")
+MISC=$(echo "$COMMITS" | grep -vFf <(echo "$INCLUDED") | head -n 3)
+
+# Final clean changelog (no headers)
+{
+  echo "$FEATURE"
+  echo "$FIXES"
+  echo "$DEPS"
+  echo "$MISC"
+} | sed '/^$/d' | sort -u > "$CHANGELOG_FILE"
+
+echo "" >> "$CHANGELOG_FILE"
