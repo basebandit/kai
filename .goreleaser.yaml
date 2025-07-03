@@ -1,0 +1,50 @@
+version: 2
+project_name: kai
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w -X main.version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+    goos:
+      - linux
+      - windows
+      - darwin
+    main: ./cmd/kai
+
+archives:
+  - formats: tar.gz
+    name_template: >-
+      {{ .ProjectName }}_{{ .Version }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+      {{- with .Arm }}_v{{ . }}{{ end }}
+    # use zip archive format for windows builds.
+    format_overrides:
+      - goos: windows
+        formats: zip
+
+    files:
+      - LICENSE.txt
+      - README.md
+
+checksum:
+  name_template: 'checksums.txt'
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:" 
+
+release:
+  draft: true
+  prerelease: auto
+  name_template: "Kubernetes MCP Server {{.Version}}"
+
