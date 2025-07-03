@@ -16,11 +16,6 @@ type DeploymentFactory interface {
 // DefaultDeploymentFactory implements the DeploymentFactory interface
 type DefaultDeploymentFactory struct{}
 
-// NewDefaultDeploymentFactory creates a new DefaultDeploymentFactory
-func NewDefaultDeploymentFactory() *DefaultDeploymentFactory {
-	return &DefaultDeploymentFactory{}
-}
-
 // NewDeployment creates a new deployment operator
 func (f *DefaultDeploymentFactory) NewDeployment(params kai.DeploymentParams) kai.DeploymentOperator {
 	return &cluster.Deployment{
@@ -38,7 +33,7 @@ func (f *DefaultDeploymentFactory) NewDeployment(params kai.DeploymentParams) ka
 
 // RegisterDeploymentTools registers all deployment-related tools with the server
 func RegisterDeploymentTools(s kai.ServerInterface, cm kai.ClusterManager) {
-	factory := NewDefaultDeploymentFactory()
+	factory := &DefaultDeploymentFactory{}
 	RegisterDeploymentToolsWithFactory(s, cm, factory)
 }
 

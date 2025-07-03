@@ -1,6 +1,5 @@
 package cluster
 
-// Constants for common test values
 const (
 	// Namespace constants
 	testNamespace    = "test-namespace"
@@ -67,6 +66,7 @@ const (
 	deploymentName1 = "deployment1"
 	deploymentName2 = "deployment2"
 	deploymentName3 = "deployment3"
+	nginxDeployment = "nginx-deployment"
 
 	// Namespace test constants
 	testNamespace1 = "test-ns-1"

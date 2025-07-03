@@ -5,6 +5,7 @@ const (
 	nonexistentPodName    = "non-existent-pod"
 	defaultNamespace      = "default"
 	testNamespace         = "test-namespace"
+	testDeployment        = "test-deployment"
 	nginxPodName          = "nginx-pod"
 	nginxImage            = "nginx:latest"
 	myAppImage            = "myapp:v1.2.3"
