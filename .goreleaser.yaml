@@ -23,14 +23,14 @@ archives:
       {{- if eq .Arch "amd64" }}x86_64
       {{- else if eq .Arch "386" }}i386
       {{- else }}{{ .Arch }}{{ end }}
-      {{- with .Arm }}_v{{ . }}{{ end }}
+      {{- if .Arm }}v{{ .Arm }}{{ end }}
     # use zip archive format for windows builds.
     format_overrides:
       - goos: windows
         formats: zip
 
     files:
-      - LICENSE.txt
+      - LICENSE
       - README.md
 
 checksum:
