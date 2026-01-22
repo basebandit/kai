@@ -72,4 +72,21 @@ const (
 	testNamespace1 = "test-ns-1"
 	testNamespace2 = "test-ns-2"
 	testNamespace3 = "prod-ns"
+
+	// ConfigMap constants
+	configMapName        = "test-configmap"
+	configMapName1       = "configmap1"
+	configMapName2       = "configmap2"
+	configMapName3       = "configmap3"
+	nonexistentConfigMap = "nonexistent-configmap"
+
+	// Secret constants
+	secretName          = "test-secret"
+	secretName1         = "secret1"
+	secretName2         = "secret2"
+	secretName3         = "secret3"
+	nonexistentSecret   = "nonexistent-secret"
+	secretTypeOpaque    = "Opaque"
+	secretTypeTLS       = "kubernetes.io/tls"
+	secretTypeDockerCfg = "kubernetes.io/dockerconfigjson"
 )
