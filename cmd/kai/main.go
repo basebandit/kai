@@ -59,4 +59,5 @@ func registerAllTools(s *kai.Server, cm *cluster.Manager) {
 	tools.RegisterDeploymentTools(s, cm)
 	tools.RegisterServiceTools(s, cm)
 	tools.RegisterContextTools(s, cm)
+	tools.RegisterConfigMapTools(s, cm)
 }
