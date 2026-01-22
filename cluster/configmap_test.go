@@ -77,8 +77,8 @@ func testCreateConfigMap(t *testing.T) {
 					"config": "data",
 				},
 				Labels: map[string]interface{}{
-					"app":  "test",
-					"env":  "dev",
+					"app": "test",
+					"env": "dev",
 				},
 				Annotations: map[string]interface{}{
 					"description": "Test ConfigMap",
@@ -249,10 +249,10 @@ func testListConfigMaps(t *testing.T) {
 			configMap: ConfigMap{
 				Namespace: testNamespace,
 			},
-			allNamespaces:    false,
-			labelSelector:    "",
-			expectError:      false,
-			expectedContent:  []string{configMapName1, configMapName2},
+			allNamespaces:     false,
+			labelSelector:     "",
+			expectError:       false,
+			expectedContent:   []string{configMapName1, configMapName2},
 			unexpectedContent: []string{configMapName3},
 		},
 		{
@@ -270,10 +270,10 @@ func testListConfigMaps(t *testing.T) {
 			configMap: ConfigMap{
 				Namespace: testNamespace,
 			},
-			allNamespaces:    true,
-			labelSelector:    "env=dev",
-			expectError:      false,
-			expectedContent:  []string{configMapName1, configMapName2},
+			allNamespaces:     true,
+			labelSelector:     "env=dev",
+			expectError:       false,
+			expectedContent:   []string{configMapName1, configMapName2},
 			unexpectedContent: []string{configMapName3},
 		},
 		{

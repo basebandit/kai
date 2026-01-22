@@ -73,3 +73,24 @@ type NamespaceParams struct {
 	Labels      map[string]interface{}
 	Annotations map[string]interface{}
 }
+
+// ConfigMapParams holds all possible configmap configuration parameters
+type ConfigMapParams struct {
+	Name        string
+	Namespace   string
+	Data        map[string]interface{}
+	BinaryData  map[string]interface{}
+	Labels      map[string]interface{}
+	Annotations map[string]interface{}
+}
+
+// SecretParams holds all possible secret configuration parameters
+type SecretParams struct {
+	Name        string
+	Namespace   string
+	Type        string
+	Data        map[string]interface{}
+	StringData  map[string]interface{}
+	Labels      map[string]interface{}
+	Annotations map[string]interface{}
+}

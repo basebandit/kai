@@ -87,6 +87,6 @@ const (
 	secretName3         = "secret3"
 	nonexistentSecret   = "nonexistent-secret"
 	secretTypeOpaque    = "Opaque"
-	secretTypeTLS       = "kubernetes.io/tls"
-	secretTypeDockerCfg = "kubernetes.io/dockerconfigjson"
+	secretTypeTLS       = "kubernetes.io/tls"              // #nosec G101
+	secretTypeDockerCfg = "kubernetes.io/dockerconfigjson" // #nosec G101
 )
