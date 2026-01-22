@@ -628,3 +628,127 @@ func formatNamespaceList(namespaces *corev1.NamespaceList, labelSelector string)
 
 	return result.String()
 }
+
+func formatConfigMap(cm *corev1.ConfigMap) string {
+	result := fmt.Sprintf("ConfigMap: %s\n", cm.Name)
+	result += fmt.Sprintf("Namespace: %s\n", cm.Namespace)
+	result += fmt.Sprintf("Created: %s\n", cm.CreationTimestamp.Time.Format(time.RFC3339))
+
+	if len(cm.Data) > 0 {
+		result += "\nData:\n"
+		for k, v := range cm.Data {
+			if len(v) > 100 {
+				result += fmt.Sprintf("- %s: %s... (%d bytes)\n", k, v[:100], len(v))
+			} else {
+				result += fmt.Sprintf("- %s: %s\n", k, v)
+			}
+		}
+	}
+
+	if len(cm.BinaryData) > 0 {
+		result += "\nBinary Data:\n"
+		for k, v := range cm.BinaryData {
+			result += fmt.Sprintf("- %s: (%d bytes)\n", k, len(v))
+		}
+	}
+
+	if len(cm.Labels) > 0 {
+		result += "\nLabels:\n"
+		for k, v := range cm.Labels {
+			result += fmt.Sprintf("- %s: %s\n", k, v)
+		}
+	}
+
+	if len(cm.Annotations) > 0 {
+		result += "\nAnnotations:\n"
+		for k, v := range cm.Annotations {
+			result += fmt.Sprintf("- %s: %s\n", k, v)
+		}
+	}
+
+	return result
+}
+
+func formatConfigMapList(configMaps *corev1.ConfigMapList, includeNamespace bool) string {
+	var result strings.Builder
+
+	for _, cm := range configMaps.Items {
+		age := time.Since(cm.CreationTimestamp.Time).Round(time.Second)
+		dataCount := len(cm.Data) + len(cm.BinaryData)
+
+		if includeNamespace {
+			result.WriteString(fmt.Sprintf("• %s/%s: Data=%d, Age=%s",
+				cm.Namespace, cm.Name, dataCount, formatDuration(age)))
+		} else {
+			result.WriteString(fmt.Sprintf("• %s: Data=%d, Age=%s",
+				cm.Name, dataCount, formatDuration(age)))
+		}
+
+		if len(cm.Labels) > 0 {
+			result.WriteString(fmt.Sprintf(" - Labels: %d", len(cm.Labels)))
+		}
+
+		result.WriteString("\n")
+	}
+
+	result.WriteString(fmt.Sprintf("\nTotal: %d ConfigMap(s)", len(configMaps.Items)))
+
+	return result.String()
+}
+
+func formatSecret(secret *corev1.Secret) string {
+	result := fmt.Sprintf("Secret: %s\n", secret.Name)
+	result += fmt.Sprintf("Namespace: %s\n", secret.Namespace)
+	result += fmt.Sprintf("Type: %s\n", secret.Type)
+	result += fmt.Sprintf("Created: %s\n", secret.CreationTimestamp.Time.Format(time.RFC3339))
+
+	if len(secret.Data) > 0 {
+		result += "\nData (keys only - values masked):\n"
+		for k, v := range secret.Data {
+			result += fmt.Sprintf("- %s: (%d bytes)\n", k, len(v))
+		}
+	}
+
+	if len(secret.Labels) > 0 {
+		result += "\nLabels:\n"
+		for k, v := range secret.Labels {
+			result += fmt.Sprintf("- %s: %s\n", k, v)
+		}
+	}
+
+	if len(secret.Annotations) > 0 {
+		result += "\nAnnotations:\n"
+		for k, v := range secret.Annotations {
+			result += fmt.Sprintf("- %s: %s\n", k, v)
+		}
+	}
+
+	return result
+}
+
+func formatSecretList(secrets *corev1.SecretList, includeNamespace bool) string {
+	var result strings.Builder
+
+	for _, secret := range secrets.Items {
+		age := time.Since(secret.CreationTimestamp.Time).Round(time.Second)
+		dataCount := len(secret.Data)
+
+		if includeNamespace {
+			result.WriteString(fmt.Sprintf("• %s/%s: Type=%s, Data=%d, Age=%s",
+				secret.Namespace, secret.Name, secret.Type, dataCount, formatDuration(age)))
+		} else {
+			result.WriteString(fmt.Sprintf("• %s: Type=%s, Data=%d, Age=%s",
+				secret.Name, secret.Type, dataCount, formatDuration(age)))
+		}
+
+		if len(secret.Labels) > 0 {
+			result.WriteString(fmt.Sprintf(" - Labels: %d", len(secret.Labels)))
+		}
+
+		result.WriteString("\n")
+	}
+
+	result.WriteString(fmt.Sprintf("\nTotal: %d Secret(s)", len(secrets.Items)))
+
+	return result.String()
+}
