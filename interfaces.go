@@ -68,3 +68,20 @@ type ServiceOperator interface {
 	Delete(ctx context.Context, cm ClusterManager) (string, error)
 	List(ctx context.Context, cm ClusterManager, allNamespaces bool, labelSelector string) (string, error)
 }
+
+// ConfigMapOperator defines the operations needed for ConfigMap management
+type ConfigMapOperator interface {
+	Create(ctx context.Context, cm ClusterManager) (string, error)
+	Get(ctx context.Context, cm ClusterManager) (string, error)
+	List(ctx context.Context, cm ClusterManager, allNamespaces bool, labelSelector string) (string, error)
+	Delete(ctx context.Context, cm ClusterManager) (string, error)
+	Update(ctx context.Context, cm ClusterManager) (string, error)
+}
+
+// SecretOperator defines the operations needed for Secret management
+type SecretOperator interface {
+	Create(ctx context.Context, cm ClusterManager) (string, error)
+	Get(ctx context.Context, cm ClusterManager) (string, error)
+	List(ctx context.Context, cm ClusterManager, allNamespaces bool, labelSelector string) (string, error)
+	Delete(ctx context.Context, cm ClusterManager) (string, error)
+}
