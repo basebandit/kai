@@ -255,10 +255,10 @@ func testListSecrets(t *testing.T) {
 			secret: Secret{
 				Namespace: testNamespace,
 			},
-			allNamespaces:    false,
-			labelSelector:    "",
-			expectError:      false,
-			expectedContent:  []string{secretName1, secretName2},
+			allNamespaces:     false,
+			labelSelector:     "",
+			expectError:       false,
+			expectedContent:   []string{secretName1, secretName2},
 			unexpectedContent: []string{secretName3},
 		},
 		{
@@ -276,10 +276,10 @@ func testListSecrets(t *testing.T) {
 			secret: Secret{
 				Namespace: testNamespace,
 			},
-			allNamespaces:    true,
-			labelSelector:    "env=dev",
-			expectError:      false,
-			expectedContent:  []string{secretName1, secretName2},
+			allNamespaces:     true,
+			labelSelector:     "env=dev",
+			expectError:       false,
+			expectedContent:   []string{secretName1, secretName2},
 			unexpectedContent: []string{secretName3},
 		},
 		{
