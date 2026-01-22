@@ -54,3 +54,25 @@ func validateRestartPolicy(policy string) error {
 	}
 	return nil
 }
+
+// validateSecretType validates if secret type is a known built-in kubernetes secret type
+func validateSecretType(typeArg string) error {
+	builtInTypes := []string{
+		"Opaque",                              // arbitrary user-defined data
+		"kubernetes.io/service-account-token", // ServiceAccount token
+		"kubernetes.io/dockercfg",             // serialized ~/.dockercfg file
+		"kubernetes.io/dockerconfigjson",      // serialized ~/.docker/config.json file
+		"kubernetes.io/basic-auth",            // credentials for basic authentication
+		"kubernetes.io/ssh-auth",              // credentials for SSH authentication
+		"kubernetes.io/tls",                   // data for a TLS client or server
+		"bootstrap.kubernetes.io/token",       // bootstrap token data
+	}
+
+	for _, builtInType := range builtInTypes {
+		if typeArg == builtInType {
+			return nil
+		}
+	}
+
+	return fmt.Errorf("invalid secret type: %s. Must be one of: %s", typeArg, strings.Join(builtInTypes, ", "))
+}
