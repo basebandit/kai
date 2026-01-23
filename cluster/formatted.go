@@ -6,6 +6,7 @@ import (
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 )
 
@@ -751,4 +752,130 @@ func formatSecretList(secrets *corev1.SecretList, includeNamespace bool) string 
 	result.WriteString(fmt.Sprintf("\nTotal: %d Secret(s)", len(secrets.Items)))
 
 	return result.String()
+}
+
+func formatJob(job *batchv1.Job) string {
+	result := fmt.Sprintf("Job: %s\n", job.Name)
+	result += fmt.Sprintf("Namespace: %s\n", job.Namespace)
+
+	if job.Spec.Completions != nil {
+		result += fmt.Sprintf("Completions: %d/%d\n", job.Status.Succeeded, *job.Spec.Completions)
+	}
+	if job.Spec.Parallelism != nil {
+		result += fmt.Sprintf("Parallelism: %d\n", *job.Spec.Parallelism)
+	}
+
+	if job.Status.Active > 0 {
+		result += fmt.Sprintf("Active: %d\n", job.Status.Active)
+	}
+	if job.Status.Failed > 0 {
+		result += fmt.Sprintf("Failed: %d\n", job.Status.Failed)
+	}
+
+	result += fmt.Sprintf("Created: %s\n", job.CreationTimestamp.Time.Format(time.RFC3339))
+
+	if job.Status.StartTime != nil {
+		result += fmt.Sprintf("Start Time: %s\n", job.Status.StartTime.Time.Format(time.RFC3339))
+	}
+	if job.Status.CompletionTime != nil {
+		result += fmt.Sprintf("Completion Time: %s\n", job.Status.CompletionTime.Time.Format(time.RFC3339))
+		duration := job.Status.CompletionTime.Time.Sub(job.Status.StartTime.Time)
+		result += fmt.Sprintf("Duration: %s\n", formatDuration(duration))
+	}
+
+	if len(job.Labels) > 0 {
+		result += "\nLabels:\n"
+		for k, v := range job.Labels {
+			result += fmt.Sprintf("- %s: %s\n", k, v)
+		}
+	}
+
+	result += fmt.Sprintf("\nImage: %s\n", job.Spec.Template.Spec.Containers[0].Image)
+
+	return result
+}
+
+func formatJobList(jobs *batchv1.JobList, includeNamespace bool) string {
+	var result strings.Builder
+
+	if includeNamespace {
+		result.WriteString("Jobs across all namespaces:\n")
+	} else {
+		result.WriteString(fmt.Sprintf("Jobs in namespace %q:\n", jobs.Items[0].Namespace))
+	}
+
+	for _, job := range jobs.Items {
+		age := time.Since(job.CreationTimestamp.Time).Round(time.Second)
+
+		completions := "0"
+		if job.Spec.Completions != nil {
+			completions = fmt.Sprintf("%d", *job.Spec.Completions)
+		}
+
+		status := fmt.Sprintf("%d/%s", job.Status.Succeeded, completions)
+		if job.Status.Active > 0 {
+			status += fmt.Sprintf(" (Active: %d)", job.Status.Active)
+		}
+		if job.Status.Failed > 0 {
+			status += fmt.Sprintf(" (Failed: %d)", job.Status.Failed)
+		}
+
+		if includeNamespace {
+			result.WriteString(fmt.Sprintf("• %s/%s: %s - Age: %s",
+				job.Namespace, job.Name, status, formatDuration(age)))
+		} else {
+			result.WriteString(fmt.Sprintf("• %s: %s - Age: %s",
+				job.Name, status, formatDuration(age)))
+		}
+
+		if len(job.Labels) > 0 {
+			result.WriteString(fmt.Sprintf(" - Labels: %d", len(job.Labels)))
+		}
+
+		result.WriteString("\n")
+	}
+
+	result.WriteString(fmt.Sprintf("\nTotal: %d Job(s)", len(jobs.Items)))
+
+	return result.String()
+}
+
+func convertToStringSlice(input []interface{}) []string {
+	if input == nil {
+		return nil
+	}
+	result := make([]string, 0, len(input))
+	for _, item := range input {
+		if str, ok := item.(string); ok {
+			result = append(result, str)
+		}
+	}
+	return result
+}
+
+func convertToEnvVars(input map[string]interface{}) []corev1.EnvVar {
+	if input == nil {
+		return nil
+	}
+	envVars := make([]corev1.EnvVar, 0, len(input))
+	for key, val := range input {
+		envVars = append(envVars, corev1.EnvVar{
+			Name:  key,
+			Value: fmt.Sprintf("%v", val),
+		})
+	}
+	return envVars
+}
+
+func convertToLocalObjectReferences(input []interface{}) []corev1.LocalObjectReference {
+	if input == nil {
+		return nil
+	}
+	refs := make([]corev1.LocalObjectReference, 0, len(input))
+	for _, item := range input {
+		if str, ok := item.(string); ok {
+			refs = append(refs, corev1.LocalObjectReference{Name: str})
+		}
+	}
+	return refs
 }
