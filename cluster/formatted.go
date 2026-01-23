@@ -172,7 +172,7 @@ func formatDeployment(deployment *appsv1.Deployment) string {
 
 	// Labels
 	if len(deployment.Labels) > 0 {
-		result += fmt.Sprintf("\nLabels:\n")
+		result += "\nLabels:\n"
 		for k, v := range deployment.Labels {
 			result += fmt.Sprintf("- %s: %s\n", k, v)
 		}
