@@ -147,6 +147,7 @@ func formatDeployment(deployment *appsv1.Deployment) string {
 	result += fmt.Sprintf("Replicas: %d/%d (available/total)\n", deployment.Status.AvailableReplicas, replicas)
 	result += fmt.Sprintf("Created: %s\n", deployment.CreationTimestamp.Format(time.RFC3339))
 
+	result += fmt.Sprintf("Ready: %d\n", deployment.Status.ReadyReplicas)
 	// Status conditions
 	if len(deployment.Status.Conditions) > 0 {
 		result += "\nConditions:\n"
@@ -165,6 +166,14 @@ func formatDeployment(deployment *appsv1.Deployment) string {
 	if len(deployment.Spec.Selector.MatchLabels) > 0 {
 		result += "\nSelector:\n"
 		for k, v := range deployment.Spec.Selector.MatchLabels {
+			result += fmt.Sprintf("- %s: %s\n", k, v)
+		}
+	}
+
+	// Labels
+	if len(deployment.Labels) > 0 {
+		result += fmt.Sprintf("\nLabels:\n")
+		for k, v := range deployment.Labels {
 			result += fmt.Sprintf("- %s: %s\n", k, v)
 		}
 	}
@@ -759,7 +768,7 @@ func formatJob(job *batchv1.Job) string {
 	result += fmt.Sprintf("Namespace: %s\n", job.Namespace)
 
 	if job.Spec.Completions != nil {
-		result += fmt.Sprintf("Completions: %d/%d\n", job.Status.Succeeded, *job.Spec.Completions)
+		result += fmt.Sprintf("Succeeded/Completions: %d/%d\n", job.Status.Succeeded, *job.Spec.Completions)
 	}
 	if job.Spec.Parallelism != nil {
 		result += fmt.Sprintf("Parallelism: %d\n", *job.Spec.Parallelism)
@@ -773,6 +782,7 @@ func formatJob(job *batchv1.Job) string {
 	}
 
 	result += fmt.Sprintf("Created: %s\n", job.CreationTimestamp.Time.Format(time.RFC3339))
+	result += fmt.Sprintf("Succeeded: %d\n", job.Status.Succeeded)
 
 	if job.Status.StartTime != nil {
 		result += fmt.Sprintf("Start Time: %s\n", job.Status.StartTime.Time.Format(time.RFC3339))
