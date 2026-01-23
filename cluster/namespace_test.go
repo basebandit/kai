@@ -2,14 +2,14 @@ package cluster
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
+	"github.com/basebandit/kai/testmocks"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/fake"
 )
 
 func TestNamespaceOperations(t *testing.T) {
@@ -19,159 +19,175 @@ func TestNamespaceOperations(t *testing.T) {
 	t.Run("DeleteNamespace", testDeleteNamespace)
 }
 
-func createNamespaceObj(name string, labels map[string]string) *corev1.Namespace {
-	return &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:   name,
-			Labels: labels,
-		},
-		Status: corev1.NamespaceStatus{
-			Phase: corev1.NamespaceActive,
-		},
-	}
-}
-
 func testCreateNamespaces(t *testing.T) {
 	ctx := context.Background()
 
 	testCases := []struct {
-		name         string
-		namespace    Namespace
-		setupObjects []runtime.Object
-		expectedText string
-		expectError  bool
-		errorMsg     string
+		name           string
+		namespace      *Namespace
+		setupMock      func(*testmocks.MockClusterManager)
+		expectedResult string
+		expectedError  string
+		validateCreate func(*testing.T, kubernetes.Interface)
 	}{
 		{
 			name: "Create basic namespace",
-			namespace: Namespace{
+			namespace: &Namespace{
 				Name: testNamespace,
 			},
-			setupObjects: []runtime.Object{},
-			expectedText: fmt.Sprintf("Namespace %q created successfully", testNamespace),
-			expectError:  false,
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset()
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "Namespace \"test-namespace\" created successfully",
+			expectedError:  "",
+			validateCreate: func(t *testing.T, client kubernetes.Interface) {
+				ns, err := client.CoreV1().Namespaces().Get(ctx, testNamespace, metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, testNamespace, ns.Name)
+			},
 		},
 		{
 			name: "Create namespace with labels",
-			namespace: Namespace{
+			namespace: &Namespace{
 				Name: "labeled-namespace",
 				Labels: map[string]interface{}{
 					"env":  "test",
 					"team": "dev",
 				},
 			},
-			setupObjects: []runtime.Object{},
-			expectedText: "Namespace \"labeled-namespace\" created successfully",
-			expectError:  false,
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset()
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "Namespace \"labeled-namespace\" created successfully",
+			expectedError:  "",
+			validateCreate: func(t *testing.T, client kubernetes.Interface) {
+				ns, err := client.CoreV1().Namespaces().Get(ctx, "labeled-namespace", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, "test", ns.Labels["env"])
+				assert.Equal(t, "dev", ns.Labels["team"])
+			},
 		},
 		{
 			name: "Create namespace with annotations",
-			namespace: Namespace{
+			namespace: &Namespace{
 				Name: "annotated-namespace",
 				Annotations: map[string]interface{}{
 					"description": "Test namespace",
 					"owner":       "test-team",
 				},
 			},
-			setupObjects: []runtime.Object{},
-			expectedText: "Namespace \"annotated-namespace\" created successfully",
-			expectError:  false,
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset()
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "Namespace \"annotated-namespace\" created successfully",
+			expectedError:  "",
+			validateCreate: func(t *testing.T, client kubernetes.Interface) {
+				ns, err := client.CoreV1().Namespaces().Get(ctx, "annotated-namespace", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, "Test namespace", ns.Annotations["description"])
+				assert.Equal(t, "test-team", ns.Annotations["owner"])
+			},
 		},
 		{
 			name: "Missing namespace name",
-			namespace: Namespace{
+			namespace: &Namespace{
 				Name: "",
 			},
-			setupObjects: []runtime.Object{},
-			expectError:  true,
-			errorMsg:     "namespace name is required",
+			setupMock:     func(mockCM *testmocks.MockClusterManager) {},
+			expectedError: "namespace name is required",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			cm := setupTestCluster(tc.setupObjects...)
+			mockCM := testmocks.NewMockClusterManager()
+			tc.setupMock(mockCM)
 
-			result, err := tc.namespace.Create(ctx, cm)
+			result, err := tc.namespace.Create(ctx, mockCM)
 
-			if tc.expectError {
+			if tc.expectedError != "" {
 				assert.Error(t, err)
-				if tc.errorMsg != "" {
-					assert.Contains(t, err.Error(), tc.errorMsg)
-				}
+				assert.Contains(t, err.Error(), tc.expectedError)
+				assert.Empty(t, result)
 			} else {
 				assert.NoError(t, err)
-				assert.Contains(t, result, tc.expectedText)
+				assert.Contains(t, result, tc.expectedResult)
 
-				fakeClient := cm.clients[testCluster]
-				namespace, err := fakeClient.CoreV1().Namespaces().Get(ctx, tc.namespace.Name, metav1.GetOptions{})
-				require.NoError(t, err)
-				assert.Equal(t, tc.namespace.Name, namespace.Name)
-
-				if tc.namespace.Labels != nil {
-					assert.NotNil(t, namespace.Labels)
-					for k, v := range tc.namespace.Labels {
-						if strVal, ok := v.(string); ok {
-							assert.Equal(t, strVal, namespace.Labels[k])
-						}
-					}
-				}
-
-				if tc.namespace.Annotations != nil {
-					assert.NotNil(t, namespace.Annotations)
-					for k, v := range tc.namespace.Annotations {
-						if strVal, ok := v.(string); ok {
-							assert.Equal(t, strVal, namespace.Annotations[k])
-						}
-					}
+				// Validate creation if validator provided
+				if tc.validateCreate != nil {
+					client, _ := mockCM.GetCurrentClient()
+					tc.validateCreate(t, client)
 				}
 			}
+
+			mockCM.AssertExpectations(t)
 		})
 	}
 }
 
 func testGetNamespace(t *testing.T) {
 	ctx := context.Background()
-	testNs := createNamespaceObj(testNamespace, nil)
+
+	existingNs := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: testNamespace,
+		},
+		Status: corev1.NamespaceStatus{
+			Phase: corev1.NamespaceActive,
+		},
+	}
 
 	testCases := []struct {
-		name        string
-		namespace   Namespace
-		expectError bool
-		errorMsg    string
+		name           string
+		namespace      *Namespace
+		setupMock      func(*testmocks.MockClusterManager)
+		expectedResult string
+		expectedError  string
 	}{
 		{
 			name: "Get existing namespace",
-			namespace: Namespace{
+			namespace: &Namespace{
 				Name: testNamespace,
 			},
-			expectError: false,
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset(existingNs)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: testNamespace,
+			expectedError:  "",
 		},
 		{
 			name: "Namespace not found",
-			namespace: Namespace{
+			namespace: &Namespace{
 				Name: nonexistentNS,
 			},
-			expectError: true,
-			errorMsg:    "not found",
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset()
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedError: "not found",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			cm := setupTestCluster(testNs)
+			mockCM := testmocks.NewMockClusterManager()
+			tc.setupMock(mockCM)
 
-			result, err := tc.namespace.Get(ctx, cm)
+			result, err := tc.namespace.Get(ctx, mockCM)
 
-			if tc.expectError {
+			if tc.expectedError != "" {
 				assert.Error(t, err)
-				if tc.errorMsg != "" {
-					assert.Contains(t, err.Error(), tc.errorMsg)
-				}
+				assert.Contains(t, err.Error(), tc.expectedError)
 			} else {
 				assert.NoError(t, err)
-				assert.Contains(t, result, testNamespace)
+				assert.Contains(t, result, tc.expectedResult)
 			}
+
+			mockCM.AssertExpectations(t)
 		})
 	}
 }
@@ -179,54 +195,77 @@ func testGetNamespace(t *testing.T) {
 func testListNamespaces(t *testing.T) {
 	ctx := context.Background()
 
-	ns1 := createNamespaceObj("namespace1", map[string]string{"env": "dev"})
-	ns2 := createNamespaceObj("namespace2", map[string]string{"env": "dev"})
-	ns3 := createNamespaceObj("namespace3", map[string]string{"env": "prod"})
+	ns1 := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "namespace1",
+			Labels: map[string]string{"env": "dev"},
+		},
+	}
+	ns2 := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "namespace2",
+			Labels: map[string]string{"env": "dev"},
+		},
+	}
+	ns3 := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   "namespace3",
+			Labels: map[string]string{"env": "prod"},
+		},
+	}
 
 	testCases := []struct {
 		name              string
-		namespace         Namespace
+		namespace         *Namespace
 		labelSelector     string
-		expectError       bool
-		errorMsg          string
+		setupMock         func(*testmocks.MockClusterManager)
 		expectedContent   []string
 		unexpectedContent []string
+		expectedError     string
 	}{
 		{
-			name:            "List all namespaces",
-			namespace:       Namespace{},
-			labelSelector:   "",
-			expectError:     false,
+			name:          "List all namespaces",
+			namespace:     &Namespace{},
+			labelSelector: "",
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset(ns1, ns2, ns3)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
 			expectedContent: []string{"namespace1", "namespace2", "namespace3"},
 		},
 		{
-			name:              "List namespaces with label selector",
-			namespace:         Namespace{},
-			labelSelector:     "env=dev",
-			expectError:       false,
+			name:          "List namespaces with label selector",
+			namespace:     &Namespace{},
+			labelSelector: "env=dev",
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset(ns1, ns2, ns3)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
 			expectedContent:   []string{"namespace1", "namespace2"},
 			unexpectedContent: []string{"namespace3"},
 		},
 		{
 			name:          "No namespaces match label selector",
-			namespace:     Namespace{},
+			namespace:     &Namespace{},
 			labelSelector: "env=nonexistent",
-			expectError:   true,
-			errorMsg:      "no namespaces found matching the specified selectors",
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset(ns1, ns2, ns3)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedError: "no namespaces found matching the specified selectors",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			cm := setupTestCluster(ns1, ns2, ns3)
+			mockCM := testmocks.NewMockClusterManager()
+			tc.setupMock(mockCM)
 
-			result, err := tc.namespace.List(ctx, cm, tc.labelSelector)
+			result, err := tc.namespace.List(ctx, mockCM, tc.labelSelector)
 
-			if tc.expectError {
+			if tc.expectedError != "" {
 				assert.Error(t, err)
-				if tc.errorMsg != "" {
-					assert.Contains(t, err.Error(), tc.errorMsg)
-				}
+				assert.Contains(t, err.Error(), tc.expectedError)
 			} else {
 				assert.NoError(t, err)
 
@@ -238,6 +277,8 @@ func testListNamespaces(t *testing.T) {
 					assert.NotContains(t, result, unexpected)
 				}
 			}
+
+			mockCM.AssertExpectations(t)
 		})
 	}
 }
@@ -245,58 +286,81 @@ func testListNamespaces(t *testing.T) {
 func testDeleteNamespace(t *testing.T) {
 	ctx := context.Background()
 
+	existingNs := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: testNamespace,
+		},
+	}
+
+	ns1 := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   testNamespace1,
+			Labels: map[string]string{"env": "test"},
+		},
+	}
+	ns2 := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   testNamespace2,
+			Labels: map[string]string{"env": "test"},
+		},
+	}
+	ns3 := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   testNamespace3,
+			Labels: map[string]string{"env": "prod"},
+		},
+	}
+
 	testCases := []struct {
-		name         string
-		namespace    Namespace
-		setupObjects []runtime.Object
-		expectError  bool
-		errorMsg     string
-		validate     func(*testing.T, context.Context, *Manager)
+		name           string
+		namespace      *Namespace
+		setupMock      func(*testmocks.MockClusterManager)
+		expectedResult string
+		expectedError  string
+		validateDelete func(*testing.T, kubernetes.Interface)
 	}{
 		{
 			name: "Delete existing namespace by name",
-			namespace: Namespace{
+			namespace: &Namespace{
 				Name: testNamespace,
 			},
-			setupObjects: []runtime.Object{
-				createNamespaceObj(testNamespace, nil),
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset(existingNs)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
 			},
-			expectError: false,
-			validate: func(t *testing.T, ctx context.Context, cm *Manager) {
-				client, err := cm.GetCurrentClient()
-				require.NoError(t, err)
-
-				_, err = client.CoreV1().Namespaces().Get(ctx, testNamespace, metav1.GetOptions{})
+			expectedResult: "deleted successfully",
+			expectedError:  "",
+			validateDelete: func(t *testing.T, client kubernetes.Interface) {
+				_, err := client.CoreV1().Namespaces().Get(ctx, testNamespace, metav1.GetOptions{})
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), "not found")
 			},
 		},
 		{
 			name: "Namespace not found",
-			namespace: Namespace{
+			namespace: &Namespace{
 				Name: nonexistentNS,
 			},
-			setupObjects: []runtime.Object{},
-			expectError:  true,
-			errorMsg:     "failed to find namespace",
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset()
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedError: "failed to find namespace",
 		},
 		{
 			name: "Delete namespaces by label selector",
-			namespace: Namespace{
+			namespace: &Namespace{
 				Labels: map[string]interface{}{
 					"env": "test",
 				},
 			},
-			setupObjects: []runtime.Object{
-				createNamespaceObj(testNamespace1, map[string]string{"env": "test"}),
-				createNamespaceObj(testNamespace2, map[string]string{"env": "test"}),
-				createNamespaceObj(testNamespace3, map[string]string{"env": "prod"}),
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset(ns1, ns2, ns3)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
 			},
-			expectError: false,
-			validate: func(t *testing.T, ctx context.Context, cm *Manager) {
-				client, err := cm.GetCurrentClient()
-				require.NoError(t, err)
-
+			expectedResult: "Deleted",
+			expectedError:  "",
+			validateDelete: func(t *testing.T, client kubernetes.Interface) {
 				_, err1 := client.CoreV1().Namespaces().Get(ctx, testNamespace1, metav1.GetOptions{})
 				_, err2 := client.CoreV1().Namespaces().Get(ctx, testNamespace2, metav1.GetOptions{})
 				assert.Error(t, err1)
@@ -309,51 +373,59 @@ func testDeleteNamespace(t *testing.T) {
 		},
 		{
 			name: "No namespaces match label selector",
-			namespace: Namespace{
+			namespace: &Namespace{
 				Labels: map[string]interface{}{
 					"env": "nonexistent",
 				},
 			},
-			setupObjects: []runtime.Object{
-				createNamespaceObj("test-ns", map[string]string{"env": "test"}),
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:   "test-ns",
+						Labels: map[string]string{"env": "test"},
+					},
+				}
+				fakeClient := fake.NewSimpleClientset(ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
 			},
-			expectError: true,
-			errorMsg:    "no namespaces found with label selector",
+			expectedError: "no namespaces found with label selector",
 		},
 		{
 			name: "Missing name and labels",
-			namespace: Namespace{
+			namespace: &Namespace{
 				Name: "",
 			},
-			setupObjects: []runtime.Object{},
-			expectError:  true,
-			errorMsg:     "either namespace name or label selector must be provided",
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset()
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedError: "either namespace name or label selector must be provided",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			cm := setupTestCluster(tc.setupObjects...)
+			mockCM := testmocks.NewMockClusterManager()
+			tc.setupMock(mockCM)
 
-			result, err := tc.namespace.Delete(ctx, cm)
+			result, err := tc.namespace.Delete(ctx, mockCM)
 
-			if tc.expectError {
+			if tc.expectedError != "" {
 				assert.Error(t, err)
-				if tc.errorMsg != "" {
-					assert.Contains(t, err.Error(), tc.errorMsg)
-				}
+				assert.Contains(t, err.Error(), tc.expectedError)
+				assert.Empty(t, result)
 			} else {
 				assert.NoError(t, err)
-				if tc.namespace.Name != "" {
-					assert.Contains(t, result, "deleted successfully")
-				} else {
-					assert.Contains(t, result, "Deleted")
-				}
+				assert.Contains(t, result, tc.expectedResult)
 
-				if tc.validate != nil {
-					tc.validate(t, ctx, cm)
+				// Validate deletion if validator provided
+				if tc.validateDelete != nil {
+					client, _ := mockCM.GetCurrentClient()
+					tc.validateDelete(t, client)
 				}
 			}
+
+			mockCM.AssertExpectations(t)
 		})
 	}
 }
