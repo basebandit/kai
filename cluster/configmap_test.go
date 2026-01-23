@@ -2,14 +2,14 @@ package cluster
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
+	"github.com/basebandit/kai/testmocks"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/fake"
 )
 
 func TestConfigMapOperations(t *testing.T) {
@@ -20,207 +20,254 @@ func TestConfigMapOperations(t *testing.T) {
 	t.Run("UpdateConfigMap", testUpdateConfigMap)
 }
 
-func createConfigMapObj(name, namespace string, data map[string]string, labels map[string]string) *corev1.ConfigMap {
-	return &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-			Labels:    labels,
-		},
-		Data: data,
-	}
-}
-
-func createNamespaceForTest(name string) *corev1.Namespace {
-	return &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-		},
-		Status: corev1.NamespaceStatus{
-			Phase: corev1.NamespaceActive,
-		},
-	}
-}
-
 func testCreateConfigMap(t *testing.T) {
 	ctx := context.Background()
 
 	testCases := []struct {
-		name         string
-		configMap    ConfigMap
-		setupObjects []runtime.Object
-		expectedText string
-		expectError  bool
-		errorMsg     string
+		name           string
+		configMap      *ConfigMap
+		setupMock      func(*testmocks.MockClusterManager)
+		expectedResult string
+		expectedError  string
+		validateCreate func(*testing.T, kubernetes.Interface)
 	}{
 		{
 			name: "Create basic ConfigMap",
-			configMap: ConfigMap{
+			configMap: &ConfigMap{
 				Name:      configMapName,
 				Namespace: testNamespace,
 				Data: map[string]interface{}{
-					"key1": "value1",
+					"config.yaml": "key: value",
+					"app.conf":    "setting=true",
 				},
 			},
-			setupObjects: []runtime.Object{
-				createNamespaceForTest(testNamespace),
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
 			},
-			expectedText: fmt.Sprintf("ConfigMap %q created successfully in namespace %q", configMapName, testNamespace),
-			expectError:  false,
-		},
-		{
-			name: "Create ConfigMap with labels and annotations",
-			configMap: ConfigMap{
-				Name:      "labeled-configmap",
-				Namespace: testNamespace,
-				Data: map[string]interface{}{
-					"config": "data",
-				},
-				Labels: map[string]interface{}{
-					"app": "test",
-					"env": "dev",
-				},
-				Annotations: map[string]interface{}{
-					"description": "Test ConfigMap",
-				},
+			expectedResult: "ConfigMap \"test-configmap\" created successfully",
+			validateCreate: func(t *testing.T, client kubernetes.Interface) {
+				cm, err := client.CoreV1().ConfigMaps(testNamespace).Get(ctx, configMapName, metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, configMapName, cm.Name)
+				assert.Equal(t, testNamespace, cm.Namespace)
+				assert.Equal(t, "key: value", cm.Data["config.yaml"])
+				assert.Equal(t, "setting=true", cm.Data["app.conf"])
 			},
-			setupObjects: []runtime.Object{
-				createNamespaceForTest(testNamespace),
-			},
-			expectedText: "ConfigMap \"labeled-configmap\" created successfully",
-			expectError:  false,
 		},
 		{
 			name: "Create ConfigMap with binary data",
-			configMap: ConfigMap{
+			configMap: &ConfigMap{
 				Name:      "binary-configmap",
 				Namespace: testNamespace,
 				BinaryData: map[string]interface{}{
-					"binary-key": "binary-value",
+					"binary.dat": []byte{0x01, 0x02, 0x03, 0x04},
 				},
 			},
-			setupObjects: []runtime.Object{
-				createNamespaceForTest(testNamespace),
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
 			},
-			expectedText: "ConfigMap \"binary-configmap\" created successfully",
-			expectError:  false,
+			expectedResult: "ConfigMap \"binary-configmap\" created successfully",
+			validateCreate: func(t *testing.T, client kubernetes.Interface) {
+				cm, err := client.CoreV1().ConfigMaps(testNamespace).Get(ctx, "binary-configmap", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, []byte{0x01, 0x02, 0x03, 0x04}, cm.BinaryData["binary.dat"])
+			},
+		},
+		{
+			name: "Create ConfigMap with labels and annotations",
+			configMap: &ConfigMap{
+				Name:      "labeled-configmap",
+				Namespace: testNamespace,
+				Data: map[string]interface{}{
+					"key": "value",
+				},
+				Labels: map[string]interface{}{
+					"app": "myapp",
+					"env": "prod",
+				},
+				Annotations: map[string]interface{}{
+					"description": "Production config",
+				},
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "ConfigMap \"labeled-configmap\" created successfully",
+			validateCreate: func(t *testing.T, client kubernetes.Interface) {
+				cm, err := client.CoreV1().ConfigMaps(testNamespace).Get(ctx, "labeled-configmap", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, "myapp", cm.Labels["app"])
+				assert.Equal(t, "prod", cm.Labels["env"])
+				assert.Equal(t, "Production config", cm.Annotations["description"])
+			},
+		},
+		{
+			name: "Create ConfigMap with both data and binary data",
+			configMap: &ConfigMap{
+				Name:      "mixed-configmap",
+				Namespace: testNamespace,
+				Data: map[string]interface{}{
+					"text.txt": "plain text",
+				},
+				BinaryData: map[string]interface{}{
+					"data.bin": []byte{0xAA, 0xBB},
+				},
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "ConfigMap \"mixed-configmap\" created successfully",
+			validateCreate: func(t *testing.T, client kubernetes.Interface) {
+				cm, err := client.CoreV1().ConfigMaps(testNamespace).Get(ctx, "mixed-configmap", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, "plain text", cm.Data["text.txt"])
+				assert.Equal(t, []byte{0xAA, 0xBB}, cm.BinaryData["data.bin"])
+			},
 		},
 		{
 			name: "Namespace not found",
-			configMap: ConfigMap{
+			configMap: &ConfigMap{
 				Name:      configMapName,
 				Namespace: nonexistentNS,
 				Data: map[string]interface{}{
-					"key1": "value1",
+					"key": "value",
 				},
 			},
-			setupObjects: []runtime.Object{},
-			expectError:  true,
-			errorMsg:     fmt.Sprintf("namespace %q not found", nonexistentNS),
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset()
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedError: "namespace \"nonexistent-namespace\" not found",
 		},
 		{
 			name: "Missing ConfigMap name",
-			configMap: ConfigMap{
+			configMap: &ConfigMap{
 				Name:      "",
 				Namespace: testNamespace,
+				Data: map[string]interface{}{
+					"key": "value",
+				},
 			},
-			setupObjects: []runtime.Object{
-				createNamespaceForTest(testNamespace),
-			},
-			expectError: true,
-			errorMsg:    "ConfigMap name is required",
+			setupMock:     func(mockCM *testmocks.MockClusterManager) {},
+			expectedError: "ConfigMap name is required",
 		},
 		{
 			name: "Missing namespace",
-			configMap: ConfigMap{
-				Name:      configMapName,
+			configMap: &ConfigMap{
+				Name: configMapName,
 				Namespace: "",
+				Data: map[string]interface{}{
+					"key": "value",
+				},
 			},
-			setupObjects: []runtime.Object{},
-			expectError:  true,
-			errorMsg:     "namespace is required",
+			setupMock:     func(mockCM *testmocks.MockClusterManager) {},
+			expectedError: "namespace is required",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			cm := setupTestCluster(tc.setupObjects...)
+			mockCM := testmocks.NewMockClusterManager()
+			tc.setupMock(mockCM)
 
-			result, err := tc.configMap.Create(ctx, cm)
+			result, err := tc.configMap.Create(ctx, mockCM)
 
-			if tc.expectError {
+			if tc.expectedError != "" {
 				assert.Error(t, err)
-				if tc.errorMsg != "" {
-					assert.Contains(t, err.Error(), tc.errorMsg)
-				}
+				assert.Contains(t, err.Error(), tc.expectedError)
+				assert.Empty(t, result)
 			} else {
 				assert.NoError(t, err)
-				assert.Contains(t, result, tc.expectedText)
+				assert.Contains(t, result, tc.expectedResult)
 
-				fakeClient := cm.clients[testCluster]
-				configMap, err := fakeClient.CoreV1().ConfigMaps(tc.configMap.Namespace).Get(ctx, tc.configMap.Name, metav1.GetOptions{})
-				require.NoError(t, err)
-				assert.Equal(t, tc.configMap.Name, configMap.Name)
-				assert.Equal(t, tc.configMap.Namespace, configMap.Namespace)
-
-				if tc.configMap.Labels != nil {
-					assert.NotNil(t, configMap.Labels)
-					for k, v := range tc.configMap.Labels {
-						if strVal, ok := v.(string); ok {
-							assert.Equal(t, strVal, configMap.Labels[k])
-						}
-					}
+				if tc.validateCreate != nil {
+					client, _ := mockCM.GetCurrentClient()
+					tc.validateCreate(t, client)
 				}
 			}
+
+			mockCM.AssertExpectations(t)
 		})
 	}
 }
 
 func testGetConfigMap(t *testing.T) {
 	ctx := context.Background()
-	testCM := createConfigMapObj(configMapName, testNamespace, map[string]string{"key": "value"}, nil)
-	testNS := createNamespaceForTest(testNamespace)
 
 	testCases := []struct {
-		name        string
-		configMap   ConfigMap
-		expectError bool
-		errorMsg    string
+		name           string
+		configMap      *ConfigMap
+		setupMock      func(*testmocks.MockClusterManager)
+		expectedResult string
+		expectedError  string
 	}{
 		{
 			name: "Get existing ConfigMap",
-			configMap: ConfigMap{
+			configMap: &ConfigMap{
 				Name:      configMapName,
 				Namespace: testNamespace,
 			},
-			expectError: false,
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				existingCM := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      configMapName,
+						Namespace: testNamespace,
+					},
+					Data: map[string]string{
+						"key": "value",
+					},
+				}
+				fakeClient := fake.NewSimpleClientset(existingCM)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "ConfigMap: test-configmap",
 		},
 		{
 			name: "ConfigMap not found",
-			configMap: ConfigMap{
+			configMap: &ConfigMap{
 				Name:      nonexistentConfigMap,
 				Namespace: testNamespace,
 			},
-			expectError: true,
-			errorMsg:    "not found",
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset()
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedError: "not found",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			cm := setupTestCluster(testNS, testCM)
+			mockCM := testmocks.NewMockClusterManager()
+			tc.setupMock(mockCM)
 
-			result, err := tc.configMap.Get(ctx, cm)
+			result, err := tc.configMap.Get(ctx, mockCM)
 
-			if tc.expectError {
+			if tc.expectedError != "" {
 				assert.Error(t, err)
-				if tc.errorMsg != "" {
-					assert.Contains(t, err.Error(), tc.errorMsg)
-				}
+				assert.Contains(t, err.Error(), tc.expectedError)
 			} else {
 				assert.NoError(t, err)
-				assert.Contains(t, result, configMapName)
+				assert.Contains(t, result, tc.expectedResult)
 			}
+
+			mockCM.AssertExpectations(t)
 		})
 	}
 }
@@ -228,87 +275,168 @@ func testGetConfigMap(t *testing.T) {
 func testListConfigMaps(t *testing.T) {
 	ctx := context.Background()
 
-	testNS := createNamespaceForTest(testNamespace)
-	otherNS := createNamespaceForTest(otherNamespace)
-	cm1 := createConfigMapObj(configMapName1, testNamespace, map[string]string{"key": "value1"}, map[string]string{"env": "dev"})
-	cm2 := createConfigMapObj(configMapName2, testNamespace, map[string]string{"key": "value2"}, map[string]string{"env": "dev"})
-	cm3 := createConfigMapObj(configMapName3, otherNamespace, map[string]string{"key": "value3"}, map[string]string{"env": "prod"})
-
 	testCases := []struct {
 		name              string
-		configMap         ConfigMap
+		configMap         *ConfigMap
 		allNamespaces     bool
 		labelSelector     string
-		expectError       bool
-		errorMsg          string
+		setupMock         func(*testmocks.MockClusterManager)
 		expectedContent   []string
 		unexpectedContent []string
+		expectedError     string
 	}{
 		{
 			name: "List ConfigMaps in namespace",
-			configMap: ConfigMap{
+			configMap: &ConfigMap{
 				Namespace: testNamespace,
 			},
-			allNamespaces:     false,
-			labelSelector:     "",
-			expectError:       false,
+			allNamespaces: false,
+			labelSelector: "",
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				cm1 := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      configMapName1,
+						Namespace: testNamespace,
+						Labels:    map[string]string{"env": "dev"},
+					},
+				}
+				cm2 := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      configMapName2,
+						Namespace: testNamespace,
+						Labels:    map[string]string{"env": "dev"},
+					},
+				}
+				cm3 := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      configMapName3,
+						Namespace: otherNamespace,
+						Labels:    map[string]string{"env": "prod"},
+					},
+				}
+				fakeClient := fake.NewSimpleClientset(cm1, cm2, cm3)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
 			expectedContent:   []string{configMapName1, configMapName2},
 			unexpectedContent: []string{configMapName3},
 		},
 		{
 			name: "List ConfigMaps in all namespaces",
-			configMap: ConfigMap{
+			configMap: &ConfigMap{
 				Namespace: testNamespace,
 			},
-			allNamespaces:   true,
-			labelSelector:   "",
-			expectError:     false,
+			allNamespaces: true,
+			labelSelector: "",
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				cm1 := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      configMapName1,
+						Namespace: testNamespace,
+					},
+				}
+				cm2 := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      configMapName2,
+						Namespace: testNamespace,
+					},
+				}
+				cm3 := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      configMapName3,
+						Namespace: otherNamespace,
+					},
+				}
+				fakeClient := fake.NewSimpleClientset(cm1, cm2, cm3)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
 			expectedContent: []string{configMapName1, configMapName2, configMapName3},
 		},
 		{
 			name: "List ConfigMaps with label selector",
-			configMap: ConfigMap{
+			configMap: &ConfigMap{
 				Namespace: testNamespace,
 			},
-			allNamespaces:     true,
-			labelSelector:     "env=dev",
-			expectError:       false,
+			allNamespaces: true,
+			labelSelector: "env=dev",
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				cm1 := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      configMapName1,
+						Namespace: testNamespace,
+						Labels:    map[string]string{"env": "dev"},
+					},
+				}
+				cm2 := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      configMapName2,
+						Namespace: testNamespace,
+						Labels:    map[string]string{"env": "dev"},
+					},
+				}
+				cm3 := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      configMapName3,
+						Namespace: otherNamespace,
+						Labels:    map[string]string{"env": "prod"},
+					},
+				}
+				fakeClient := fake.NewSimpleClientset(cm1, cm2, cm3)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
 			expectedContent:   []string{configMapName1, configMapName2},
 			unexpectedContent: []string{configMapName3},
 		},
 		{
 			name: "No ConfigMaps match label selector",
-			configMap: ConfigMap{
+			configMap: &ConfigMap{
 				Namespace: testNamespace,
 			},
 			allNamespaces: false,
 			labelSelector: "env=nonexistent",
-			expectError:   true,
-			errorMsg:      "no ConfigMaps found matching the specified label selector",
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset()
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedError: "no ConfigMaps found matching the specified label selector",
 		},
 		{
 			name: "No ConfigMaps in empty namespace",
-			configMap: ConfigMap{
+			configMap: &ConfigMap{
 				Namespace: emptyNamespace,
 			},
 			allNamespaces: false,
 			labelSelector: "",
-			expectError:   true,
-			errorMsg:      fmt.Sprintf("no ConfigMaps found in namespace %q", emptyNamespace),
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset()
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedError: "no ConfigMaps found in namespace \"empty-namespace\"",
+		},
+		{
+			name: "No ConfigMaps in any namespace",
+			configMap: &ConfigMap{
+				Namespace: testNamespace,
+			},
+			allNamespaces: true,
+			labelSelector: "",
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset()
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedError: "no ConfigMaps found in any namespace",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			cm := setupTestCluster(testNS, otherNS, cm1, cm2, cm3)
+			mockCM := testmocks.NewMockClusterManager()
+			tc.setupMock(mockCM)
 
-			result, err := tc.configMap.List(ctx, cm, tc.allNamespaces, tc.labelSelector)
+			result, err := tc.configMap.List(ctx, mockCM, tc.allNamespaces, tc.labelSelector)
 
-			if tc.expectError {
+			if tc.expectedError != "" {
 				assert.Error(t, err)
-				if tc.errorMsg != "" {
-					assert.Contains(t, err.Error(), tc.errorMsg)
-				}
+				assert.Contains(t, err.Error(), tc.expectedError)
 			} else {
 				assert.NoError(t, err)
 
@@ -320,6 +448,8 @@ func testListConfigMaps(t *testing.T) {
 					assert.NotContains(t, result, unexpected)
 				}
 			}
+
+			mockCM.AssertExpectations(t)
 		})
 	}
 }
@@ -328,78 +458,81 @@ func testDeleteConfigMap(t *testing.T) {
 	ctx := context.Background()
 
 	testCases := []struct {
-		name         string
-		configMap    ConfigMap
-		setupObjects []runtime.Object
-		expectError  bool
-		errorMsg     string
-		validate     func(*testing.T, context.Context, *Manager)
+		name           string
+		configMap      *ConfigMap
+		setupMock      func(*testmocks.MockClusterManager)
+		expectedResult string
+		expectedError  string
+		validateDelete func(*testing.T, kubernetes.Interface)
 	}{
 		{
 			name: "Delete existing ConfigMap",
-			configMap: ConfigMap{
+			configMap: &ConfigMap{
 				Name:      configMapName,
 				Namespace: testNamespace,
 			},
-			setupObjects: []runtime.Object{
-				createNamespaceForTest(testNamespace),
-				createConfigMapObj(configMapName, testNamespace, map[string]string{"key": "value"}, nil),
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				existingCM := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      configMapName,
+						Namespace: testNamespace,
+					},
+				}
+				fakeClient := fake.NewSimpleClientset(existingCM)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
 			},
-			expectError: false,
-			validate: func(t *testing.T, ctx context.Context, cm *Manager) {
-				client, err := cm.GetCurrentClient()
-				require.NoError(t, err)
-
-				_, err = client.CoreV1().ConfigMaps(testNamespace).Get(ctx, configMapName, metav1.GetOptions{})
+			expectedResult: "ConfigMap \"test-configmap\" deleted successfully",
+			validateDelete: func(t *testing.T, client kubernetes.Interface) {
+				_, err := client.CoreV1().ConfigMaps(testNamespace).Get(ctx, configMapName, metav1.GetOptions{})
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), "not found")
 			},
 		},
 		{
 			name: "ConfigMap not found",
-			configMap: ConfigMap{
+			configMap: &ConfigMap{
 				Name:      nonexistentConfigMap,
 				Namespace: testNamespace,
 			},
-			setupObjects: []runtime.Object{
-				createNamespaceForTest(testNamespace),
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset()
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
 			},
-			expectError: true,
-			errorMsg:    "not found",
+			expectedError: "not found",
 		},
 		{
 			name: "Missing ConfigMap name",
-			configMap: ConfigMap{
+			configMap: &ConfigMap{
 				Name:      "",
 				Namespace: testNamespace,
 			},
-			setupObjects: []runtime.Object{
-				createNamespaceForTest(testNamespace),
-			},
-			expectError: true,
-			errorMsg:    "ConfigMap name is required for deletion",
+			setupMock:     func(mockCM *testmocks.MockClusterManager) {},
+			expectedError: "ConfigMap name is required for deletion",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			cm := setupTestCluster(tc.setupObjects...)
+			mockCM := testmocks.NewMockClusterManager()
+			tc.setupMock(mockCM)
 
-			result, err := tc.configMap.Delete(ctx, cm)
+			result, err := tc.configMap.Delete(ctx, mockCM)
 
-			if tc.expectError {
+			if tc.expectedError != "" {
 				assert.Error(t, err)
-				if tc.errorMsg != "" {
-					assert.Contains(t, err.Error(), tc.errorMsg)
-				}
+				assert.Contains(t, err.Error(), tc.expectedError)
+				assert.Empty(t, result)
 			} else {
 				assert.NoError(t, err)
-				assert.Contains(t, result, "deleted successfully")
+				assert.Contains(t, result, tc.expectedResult)
 
-				if tc.validate != nil {
-					tc.validate(t, ctx, cm)
+				if tc.validateDelete != nil {
+					client, _ := mockCM.GetCurrentClient()
+					tc.validateDelete(t, client)
 				}
 			}
+
+			mockCM.AssertExpectations(t)
 		})
 	}
 }
@@ -408,108 +541,154 @@ func testUpdateConfigMap(t *testing.T) {
 	ctx := context.Background()
 
 	testCases := []struct {
-		name         string
-		configMap    ConfigMap
-		setupObjects []runtime.Object
-		expectError  bool
-		errorMsg     string
-		validate     func(*testing.T, context.Context, *Manager)
+		name           string
+		configMap      *ConfigMap
+		setupMock      func(*testmocks.MockClusterManager)
+		expectedResult string
+		expectedError  string
+		validateUpdate func(*testing.T, kubernetes.Interface)
 	}{
 		{
-			name: "Update ConfigMap data",
-			configMap: ConfigMap{
+			name: "Update existing ConfigMap data",
+			configMap: &ConfigMap{
 				Name:      configMapName,
 				Namespace: testNamespace,
 				Data: map[string]interface{}{
-					"new-key": "new-value",
+					"config.yaml": "updated: true",
+					"new.conf":    "added=yes",
 				},
 			},
-			setupObjects: []runtime.Object{
-				createNamespaceForTest(testNamespace),
-				createConfigMapObj(configMapName, testNamespace, map[string]string{"old-key": "old-value"}, nil),
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				existingCM := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      configMapName,
+						Namespace: testNamespace,
+					},
+					Data: map[string]string{
+						"config.yaml": "old: value",
+					},
+				}
+				fakeClient := fake.NewSimpleClientset(existingCM)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
 			},
-			expectError: false,
-			validate: func(t *testing.T, ctx context.Context, cm *Manager) {
-				client, err := cm.GetCurrentClient()
-				require.NoError(t, err)
-
-				configMap, err := client.CoreV1().ConfigMaps(testNamespace).Get(ctx, configMapName, metav1.GetOptions{})
-				require.NoError(t, err)
-				assert.Equal(t, "new-value", configMap.Data["new-key"])
-				assert.NotContains(t, configMap.Data, "old-key")
+			expectedResult: "ConfigMap \"test-configmap\" updated successfully",
+			validateUpdate: func(t *testing.T, client kubernetes.Interface) {
+				cm, err := client.CoreV1().ConfigMaps(testNamespace).Get(ctx, configMapName, metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, "updated: true", cm.Data["config.yaml"])
+				assert.Equal(t, "added=yes", cm.Data["new.conf"])
 			},
 		},
 		{
-			name: "Update ConfigMap labels",
-			configMap: ConfigMap{
+			name: "Update ConfigMap with binary data",
+			configMap: &ConfigMap{
+				Name:      configMapName,
+				Namespace: testNamespace,
+				BinaryData: map[string]interface{}{
+					"data.bin": []byte{0xFF, 0xEE},
+				},
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				existingCM := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      configMapName,
+						Namespace: testNamespace,
+					},
+				}
+				fakeClient := fake.NewSimpleClientset(existingCM)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "ConfigMap \"test-configmap\" updated successfully",
+			validateUpdate: func(t *testing.T, client kubernetes.Interface) {
+				cm, err := client.CoreV1().ConfigMaps(testNamespace).Get(ctx, configMapName, metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, []byte{0xFF, 0xEE}, cm.BinaryData["data.bin"])
+			},
+		},
+		{
+			name: "Update ConfigMap labels and annotations",
+			configMap: &ConfigMap{
 				Name:      configMapName,
 				Namespace: testNamespace,
 				Labels: map[string]interface{}{
-					"app": "updated",
+					"version": "v2",
+				},
+				Annotations: map[string]interface{}{
+					"updated": "true",
 				},
 			},
-			setupObjects: []runtime.Object{
-				createNamespaceForTest(testNamespace),
-				createConfigMapObj(configMapName, testNamespace, map[string]string{"key": "value"}, map[string]string{"app": "original"}),
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				existingCM := &corev1.ConfigMap{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      configMapName,
+						Namespace: testNamespace,
+						Labels: map[string]string{
+							"version": "v1",
+						},
+					},
+				}
+				fakeClient := fake.NewSimpleClientset(existingCM)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
 			},
-			expectError: false,
-			validate: func(t *testing.T, ctx context.Context, cm *Manager) {
-				client, err := cm.GetCurrentClient()
-				require.NoError(t, err)
-
-				configMap, err := client.CoreV1().ConfigMaps(testNamespace).Get(ctx, configMapName, metav1.GetOptions{})
-				require.NoError(t, err)
-				assert.Equal(t, "updated", configMap.Labels["app"])
+			expectedResult: "ConfigMap \"test-configmap\" updated successfully",
+			validateUpdate: func(t *testing.T, client kubernetes.Interface) {
+				cm, err := client.CoreV1().ConfigMaps(testNamespace).Get(ctx, configMapName, metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, "v2", cm.Labels["version"])
+				assert.Equal(t, "true", cm.Annotations["updated"])
 			},
 		},
 		{
-			name: "ConfigMap not found for update",
-			configMap: ConfigMap{
+			name: "ConfigMap not found",
+			configMap: &ConfigMap{
 				Name:      nonexistentConfigMap,
 				Namespace: testNamespace,
 				Data: map[string]interface{}{
 					"key": "value",
 				},
 			},
-			setupObjects: []runtime.Object{
-				createNamespaceForTest(testNamespace),
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset()
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
 			},
-			expectError: true,
-			errorMsg:    "not found",
+			expectedError: "not found",
 		},
 		{
-			name: "Missing ConfigMap name for update",
-			configMap: ConfigMap{
+			name: "Missing ConfigMap name",
+			configMap: &ConfigMap{
 				Name:      "",
 				Namespace: testNamespace,
+				Data: map[string]interface{}{
+					"key": "value",
+				},
 			},
-			setupObjects: []runtime.Object{
-				createNamespaceForTest(testNamespace),
-			},
-			expectError: true,
-			errorMsg:    "ConfigMap name is required for update",
+			setupMock:     func(mockCM *testmocks.MockClusterManager) {},
+			expectedError: "ConfigMap name is required for update",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			cm := setupTestCluster(tc.setupObjects...)
+			mockCM := testmocks.NewMockClusterManager()
+			tc.setupMock(mockCM)
 
-			result, err := tc.configMap.Update(ctx, cm)
+			result, err := tc.configMap.Update(ctx, mockCM)
 
-			if tc.expectError {
+			if tc.expectedError != "" {
 				assert.Error(t, err)
-				if tc.errorMsg != "" {
-					assert.Contains(t, err.Error(), tc.errorMsg)
-				}
+				assert.Contains(t, err.Error(), tc.expectedError)
+				assert.Empty(t, result)
 			} else {
 				assert.NoError(t, err)
-				assert.Contains(t, result, "updated successfully")
+				assert.Contains(t, result, tc.expectedResult)
 
-				if tc.validate != nil {
-					tc.validate(t, ctx, cm)
+				if tc.validateUpdate != nil {
+					client, _ := mockCM.GetCurrentClient()
+					tc.validateUpdate(t, client)
 				}
 			}
+
+			mockCM.AssertExpectations(t)
 		})
 	}
 }
