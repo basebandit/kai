@@ -2,20 +2,16 @@ package cluster
 
 import (
 	"context"
-	"fmt"
 	"testing"
-	"time"
 
-	"github.com/basebandit/kai"
+	"github.com/basebandit/kai/testmocks"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/fake"
 )
 
-// TestServiceOperations groups all service-related operations tests
 func TestServiceOperations(t *testing.T) {
 	t.Run("CreateService", testCreateServices)
 	t.Run("GetService", testGetService)
@@ -23,49 +19,27 @@ func TestServiceOperations(t *testing.T) {
 	t.Run("DeleteService", testDeleteService)
 }
 
-// createService creates a service object for testing
-func createServiceObj(name, namespace string, serviceType corev1.ServiceType) *corev1.Service {
-	return &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: namespace,
-			CreationTimestamp: metav1.Time{
-				Time: time.Now().Add(-24 * time.Hour), // 1 day old
-			},
-		},
-		Spec: corev1.ServiceSpec{
-			Type: serviceType,
-			Ports: []corev1.ServicePort{
-				{
-					Port:     80,
-					Protocol: corev1.ProtocolTCP,
-				},
-			},
-		},
-	}
-}
-
 func testCreateServices(t *testing.T) {
 	ctx := context.Background()
 
 	testCases := []struct {
-		name         string
-		service      Service
-		setupObjects []runtime.Object
-		expectedText string
-		expectError  bool
-		errorMsg     string
+		name           string
+		service        *Service
+		setupMock      func(*testmocks.MockClusterManager)
+		expectedResult string
+		expectedError  string
+		validateCreate func(*testing.T, kubernetes.Interface)
 	}{
 		{
-			name: "Create ClusterIP service",
-			service: Service{
+			name: "Create basic ClusterIP service",
+			service: &Service{
 				Name:      "test-service",
 				Namespace: testNamespace,
 				Type:      "ClusterIP",
 				Ports: []ServicePort{
 					{
 						Port:       80,
-						TargetPort: 8080,
+						TargetPort: int32(8080),
 						Protocol:   "TCP",
 					},
 				},
@@ -73,22 +47,33 @@ func testCreateServices(t *testing.T) {
 					"app": "test",
 				},
 			},
-			setupObjects: []runtime.Object{
-				createNamespace(testNamespace),
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
 			},
-			expectedText: "Service \"test-service\" created successfully",
-			expectError:  false,
+			expectedResult: "Service \"test-service\" created successfully",
+			validateCreate: func(t *testing.T, client kubernetes.Interface) {
+				svc, err := client.CoreV1().Services(testNamespace).Get(ctx, "test-service", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, "test-service", svc.Name)
+				assert.Equal(t, corev1.ServiceTypeClusterIP, svc.Spec.Type)
+				assert.Len(t, svc.Spec.Ports, 1)
+				assert.Equal(t, int32(80), svc.Spec.Ports[0].Port)
+			},
 		},
 		{
 			name: "Create NodePort service",
-			service: Service{
+			service: &Service{
 				Name:      "nodeport-service",
 				Namespace: testNamespace,
 				Type:      "NodePort",
 				Ports: []ServicePort{
 					{
 						Port:       80,
-						TargetPort: 8080,
+						TargetPort: int32(8080),
 						NodePort:   30080,
 						Protocol:   "TCP",
 					},
@@ -97,15 +82,55 @@ func testCreateServices(t *testing.T) {
 					"app": "test",
 				},
 			},
-			setupObjects: []runtime.Object{
-				createNamespace(testNamespace),
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
 			},
-			expectedText: "Service \"nodeport-service\" created successfully",
-			expectError:  false,
+			expectedResult: "Service \"nodeport-service\" created successfully",
+			validateCreate: func(t *testing.T, client kubernetes.Interface) {
+				svc, err := client.CoreV1().Services(testNamespace).Get(ctx, "nodeport-service", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, corev1.ServiceTypeNodePort, svc.Spec.Type)
+				assert.Equal(t, int32(30080), svc.Spec.Ports[0].NodePort)
+			},
+		},
+		{
+			name: "Create LoadBalancer service",
+			service: &Service{
+				Name:      "lb-service",
+				Namespace: testNamespace,
+				Type:      "LoadBalancer",
+				Ports: []ServicePort{
+					{
+						Port:       443,
+						TargetPort: int32(8443),
+						Protocol:   "TCP",
+					},
+				},
+				Selector: map[string]interface{}{
+					"app": "web",
+				},
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "Service \"lb-service\" created successfully",
+			validateCreate: func(t *testing.T, client kubernetes.Interface) {
+				svc, err := client.CoreV1().Services(testNamespace).Get(ctx, "lb-service", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, corev1.ServiceTypeLoadBalancer, svc.Spec.Type)
+			},
 		},
 		{
 			name: "Create service with multiple ports",
-			service: Service{
+			service: &Service{
 				Name:      "multi-port-service",
 				Namespace: testNamespace,
 				Type:      "ClusterIP",
@@ -113,13 +138,13 @@ func testCreateServices(t *testing.T) {
 					{
 						Name:       "http",
 						Port:       80,
-						TargetPort: 8080,
+						TargetPort: int32(8080),
 						Protocol:   "TCP",
 					},
 					{
 						Name:       "https",
 						Port:       443,
-						TargetPort: 8443,
+						TargetPort: int32(8443),
 						Protocol:   "TCP",
 					},
 				},
@@ -127,15 +152,25 @@ func testCreateServices(t *testing.T) {
 					"app": "test",
 				},
 			},
-			setupObjects: []runtime.Object{
-				createNamespace(testNamespace),
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
 			},
-			expectedText: "Service \"multi-port-service\" created successfully",
-			expectError:  false,
+			expectedResult: "Service \"multi-port-service\" created successfully",
+			validateCreate: func(t *testing.T, client kubernetes.Interface) {
+				svc, err := client.CoreV1().Services(testNamespace).Get(ctx, "multi-port-service", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Len(t, svc.Spec.Ports, 2)
+				assert.Equal(t, "http", svc.Spec.Ports[0].Name)
+				assert.Equal(t, "https", svc.Spec.Ports[1].Name)
+			},
 		},
 		{
-			name: "Create service with named targetPort",
-			service: Service{
+			name: "Create service with named target port",
+			service: &Service{
 				Name:      "named-target-service",
 				Namespace: testNamespace,
 				Type:      "ClusterIP",
@@ -150,142 +185,300 @@ func testCreateServices(t *testing.T) {
 					"app": "test",
 				},
 			},
-			setupObjects: []runtime.Object{
-				createNamespace(testNamespace),
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
 			},
-			expectedText: "Service \"named-target-service\" created successfully",
-			expectError:  false,
+			expectedResult: "created successfully",
+			validateCreate: func(t *testing.T, client kubernetes.Interface) {
+				svc, err := client.CoreV1().Services(testNamespace).Get(ctx, "named-target-service", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, "http", svc.Spec.Ports[0].TargetPort.StrVal)
+			},
 		},
 		{
-			name: "Namespace not found",
-			service: Service{
-				Name:      "test-service",
-				Namespace: nonexistentNS,
+			name: "Create service with UDP protocol",
+			service: &Service{
+				Name:      "udp-service",
+				Namespace: testNamespace,
 				Type:      "ClusterIP",
 				Ports: []ServicePort{
 					{
+						Port:       53,
+						TargetPort: int32(53),
+						Protocol:   "UDP",
+					},
+				},
+				Selector: map[string]interface{}{
+					"app": "dns",
+				},
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "created successfully",
+			validateCreate: func(t *testing.T, client kubernetes.Interface) {
+				svc, err := client.CoreV1().Services(testNamespace).Get(ctx, "udp-service", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, corev1.ProtocolUDP, svc.Spec.Ports[0].Protocol)
+			},
+		},
+		{
+			name: "Create service with labels",
+			service: &Service{
+				Name:      "labeled-service",
+				Namespace: testNamespace,
+				Type:      "ClusterIP",
+				Labels: map[string]interface{}{
+					"env":  "test",
+					"tier": "backend",
+				},
+				Ports: []ServicePort{
+					{
 						Port:       80,
-						TargetPort: 8080,
-						Protocol:   "TCP",
+						TargetPort: int32(8080),
 					},
 				},
 				Selector: map[string]interface{}{
 					"app": "test",
 				},
 			},
-			setupObjects: []runtime.Object{},
-			expectError:  true,
-			errorMsg:     fmt.Sprintf("namespace %q not found", nonexistentNS),
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "created successfully",
+			validateCreate: func(t *testing.T, client kubernetes.Interface) {
+				svc, err := client.CoreV1().Services(testNamespace).Get(ctx, "labeled-service", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, "test", svc.Labels["env"])
+				assert.Equal(t, "backend", svc.Labels["tier"])
+			},
+		},
+		{
+			name: "Create service with session affinity",
+			service: &Service{
+				Name:            "affinity-service",
+				Namespace:       testNamespace,
+				Type:            "ClusterIP",
+				SessionAffinity: "ClientIP",
+				Ports: []ServicePort{
+					{
+						Port:       80,
+						TargetPort: int32(8080),
+					},
+				},
+				Selector: map[string]interface{}{
+					"app": "test",
+				},
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "created successfully",
+			validateCreate: func(t *testing.T, client kubernetes.Interface) {
+				svc, err := client.CoreV1().Services(testNamespace).Get(ctx, "affinity-service", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, corev1.ServiceAffinityClientIP, svc.Spec.SessionAffinity)
+			},
+		},
+		{
+			name: "Create ExternalName service",
+			service: &Service{
+				Name:         "external-service",
+				Namespace:    testNamespace,
+				Type:         "ExternalName",
+				ExternalName: "example.com",
+				Ports: []ServicePort{
+					{
+						Port: 80,
+					},
+				},
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "created successfully",
+			validateCreate: func(t *testing.T, client kubernetes.Interface) {
+				svc, err := client.CoreV1().Services(testNamespace).Get(ctx, "external-service", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, corev1.ServiceTypeExternalName, svc.Spec.Type)
+				assert.Equal(t, "example.com", svc.Spec.ExternalName)
+			},
+		},
+		{
+			name: "Missing service name",
+			service: &Service{
+				Name:      "",
+				Namespace: testNamespace,
+				Type:      "ClusterIP",
+				Ports: []ServicePort{
+					{Port: 80},
+				},
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedError: "service name is required",
+		},
+		{
+			name: "Missing namespace",
+			service: &Service{
+				Name:      "test-service",
+				Namespace: "",
+				Type:      "ClusterIP",
+				Ports: []ServicePort{
+					{Port: 80},
+				},
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset()
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedError: "namespace \"\" not found",
+		},
+		{
+			name: "Missing ports",
+			service: &Service{
+				Name:      "test-service",
+				Namespace: testNamespace,
+				Type:      "ClusterIP",
+				Ports:     []ServicePort{},
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedError: "at least one port must be specified",
+		},
+		{
+			name: "Namespace not found",
+			service: &Service{
+				Name:      "test-service",
+				Namespace: nonexistentNS,
+				Type:      "ClusterIP",
+				Ports: []ServicePort{
+					{
+						Port:       80,
+						TargetPort: int32(8080),
+					},
+				},
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset()
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedError: "namespace \"nonexistent-namespace\" not found",
 		},
 		{
 			name: "Invalid service type",
-			service: Service{
-				Name:      "invalid-type-service",
+			service: &Service{
+				Name:      "invalid-service",
 				Namespace: testNamespace,
 				Type:      "InvalidType",
 				Ports: []ServicePort{
-					{
-						Port:       80,
-						TargetPort: 8080,
-						Protocol:   "TCP",
-					},
+					{Port: 80},
 				},
 			},
-			setupObjects: []runtime.Object{
-				createNamespace(testNamespace),
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
 			},
-			expectError: true,
-			errorMsg:    "invalid service type",
+			expectedError: "invalid service type",
 		},
 		{
-			name: "NodePort specified for ClusterIP service",
-			service: Service{
-				Name:      "invalid-nodeport-service",
+			name: "Invalid protocol",
+			service: &Service{
+				Name:      "invalid-protocol",
 				Namespace: testNamespace,
 				Type:      "ClusterIP",
 				Ports: []ServicePort{
 					{
-						Port:       80,
-						TargetPort: 8080,
-						NodePort:   30080, // Invalid for ClusterIP
-						Protocol:   "TCP",
+						Port:     80,
+						Protocol: "INVALID",
 					},
 				},
 			},
-			setupObjects: []runtime.Object{
-				createNamespace(testNamespace),
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
 			},
-			expectError: true,
-			errorMsg:    "nodePort can only be specified for NodePort or LoadBalancer",
+			expectedError: "invalid protocol",
 		},
 		{
-			name: "No ports specified",
-			service: Service{
-				Name:      "no-port-service",
+			name: "ExternalName service without external name",
+			service: &Service{
+				Name:      "external-service",
 				Namespace: testNamespace,
-				Type:      "ClusterIP",
-				Ports:     []ServicePort{}, // Empty ports
+				Type:      "ExternalName",
+				Ports: []ServicePort{
+					{Port: 80},
+				},
 			},
-			setupObjects: []runtime.Object{
-				createNamespace(testNamespace),
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
 			},
-			expectError: true,
-			errorMsg:    "at least one port must be specified",
+			expectedError: "externalName must be specified for ExternalName service type",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			cm := setupTestCluster(tc.setupObjects...)
+			mockCM := testmocks.NewMockClusterManager()
+			tc.setupMock(mockCM)
 
-			result, err := tc.service.Create(ctx, cm)
+			result, err := tc.service.Create(ctx, mockCM)
 
-			// Verify result
-			if tc.expectError {
+			if tc.expectedError != "" {
 				assert.Error(t, err)
-				if tc.errorMsg != "" {
-					assert.Contains(t, err.Error(), tc.errorMsg)
-				}
+				assert.Contains(t, err.Error(), tc.expectedError)
+				assert.Empty(t, result)
 			} else {
 				assert.NoError(t, err)
-				assert.Contains(t, result, tc.expectedText)
+				assert.Contains(t, result, tc.expectedResult)
 
-				// Verify service was created
-				fakeClient := cm.clients[testCluster]
-				service, err := fakeClient.CoreV1().Services(tc.service.Namespace).Get(ctx, tc.service.Name, metav1.GetOptions{})
-				require.NoError(t, err)
-				assert.Equal(t, tc.service.Name, service.Name)
-				assert.Equal(t, tc.service.Namespace, service.Namespace)
-
-				// Check service type
-				if tc.service.Type != "" {
-					assert.Equal(t, corev1.ServiceType(tc.service.Type), service.Spec.Type)
-				}
-
-				// Check ports
-				assert.Equal(t, len(tc.service.Ports), len(service.Spec.Ports))
-				if len(tc.service.Ports) > 0 {
-					for i, expectedPort := range tc.service.Ports {
-						actualPort := service.Spec.Ports[i]
-						assert.Equal(t, expectedPort.Port, actualPort.Port)
-
-						// Check NodePort if specified
-						if expectedPort.NodePort != 0 {
-							assert.Equal(t, expectedPort.NodePort, actualPort.NodePort)
-						}
-					}
-				}
-
-				// Check selector
-				if tc.service.Selector != nil {
-					assert.NotNil(t, service.Spec.Selector)
-					for k, v := range tc.service.Selector {
-						if strVal, ok := v.(string); ok {
-							assert.Equal(t, strVal, service.Spec.Selector[k])
-						}
-					}
+				if tc.validateCreate != nil {
+					client, _ := mockCM.GetCurrentClient()
+					tc.validateCreate(t, client)
 				}
 			}
+
+			mockCM.AssertExpectations(t)
 		})
 	}
 }
@@ -293,61 +486,89 @@ func testCreateServices(t *testing.T) {
 func testGetService(t *testing.T) {
 	ctx := context.Background()
 
-	serviceName := "test-service"
-	nonexistentServiceName := "nonexistent-service"
-
-	clusterIPService := createServiceObj(serviceName, testNamespace, corev1.ServiceTypeClusterIP)
-	testNamespaceObj := createNamespace(testNamespace)
+	existingService := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-service",
+			Namespace: testNamespace,
+		},
+		Spec: corev1.ServiceSpec{
+			Type: corev1.ServiceTypeClusterIP,
+			Ports: []corev1.ServicePort{
+				{
+					Port:     80,
+					Protocol: corev1.ProtocolTCP,
+				},
+			},
+		},
+	}
 
 	testCases := []struct {
-		name        string
-		service     Service
-		expectError bool
-		errorMsg    string
+		name           string
+		service        *Service
+		setupMock      func(*testmocks.MockClusterManager)
+		expectedResult string
+		expectedError  string
 	}{
 		{
 			name: "Get existing service",
-			service: Service{
-				Name:      serviceName,
+			service: &Service{
+				Name:      "test-service",
 				Namespace: testNamespace,
 			},
-			expectError: false,
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(existingService, ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "test-service",
 		},
 		{
 			name: "Service not found",
-			service: Service{
-				Name:      nonexistentServiceName,
+			service: &Service{
+				Name:      "nonexistent-service",
 				Namespace: testNamespace,
 			},
-			expectError: true,
-			errorMsg:    "not found",
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedError: "service 'nonexistent-service' not found",
 		},
 		{
 			name: "Namespace not found",
-			service: Service{
-				Name:      serviceName,
+			service: &Service{
+				Name:      "test-service",
 				Namespace: nonexistentNS,
 			},
-			expectError: true,
-			errorMsg:    "not found",
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset()
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedError: "namespace 'nonexistent-namespace' not found",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			cm := setupTestCluster(clusterIPService, testNamespaceObj)
+			mockCM := testmocks.NewMockClusterManager()
+			tc.setupMock(mockCM)
 
-			result, err := tc.service.Get(ctx, cm)
+			result, err := tc.service.Get(ctx, mockCM)
 
-			if tc.expectError {
+			if tc.expectedError != "" {
 				assert.Error(t, err)
-				if tc.errorMsg != "" {
-					assert.Contains(t, err.Error(), tc.errorMsg)
-				}
+				assert.Contains(t, err.Error(), tc.expectedError)
 			} else {
 				assert.NoError(t, err)
-				assert.Contains(t, result, serviceName)
+				assert.Contains(t, result, tc.expectedResult)
 			}
+
+			mockCM.AssertExpectations(t)
 		})
 	}
 }
@@ -355,304 +576,310 @@ func testGetService(t *testing.T) {
 func testListServices(t *testing.T) {
 	ctx := context.Background()
 
-	service1 := &corev1.Service{
+	svc1 := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "service1",
 			Namespace: testNamespace,
 			Labels:    map[string]string{"app": "test"},
 		},
 		Spec: corev1.ServiceSpec{
-			Selector: map[string]string{"app": "test"},
-			Ports: []corev1.ServicePort{
-				{
-					Port:     80,
-					Protocol: corev1.ProtocolTCP,
-				},
-			},
+			Type: corev1.ServiceTypeClusterIP,
 		},
 	}
-
-	service2 := &corev1.Service{
+	svc2 := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "service2",
 			Namespace: testNamespace,
 			Labels:    map[string]string{"app": "test"},
 		},
 		Spec: corev1.ServiceSpec{
-			Selector: map[string]string{"app": "test"},
-			Ports: []corev1.ServicePort{
-				{
-					Port:     80,
-					Protocol: corev1.ProtocolTCP,
-				},
-			},
+			Type: corev1.ServiceTypeNodePort,
 		},
 	}
-
-	// Service with different label - should not be matched
-	service3 := &corev1.Service{
+	svc3 := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "service3",
-			Namespace: testNamespace,
+			Namespace: "other-namespace",
 			Labels:    map[string]string{"app": "other"},
 		},
 		Spec: corev1.ServiceSpec{
-			Selector: map[string]string{"app": "other"},
-			Ports: []corev1.ServicePort{
-				{
-					Port:     80,
-					Protocol: corev1.ProtocolTCP,
-				},
-			},
+			Type: corev1.ServiceTypeClusterIP,
 		},
 	}
-
-	testNamespaceObj := createNamespace(testNamespace)
-
-	// "List services with label selector" test case
-	testServices := []runtime.Object{
-		service1, service2, service3, testNamespaceObj,
-	}
-
-	cm := setupTestCluster(testServices...)
-
-	service := &Service{
-		Namespace: testNamespace,
-	}
-
-	result, err := service.List(ctx, cm, false, "app=test")
-
-	assert.NoError(t, err)
-	assert.Contains(t, result, "service1")
-	assert.Contains(t, result, "service2")
-	assert.NotContains(t, result, "service3")
-}
-
-func testDeleteService(t *testing.T) {
-	ctx := context.Background()
-
-	serviceName := "test-service"
-	nonexistentServiceName := "nonexistent-service"
-
-	// Create services with specific labels for testing
-	service1 := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "service1",
-			Namespace: testNamespace,
-			Labels: map[string]string{
-				"app":     "frontend",
-				"tier":    "web",
-				"version": "v1",
-			},
-		},
-		Spec: corev1.ServiceSpec{
-			Selector: map[string]string{"app": "frontend"},
-			Ports: []corev1.ServicePort{
-				{
-					Port:     80,
-					Protocol: corev1.ProtocolTCP,
-				},
-			},
-		},
-	}
-
-	service2 := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "service2",
-			Namespace: testNamespace,
-			Labels: map[string]string{
-				"app":     "backend",
-				"tier":    "api",
-				"version": "v1",
-			},
-		},
-		Spec: corev1.ServiceSpec{
-			Selector: map[string]string{"app": "backend"},
-			Ports: []corev1.ServicePort{
-				{
-					Port:     8080,
-					Protocol: corev1.ProtocolTCP,
-				},
-			},
-		},
-	}
-
-	service3 := &corev1.Service{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "service3",
-			Namespace: testNamespace,
-			Labels: map[string]string{
-				"app":     "frontend",
-				"tier":    "web",
-				"version": "v2",
-			},
-		},
-		Spec: corev1.ServiceSpec{
-			Selector: map[string]string{"app": "frontend"},
-			Ports: []corev1.ServicePort{
-				{
-					Port:     80,
-					Protocol: corev1.ProtocolTCP,
-				},
-			},
-		},
-	}
-
-	clusterIPService := createServiceObj(serviceName, testNamespace, corev1.ServiceTypeClusterIP)
-	testNamespaceObj := createNamespace(testNamespace)
 
 	testCases := []struct {
-		name         string
-		service      Service
-		setupObjects []runtime.Object
-		expectError  bool
-		errorMsg     string
-		expectResult string
-		validate     func(*testing.T, context.Context, kai.ClusterManager)
+		name              string
+		service           *Service
+		allNamespaces     bool
+		labelSelector     string
+		setupMock         func(*testmocks.MockClusterManager)
+		expectedContent   []string
+		unexpectedContent []string
+		expectedError     string
 	}{
 		{
-			name: "Delete specific service by name",
-			service: Service{
-				Name:      serviceName,
+			name: "List services in namespace",
+			service: &Service{
 				Namespace: testNamespace,
 			},
-			setupObjects: []runtime.Object{clusterIPService, testNamespaceObj},
-			expectError:  false,
-			expectResult: "deleted successfully",
-			validate: func(t *testing.T, ctx context.Context, cm kai.ClusterManager) {
-				// Verify the service was actually deleted
-				client, err := cm.GetCurrentClient()
-				require.NoError(t, err, "Should be able to get client")
-
-				_, err = client.CoreV1().Services(testNamespace).Get(ctx, serviceName, metav1.GetOptions{})
-				assert.Error(t, err, "Service should have been deleted")
-				assert.True(t, errors.IsNotFound(err), "Expected 'not found' error but got: %v", err)
+			allNamespaces: false,
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(svc1, svc2, svc3, ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
 			},
+			expectedContent:   []string{"service1", "service2"},
+			unexpectedContent: []string{"service3"},
 		},
 		{
-			name: "Service not found",
-			service: Service{
-				Name:      nonexistentServiceName,
+			name: "List services with label selector",
+			service: &Service{
 				Namespace: testNamespace,
 			},
-			setupObjects: []runtime.Object{clusterIPService, testNamespaceObj},
-			expectError:  true,
-			errorMsg:     "failed to find service",
+			allNamespaces: false,
+			labelSelector: "app=test",
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(svc1, svc2, ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedContent: []string{"service1", "service2"},
+		},
+		{
+			name: "List services in all namespaces",
+			service: &Service{
+				Namespace: "",
+			},
+			allNamespaces: true,
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset(svc1, svc2, svc3)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedContent: []string{"service1", "service2", "service3"},
+		},
+		{
+			name: "No services found in namespace",
+			service: &Service{
+				Namespace: testNamespace,
+			},
+			allNamespaces: false,
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedContent: []string{"No services found"},
 		},
 		{
 			name: "Namespace not found",
-			service: Service{
-				Name:      serviceName,
+			service: &Service{
 				Namespace: nonexistentNS,
 			},
-			setupObjects: []runtime.Object{clusterIPService, testNamespaceObj},
-			expectError:  true,
-			errorMsg:     "namespace",
-		},
-		{
-			name: "Missing service name and labels",
-			service: Service{
-				Name:      "", // Empty name
-				Namespace: testNamespace,
-				// No labels
+			allNamespaces: false,
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset()
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
 			},
-			setupObjects: []runtime.Object{clusterIPService, testNamespaceObj},
-			expectError:  true,
-			errorMsg:     "either service name or label selector must be provided",
-		},
-		{
-			name: "Delete services by app label",
-			service: Service{
-				Namespace: testNamespace,
-				Labels: map[string]interface{}{
-					"app": "frontend",
-				},
-			},
-			setupObjects: []runtime.Object{service1, service2, service3, testNamespaceObj},
-			expectError:  false,
-			expectResult: "Deleted 2 services with label selector",
-			validate: func(t *testing.T, ctx context.Context, cm kai.ClusterManager) {
-				// Verify the frontend services were deleted
-				client, err := cm.GetCurrentClient()
-				require.NoError(t, err, "Should be able to get client")
-
-				// service1 and service3 should be gone (frontend)
-				_, err1 := client.CoreV1().Services(testNamespace).Get(ctx, "service1", metav1.GetOptions{})
-				_, err3 := client.CoreV1().Services(testNamespace).Get(ctx, "service3", metav1.GetOptions{})
-				assert.Error(t, err1, "Service1 should have been deleted")
-				assert.Error(t, err3, "Service3 should have been deleted")
-
-				// service2 should still exist (backend)
-				svc2, err2 := client.CoreV1().Services(testNamespace).Get(ctx, "service2", metav1.GetOptions{})
-				assert.NoError(t, err2, "Service2 should still exist")
-				assert.Equal(t, "service2", svc2.Name)
-			},
-		},
-		{
-			name: "Delete services by multiple labels",
-			service: Service{
-				Namespace: testNamespace,
-				Labels: map[string]interface{}{
-					"tier":    "web",
-					"version": "v2",
-				},
-			},
-			setupObjects: []runtime.Object{service1, service2, service3, testNamespaceObj},
-			expectError:  false,
-			expectResult: "Deleted 1 services with label selector",
-			validate: func(t *testing.T, ctx context.Context, cm kai.ClusterManager) {
-				// Verify only service3 was deleted (tier=web,version=v2)
-				client, err := cm.GetCurrentClient()
-				require.NoError(t, err, "Should be able to get client")
-
-				// service3 should be gone
-				_, err3 := client.CoreV1().Services(testNamespace).Get(ctx, "service3", metav1.GetOptions{})
-				assert.Error(t, err3, "Service3 should have been deleted")
-
-				// service1 and service2 should still exist
-				svc1, err1 := client.CoreV1().Services(testNamespace).Get(ctx, "service1", metav1.GetOptions{})
-				svc2, err2 := client.CoreV1().Services(testNamespace).Get(ctx, "service2", metav1.GetOptions{})
-				assert.NoError(t, err1, "Service1 should still exist")
-				assert.NoError(t, err2, "Service2 should still exist")
-				assert.Equal(t, "service1", svc1.Name)
-				assert.Equal(t, "service2", svc2.Name)
-			},
-		},
-		{
-			name: "No services match label selector",
-			service: Service{
-				Namespace: testNamespace,
-				Labels: map[string]interface{}{
-					"app": "nonexistent",
-				},
-			},
-			setupObjects: []runtime.Object{service1, service2, service3, testNamespaceObj},
-			expectError:  true,
-			errorMsg:     "no services found with label selector",
+			expectedError: "namespace \"nonexistent-namespace\" not found",
 		},
 	}
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Set up a fresh test cluster for each test case
-			cm := setupTestCluster(tc.setupObjects...)
+			mockCM := testmocks.NewMockClusterManager()
+			tc.setupMock(mockCM)
 
-			result, err := tc.service.Delete(ctx, cm)
+			result, err := tc.service.List(ctx, mockCM, tc.allNamespaces, tc.labelSelector)
 
-			if tc.expectError {
+			if tc.expectedError != "" {
 				assert.Error(t, err)
-				if tc.errorMsg != "" {
-					assert.Contains(t, err.Error(), tc.errorMsg)
-				}
+				assert.Contains(t, err.Error(), tc.expectedError)
 			} else {
 				assert.NoError(t, err)
-				assert.Contains(t, result, tc.expectResult)
 
-				// Run custom validation if provided
-				if tc.validate != nil {
-					tc.validate(t, ctx, cm)
+				for _, expected := range tc.expectedContent {
+					assert.Contains(t, result, expected)
+				}
+
+				for _, unexpected := range tc.unexpectedContent {
+					assert.NotContains(t, result, unexpected)
 				}
 			}
+
+			mockCM.AssertExpectations(t)
+		})
+	}
+}
+
+func testDeleteService(t *testing.T) {
+	ctx := context.Background()
+
+	testCases := []struct {
+		name           string
+		service        *Service
+		setupMock      func(*testmocks.MockClusterManager)
+		expectedResult string
+		expectedError  string
+		validateDelete func(*testing.T, kubernetes.Interface)
+	}{
+		{
+			name: "Delete existing service by name",
+			service: &Service{
+				Name:      "test-service",
+				Namespace: testNamespace,
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				svc := &corev1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-service",
+						Namespace: testNamespace,
+					},
+				}
+				fakeClient := fake.NewSimpleClientset(svc, ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "Service \"test-service\" deleted successfully",
+			validateDelete: func(t *testing.T, client kubernetes.Interface) {
+				_, err := client.CoreV1().Services(testNamespace).Get(ctx, "test-service", metav1.GetOptions{})
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), "not found")
+			},
+		},
+		{
+			name: "Delete services by label selector",
+			service: &Service{
+				Namespace: testNamespace,
+				Labels: map[string]interface{}{
+					"app": "test",
+				},
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				svc1 := &corev1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "service1",
+						Namespace: testNamespace,
+						Labels:    map[string]string{"app": "test"},
+					},
+				}
+				svc2 := &corev1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "service2",
+						Namespace: testNamespace,
+						Labels:    map[string]string{"app": "test"},
+					},
+				}
+				fakeClient := fake.NewSimpleClientset(svc1, svc2, ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "Deleted 2 services",
+			validateDelete: func(t *testing.T, client kubernetes.Interface) {
+				_, err1 := client.CoreV1().Services(testNamespace).Get(ctx, "service1", metav1.GetOptions{})
+				_, err2 := client.CoreV1().Services(testNamespace).Get(ctx, "service2", metav1.GetOptions{})
+				assert.Error(t, err1)
+				assert.Error(t, err2)
+			},
+		},
+		{
+			name: "Service not found",
+			service: &Service{
+				Name:      "nonexistent-service",
+				Namespace: testNamespace,
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedError: "failed to find service",
+		},
+		{
+			name: "Namespace not found",
+			service: &Service{
+				Name:      "test-service",
+				Namespace: nonexistentNS,
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset()
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedError: "namespace \"nonexistent-namespace\" not found",
+		},
+		{
+			name: "No services match label selector",
+			service: &Service{
+				Namespace: testNamespace,
+				Labels: map[string]interface{}{
+					"app": "nonexistent",
+				},
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				svc := &corev1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "service1",
+						Namespace: testNamespace,
+						Labels:    map[string]string{"app": "test"},
+					},
+				}
+				fakeClient := fake.NewSimpleClientset(svc, ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedError: "no services found with label selector",
+		},
+		{
+			name: "Missing name and labels",
+			service: &Service{
+				Namespace: testNamespace,
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedError: "either service name or label selector must be provided",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockCM := testmocks.NewMockClusterManager()
+			tc.setupMock(mockCM)
+
+			result, err := tc.service.Delete(ctx, mockCM)
+
+			if tc.expectedError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedError)
+				assert.Empty(t, result)
+			} else {
+				assert.NoError(t, err)
+				assert.Contains(t, result, tc.expectedResult)
+
+				if tc.validateDelete != nil {
+					client, _ := mockCM.GetCurrentClient()
+					tc.validateDelete(t, client)
+				}
+			}
+
+			mockCM.AssertExpectations(t)
 		})
 	}
 }
