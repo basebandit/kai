@@ -9,7 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
 )
@@ -31,23 +30,6 @@ var (
 )
 
 // createNamespace creates a namespace object for testing
-func createNamespace(name string) *corev1.Namespace {
-	return &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
-		},
-	}
-}
-
-// setupTestCluster creates a test cluster manager with the given objects
-func setupTestCluster(objects ...runtime.Object) *Manager {
-	cm := New()
-	fakeClient := fake.NewSimpleClientset(objects...)
-	cm.clients[testCluster] = fakeClient
-	cm.currentContext = testCluster
-	return cm
-}
-
 func TestPodOperations(t *testing.T) {
 	t.Run("CreatePod", testCreatePods)
 	t.Run("GetPod", testGetPod)
