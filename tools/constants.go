@@ -2,29 +2,29 @@ package tools
 
 const (
 	// Common test resource names
-	testPodName           = "test-pod"
-	nonexistentPodName    = "non-existent-pod"
-	testSecretName        = "test-secret"
-	testConfigMapName     = "test-configmap"
+	testPodName        = "test-pod"
+	nonexistentPodName = "non-existent-pod"
+	testSecretName     = "test-secret"
+	testConfigMapName  = "test-configmap"
 
 	// Namespace constants
-	defaultNamespace      = "default"
-	testNamespace         = "test-namespace"
+	defaultNamespace = "default"
+	testNamespace    = "test-namespace"
 
 	// Image constants
-	nginxPodName          = "nginx-pod"
-	nginxImage            = "nginx:latest"
-	myAppImage            = "myapp:v1.2.3"
+	nginxPodName = "nginx-pod"
+	nginxImage   = "nginx:latest"
+	myAppImage   = "myapp:v1.2.3"
 
 	// Secret type constants
-	testSecretType        = "Opaque"
-	tlsSecretType         = "kubernetes.io/tls"
-	dockerSecretType      = "kubernetes.io/dockerconfigjson"
-	invalidSecretType     = "invalid/secret-type"
+	testSecretType    = "Opaque"
+	tlsSecretType     = "kubernetes.io/tls"
+	dockerSecretType  = "kubernetes.io/dockerconfigjson"
+	invalidSecretType = "invalid/secret-type"
 
 	// Format strings
-	deploymentCreatedFmt  = "Deployment %q created successfully in namespace %q with %d replica(s)"
-	deleteSuccessMsgFmt   = "Successfully delete pod %q in namespace %q"
+	deploymentCreatedFmt = "Deployment %q created successfully in namespace %q with %d replica(s)"
+	deleteSuccessMsgFmt  = "Successfully delete pod %q in namespace %q"
 
 	// Configuration constants
 	defaultContainerPort  = "8080/TCP"

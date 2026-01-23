@@ -170,7 +170,7 @@ func testCreateConfigMap(t *testing.T) {
 		{
 			name: "Missing namespace",
 			configMap: &ConfigMap{
-				Name: configMapName,
+				Name:      configMapName,
 				Namespace: "",
 				Data: map[string]interface{}{
 					"key": "value",

@@ -14,21 +14,21 @@ import (
 )
 
 type createSecretTestCase struct {
-	name                    string
-	args                    map[string]interface{}
-	expectedParams          kai.SecretParams
-	mockSetup               func(*testmocks.MockClusterManager, *testmocks.MockSecretFactory, *testmocks.MockSecret)
-	expectedOutput          string
-	expectSecretCreation    bool
+	name                 string
+	args                 map[string]interface{}
+	expectedParams       kai.SecretParams
+	mockSetup            func(*testmocks.MockClusterManager, *testmocks.MockSecretFactory, *testmocks.MockSecret)
+	expectedOutput       string
+	expectSecretCreation bool
 }
 
 type getSecretTestCase struct {
-	name                    string
-	args                    map[string]interface{}
-	expectedParams          kai.SecretParams
-	mockSetup               func(*testmocks.MockClusterManager, *testmocks.MockSecretFactory, *testmocks.MockSecret)
-	expectedOutput          string
-	expectSecretCreation    bool
+	name                 string
+	args                 map[string]interface{}
+	expectedParams       kai.SecretParams
+	mockSetup            func(*testmocks.MockClusterManager, *testmocks.MockSecretFactory, *testmocks.MockSecret)
+	expectedOutput       string
+	expectSecretCreation bool
 }
 
 type listSecretsTestCase struct {
@@ -40,12 +40,12 @@ type listSecretsTestCase struct {
 }
 
 type deleteSecretTestCase struct {
-	name                    string
-	args                    map[string]interface{}
-	expectedParams          kai.SecretParams
-	mockSetup               func(*testmocks.MockClusterManager, *testmocks.MockSecretFactory, *testmocks.MockSecret)
-	expectedOutput          string
-	expectSecretCreation    bool
+	name                 string
+	args                 map[string]interface{}
+	expectedParams       kai.SecretParams
+	mockSetup            func(*testmocks.MockClusterManager, *testmocks.MockSecretFactory, *testmocks.MockSecret)
+	expectedOutput       string
+	expectSecretCreation bool
 }
 
 func TestRegisterSecretTools(t *testing.T) {
@@ -223,9 +223,10 @@ func TestCreateSecretHandler(t *testing.T) {
 			expectSecretCreation: false,
 		},
 		{
-			name:         "Missing Secret name",
-			args:         map[string]interface{}{},
-			mockSetup:    func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockSecretFactory, mockSecret *testmocks.MockSecret) {},
+			name: "Missing Secret name",
+			args: map[string]interface{}{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockSecretFactory, mockSecret *testmocks.MockSecret) {
+			},
 			expectedOutput:       errMissingName,
 			expectSecretCreation: false,
 		},
@@ -234,7 +235,8 @@ func TestCreateSecretHandler(t *testing.T) {
 			args: map[string]interface{}{
 				"name": "",
 			},
-			mockSetup:            func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockSecretFactory, mockSecret *testmocks.MockSecret) {},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockSecretFactory, mockSecret *testmocks.MockSecret) {
+			},
 			expectedOutput:       errEmptyName,
 			expectSecretCreation: false,
 		},
@@ -339,9 +341,10 @@ func TestGetSecretHandler(t *testing.T) {
 			expectSecretCreation: true,
 		},
 		{
-			name:                 "Missing Secret name",
-			args:                 map[string]interface{}{},
-			mockSetup:            func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockSecretFactory, mockSecret *testmocks.MockSecret) {},
+			name: "Missing Secret name",
+			args: map[string]interface{}{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockSecretFactory, mockSecret *testmocks.MockSecret) {
+			},
 			expectedOutput:       errMissingName,
 			expectSecretCreation: false,
 		},
@@ -350,7 +353,8 @@ func TestGetSecretHandler(t *testing.T) {
 			args: map[string]interface{}{
 				"name": "",
 			},
-			mockSetup:            func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockSecretFactory, mockSecret *testmocks.MockSecret) {},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockSecretFactory, mockSecret *testmocks.MockSecret) {
+			},
 			expectedOutput:       errEmptyName,
 			expectSecretCreation: false,
 		},
@@ -555,9 +559,10 @@ func TestDeleteSecretHandler(t *testing.T) {
 			expectSecretCreation: true,
 		},
 		{
-			name:                 "Missing Secret name",
-			args:                 map[string]interface{}{},
-			mockSetup:            func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockSecretFactory, mockSecret *testmocks.MockSecret) {},
+			name: "Missing Secret name",
+			args: map[string]interface{}{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockSecretFactory, mockSecret *testmocks.MockSecret) {
+			},
 			expectedOutput:       errMissingName,
 			expectSecretCreation: false,
 		},
@@ -566,7 +571,8 @@ func TestDeleteSecretHandler(t *testing.T) {
 			args: map[string]interface{}{
 				"name": "",
 			},
-			mockSetup:            func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockSecretFactory, mockSecret *testmocks.MockSecret) {},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockSecretFactory, mockSecret *testmocks.MockSecret) {
+			},
 			expectedOutput:       errEmptyName,
 			expectSecretCreation: false,
 		},
@@ -740,9 +746,10 @@ func TestUpdateSecretHandler(t *testing.T) {
 			expectSecretCreation: true,
 		},
 		{
-			name:                 "Missing Secret name for update",
-			args:                 map[string]interface{}{},
-			mockSetup:            func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockSecretFactory, mockSecret *testmocks.MockSecret) {},
+			name: "Missing Secret name for update",
+			args: map[string]interface{}{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockSecretFactory, mockSecret *testmocks.MockSecret) {
+			},
 			expectedOutput:       errMissingName,
 			expectSecretCreation: false,
 		},
@@ -751,7 +758,8 @@ func TestUpdateSecretHandler(t *testing.T) {
 			args: map[string]interface{}{
 				"name": "",
 			},
-			mockSetup:            func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockSecretFactory, mockSecret *testmocks.MockSecret) {},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockSecretFactory, mockSecret *testmocks.MockSecret) {
+			},
 			expectedOutput:       errEmptyName,
 			expectSecretCreation: false,
 		},
