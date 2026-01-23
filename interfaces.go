@@ -84,4 +84,13 @@ type SecretOperator interface {
 	Get(ctx context.Context, cm ClusterManager) (string, error)
 	List(ctx context.Context, cm ClusterManager, allNamespaces bool, labelSelector string) (string, error)
 	Delete(ctx context.Context, cm ClusterManager) (string, error)
+	Update(ctx context.Context, cm ClusterManager) (string, error)
+}
+
+// JobOperator defines the operations needed for Job management
+type JobOperator interface {
+	Create(ctx context.Context, cm ClusterManager) (string, error)
+	Get(ctx context.Context, cm ClusterManager) (string, error)
+	List(ctx context.Context, cm ClusterManager, allNamespaces bool, labelSelector string) (string, error)
+	Delete(ctx context.Context, cm ClusterManager) (string, error)
 }
