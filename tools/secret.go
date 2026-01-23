@@ -107,6 +107,33 @@ func RegisterSecretToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager
 		),
 	)
 	s.AddTool(deleteSecretTool, deleteSecretHandler(cm, factory))
+
+	updateSecretTool := mcp.NewTool("update_secret",
+		mcp.WithDescription("Update an existing Secret"),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Name of the Secret to update"),
+		),
+		mcp.WithString("namespace",
+			mcp.Description("Namespace of the Secret (defaults to current namespace)"),
+		),
+		mcp.WithString("type",
+			mcp.Description("Secret type (Opaque, kubernetes.io/tls, kubernetes.io/dockerconfigjson, etc.)"),
+		),
+		mcp.WithObject("data",
+			mcp.Description("New key-value pairs of secret data (replaces existing data)"),
+		),
+		mcp.WithObject("string_data",
+			mcp.Description("New key-value pairs of secret data in plain text (replaces existing string data)"),
+		),
+		mcp.WithObject("labels",
+			mcp.Description("New labels to apply to the Secret (replaces existing labels)"),
+		),
+		mcp.WithObject("annotations",
+			mcp.Description("New annotations to apply to the Secret (replaces existing annotations)"),
+		),
+	)
+	s.AddTool(updateSecretTool, updateSecretHandler(cm, factory))
 }
 
 func createSecretHandler(cm kai.ClusterManager, factory SecretFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -257,6 +284,61 @@ func deleteSecretHandler(cm kai.ClusterManager, factory SecretFactory) func(ctx 
 		result, err := secret.Delete(ctx, cm)
 		if err != nil {
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to delete Secret: %s", err.Error())), nil
+		}
+
+		return mcp.NewToolResultText(result), nil
+	}
+}
+
+func updateSecretHandler(cm kai.ClusterManager, factory SecretFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		nameArg, ok := request.Params.Arguments["name"]
+		if !ok || nameArg == nil {
+			return mcp.NewToolResultText(errMissingName), nil
+		}
+
+		name, ok := nameArg.(string)
+		if !ok || name == "" {
+			return mcp.NewToolResultText(errEmptyName), nil
+		}
+
+		namespace := cm.GetCurrentNamespace()
+		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+			namespace = namespaceArg
+		}
+
+		params := kai.SecretParams{
+			Name:      name,
+			Namespace: namespace,
+		}
+
+		if typeArg, ok := request.Params.Arguments["type"].(string); ok && typeArg != "" {
+			if err := validateSecretType(typeArg); err != nil {
+				return mcp.NewToolResultText(err.Error()), nil
+			}
+			params.Type = typeArg
+		}
+
+		if dataArg, ok := request.Params.Arguments["data"].(map[string]interface{}); ok {
+			params.Data = dataArg
+		}
+
+		if stringDataArg, ok := request.Params.Arguments["string_data"].(map[string]interface{}); ok {
+			params.StringData = stringDataArg
+		}
+
+		if labelsArg, ok := request.Params.Arguments["labels"].(map[string]interface{}); ok {
+			params.Labels = labelsArg
+		}
+
+		if annotationsArg, ok := request.Params.Arguments["annotations"].(map[string]interface{}); ok {
+			params.Annotations = annotationsArg
+		}
+
+		secret := factory.NewSecret(params)
+		result, err := secret.Update(ctx, cm)
+		if err != nil {
+			return mcp.NewToolResultText(fmt.Sprintf("Failed to update Secret: %s", err.Error())), nil
 		}
 
 		return mcp.NewToolResultText(result), nil
