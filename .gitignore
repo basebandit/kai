@@ -26,3 +26,8 @@ go.work.sum
 
 # env file
 .env
+
+# Test output files
+coverage.html
+coverage_out.html
+output.txt
