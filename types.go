@@ -94,3 +94,20 @@ type SecretParams struct {
 	Labels      map[string]interface{}
 	Annotations map[string]interface{}
 }
+
+// JobParams holds all possible job configuration parameters
+type JobParams struct {
+	Name             string
+	Namespace        string
+	Image            string
+	Command          []interface{}
+	Args             []interface{}
+	RestartPolicy    string
+	BackoffLimit     *int32
+	Completions      *int32
+	Parallelism      *int32
+	Labels           map[string]interface{}
+	Env              map[string]interface{}
+	ImagePullPolicy  string
+	ImagePullSecrets []interface{}
+}
