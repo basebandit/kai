@@ -1,6 +1,8 @@
 package cluster
 
-// Constants for common test values
+// This file contains test-only constants shared across test files.
+// These constants are not used in production code.
+
 const (
 	// Namespace constants
 	testNamespace    = "test-namespace"

@@ -1,5 +1,8 @@
 package tools
 
+// This file contains test-only constants shared across test files.
+// These constants are not used in production code.
+
 const (
 	// Common test resource names
 	testPodName        = "test-pod"
