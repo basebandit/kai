@@ -17,8 +17,10 @@ const (
 	myAppImage   = "myapp:v1.2.3"
 
 	// Secret type constants
-	testSecretType    = "Opaque"
-	tlsSecretType     = "kubernetes.io/tls"
+	testSecretType = "Opaque"
+	//#nosec G101 -- This is a Kubernetes secret type string, not a credential
+	tlsSecretType = "kubernetes.io/tls"
+	//#nosec G101 -- This is a Kubernetes secret type string, not a credential
 	dockerSecretType  = "kubernetes.io/dockerconfigjson"
 	invalidSecretType = "invalid/secret-type"
 
