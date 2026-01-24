@@ -562,7 +562,7 @@ func TestFormatSecret(t *testing.T) {
 	t.Run("Format basic secret", func(t *testing.T) {
 		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:              "test-secret",
+				Name:              secretName,
 				Namespace:         "default",
 				CreationTimestamp: metav1.Time{Time: time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)},
 			},
@@ -573,7 +573,7 @@ func TestFormatSecret(t *testing.T) {
 		}
 
 		result := formatSecret(secret)
-		assert.Contains(t, result, "test-secret")
+		assert.Contains(t, result, secretName)
 		assert.Contains(t, result, "default")
 		assert.Contains(t, result, "password")
 	})

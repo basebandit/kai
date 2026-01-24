@@ -54,7 +54,7 @@ func testCreatePods(t *testing.T) {
 			pod: &Pod{
 				Name:      "test-pod",
 				Namespace: testNamespace,
-				Image:     "nginx:latest",
+				Image:     nginxImage,
 			},
 			setupMock: func(mockCM *testmocks.MockClusterManager) {
 				ns := &corev1.Namespace{
@@ -69,7 +69,7 @@ func testCreatePods(t *testing.T) {
 				assert.NoError(t, err)
 				assert.Equal(t, "test-pod", pod.Name)
 				assert.Equal(t, testNamespace, pod.Namespace)
-				assert.Equal(t, "nginx:latest", pod.Spec.Containers[0].Image)
+				assert.Equal(t, nginxImage, pod.Spec.Containers[0].Image)
 			},
 		},
 		{
@@ -77,7 +77,7 @@ func testCreatePods(t *testing.T) {
 			pod: &Pod{
 				Name:          "custom-pod",
 				Namespace:     testNamespace,
-				Image:         "nginx:latest",
+				Image:         nginxImage,
 				ContainerName: "web-server",
 			},
 			setupMock: func(mockCM *testmocks.MockClusterManager) {
@@ -99,7 +99,7 @@ func testCreatePods(t *testing.T) {
 			pod: &Pod{
 				Name:          "port-pod",
 				Namespace:     testNamespace,
-				Image:         "nginx:latest",
+				Image:         nginxImage,
 				ContainerPort: "8080/TCP",
 			},
 			setupMock: func(mockCM *testmocks.MockClusterManager) {
@@ -123,7 +123,7 @@ func testCreatePods(t *testing.T) {
 			pod: &Pod{
 				Name:          "udp-pod",
 				Namespace:     testNamespace,
-				Image:         "nginx:latest",
+				Image:         nginxImage,
 				ContainerPort: "53/UDP",
 			},
 			setupMock: func(mockCM *testmocks.MockClusterManager) {
@@ -145,7 +145,7 @@ func testCreatePods(t *testing.T) {
 			pod: &Pod{
 				Name:            "policy-pod",
 				Namespace:       testNamespace,
-				Image:           "nginx:latest",
+				Image:           nginxImage,
 				ImagePullPolicy: "Always",
 			},
 			setupMock: func(mockCM *testmocks.MockClusterManager) {
@@ -165,10 +165,10 @@ func testCreatePods(t *testing.T) {
 		{
 			name: "Create pod with restart policy",
 			pod: &Pod{
-				Name:          "restart-pod",
+				Name:          restartPod,
 				Namespace:     testNamespace,
-				Image:         "nginx:latest",
-				RestartPolicy: "OnFailure",
+				Image:         nginxImage,
+				RestartPolicy: failureRestartPolicy,
 			},
 			setupMock: func(mockCM *testmocks.MockClusterManager) {
 				ns := &corev1.Namespace{
@@ -179,7 +179,7 @@ func testCreatePods(t *testing.T) {
 			},
 			expectedResult: "created successfully",
 			validateCreate: func(t *testing.T, client kubernetes.Interface) {
-				pod, err := client.CoreV1().Pods(testNamespace).Get(ctx, "restart-pod", metav1.GetOptions{})
+				pod, err := client.CoreV1().Pods(testNamespace).Get(ctx, restartPod, metav1.GetOptions{})
 				assert.NoError(t, err)
 				assert.Equal(t, corev1.RestartPolicyOnFailure, pod.Spec.RestartPolicy)
 			},
@@ -187,10 +187,10 @@ func testCreatePods(t *testing.T) {
 		{
 			name: "Create pod with service account",
 			pod: &Pod{
-				Name:           "sa-pod",
+				Name:           podServiceAccount,
 				Namespace:      testNamespace,
-				Image:          "nginx:latest",
-				ServiceAccount: "test-sa",
+				Image:          nginxImage,
+				ServiceAccount: testServiceAccount,
 			},
 			setupMock: func(mockCM *testmocks.MockClusterManager) {
 				ns := &corev1.Namespace{
@@ -201,15 +201,15 @@ func testCreatePods(t *testing.T) {
 			},
 			expectedResult: "created successfully",
 			validateCreate: func(t *testing.T, client kubernetes.Interface) {
-				pod, err := client.CoreV1().Pods(testNamespace).Get(ctx, "sa-pod", metav1.GetOptions{})
+				pod, err := client.CoreV1().Pods(testNamespace).Get(ctx, podServiceAccount, metav1.GetOptions{})
 				assert.NoError(t, err)
-				assert.Equal(t, "test-sa", pod.Spec.ServiceAccountName)
+				assert.Equal(t, testServiceAccount, pod.Spec.ServiceAccountName)
 			},
 		},
 		{
 			name: "Create pod with command and args",
 			pod: &Pod{
-				Name:      "cmd-pod",
+				Name:      cmdPod,
 				Namespace: testNamespace,
 				Image:     "busybox:latest",
 				Command:   shellCommand,
@@ -224,7 +224,7 @@ func testCreatePods(t *testing.T) {
 			},
 			expectedResult: "created successfully",
 			validateCreate: func(t *testing.T, client kubernetes.Interface) {
-				pod, err := client.CoreV1().Pods(testNamespace).Get(ctx, "cmd-pod", metav1.GetOptions{})
+				pod, err := client.CoreV1().Pods(testNamespace).Get(ctx, cmdPod, metav1.GetOptions{})
 				assert.NoError(t, err)
 				assert.Equal(t, []string{"/bin/sh", "-c"}, pod.Spec.Containers[0].Command)
 				assert.Equal(t, []string{"echo hello; sleep 3600"}, pod.Spec.Containers[0].Args)
@@ -233,9 +233,9 @@ func testCreatePods(t *testing.T) {
 		{
 			name: "Create pod with labels",
 			pod: &Pod{
-				Name:      "labeled-pod",
+				Name:      labeledPod,
 				Namespace: testNamespace,
-				Image:     "nginx:latest",
+				Image:     nginxImage,
 				Labels:    testLabels,
 			},
 			setupMock: func(mockCM *testmocks.MockClusterManager) {
@@ -247,7 +247,7 @@ func testCreatePods(t *testing.T) {
 			},
 			expectedResult: "created successfully",
 			validateCreate: func(t *testing.T, client kubernetes.Interface) {
-				pod, err := client.CoreV1().Pods(testNamespace).Get(ctx, "labeled-pod", metav1.GetOptions{})
+				pod, err := client.CoreV1().Pods(testNamespace).Get(ctx, labeledPod, metav1.GetOptions{})
 				assert.NoError(t, err)
 				assert.Equal(t, "test", pod.Labels["app"])
 				assert.Equal(t, "dev", pod.Labels["env"])
@@ -256,9 +256,9 @@ func testCreatePods(t *testing.T) {
 		{
 			name: "Create pod with environment variables",
 			pod: &Pod{
-				Name:      "env-pod",
+				Name:      envPod,
 				Namespace: testNamespace,
-				Image:     "nginx:latest",
+				Image:     nginxImage,
 				Env:       testEnv,
 			},
 			setupMock: func(mockCM *testmocks.MockClusterManager) {
@@ -270,7 +270,7 @@ func testCreatePods(t *testing.T) {
 			},
 			expectedResult: "created successfully",
 			validateCreate: func(t *testing.T, client kubernetes.Interface) {
-				pod, err := client.CoreV1().Pods(testNamespace).Get(ctx, "env-pod", metav1.GetOptions{})
+				pod, err := client.CoreV1().Pods(testNamespace).Get(ctx, envPod, metav1.GetOptions{})
 				assert.NoError(t, err)
 				assert.Len(t, pod.Spec.Containers[0].Env, 2)
 				envMap := make(map[string]string)
@@ -284,9 +284,9 @@ func testCreatePods(t *testing.T) {
 		{
 			name: "Create pod with node selector",
 			pod: &Pod{
-				Name:         "node-selector-pod",
+				Name:         nodeSelectorPod,
 				Namespace:    testNamespace,
-				Image:        "nginx:latest",
+				Image:        nginxImage,
 				NodeSelector: ssdNodeSelector,
 			},
 			setupMock: func(mockCM *testmocks.MockClusterManager) {
@@ -298,7 +298,7 @@ func testCreatePods(t *testing.T) {
 			},
 			expectedResult: "created successfully",
 			validateCreate: func(t *testing.T, client kubernetes.Interface) {
-				pod, err := client.CoreV1().Pods(testNamespace).Get(ctx, "node-selector-pod", metav1.GetOptions{})
+				pod, err := client.CoreV1().Pods(testNamespace).Get(ctx, nodeSelectorPod, metav1.GetOptions{})
 				assert.NoError(t, err)
 				assert.Equal(t, "ssd", pod.Spec.NodeSelector["disktype"])
 			},
@@ -306,9 +306,9 @@ func testCreatePods(t *testing.T) {
 		{
 			name: "Create pod with image pull secrets",
 			pod: &Pod{
-				Name:             "pull-secret-pod",
+				Name:             pullSecretPod,
 				Namespace:        testNamespace,
-				Image:            "nginx:latest",
+				Image:            nginxImage,
 				ImagePullSecrets: []interface{}{"my-registry-secret"},
 			},
 			setupMock: func(mockCM *testmocks.MockClusterManager) {
@@ -320,7 +320,7 @@ func testCreatePods(t *testing.T) {
 			},
 			expectedResult: "created successfully",
 			validateCreate: func(t *testing.T, client kubernetes.Interface) {
-				pod, err := client.CoreV1().Pods(testNamespace).Get(ctx, "pull-secret-pod", metav1.GetOptions{})
+				pod, err := client.CoreV1().Pods(testNamespace).Get(ctx, pullSecretPod, metav1.GetOptions{})
 				assert.NoError(t, err)
 				assert.Len(t, pod.Spec.ImagePullSecrets, 1)
 				assert.Equal(t, "my-registry-secret", pod.Spec.ImagePullSecrets[0].Name)
@@ -329,14 +329,14 @@ func testCreatePods(t *testing.T) {
 		{
 			name: "Create pod with all attributes",
 			pod: &Pod{
-				Name:             "full-pod",
+				Name:             fullPod,
 				Namespace:        testNamespace,
-				Image:            "nginx:latest",
+				Image:            nginxImage,
 				ContainerName:    "custom-container",
 				ContainerPort:    "8080/TCP",
 				ImagePullPolicy:  "Always",
-				RestartPolicy:    "OnFailure",
-				ServiceAccount:   "test-sa",
+				RestartPolicy:    failureRestartPolicy,
+				ServiceAccount:   testServiceAccount,
 				Command:          shellCommand,
 				Args:             sleepArgs,
 				Labels:           testLabels,
@@ -353,14 +353,14 @@ func testCreatePods(t *testing.T) {
 			},
 			expectedResult: "created successfully",
 			validateCreate: func(t *testing.T, client kubernetes.Interface) {
-				pod, err := client.CoreV1().Pods(testNamespace).Get(ctx, "full-pod", metav1.GetOptions{})
+				pod, err := client.CoreV1().Pods(testNamespace).Get(ctx, fullPod, metav1.GetOptions{})
 				assert.NoError(t, err)
-				assert.Equal(t, "full-pod", pod.Name)
+				assert.Equal(t, fullPod, pod.Name)
 				assert.Equal(t, "custom-container", pod.Spec.Containers[0].Name)
 				assert.Equal(t, int32(8080), pod.Spec.Containers[0].Ports[0].ContainerPort)
 				assert.Equal(t, corev1.PullAlways, pod.Spec.Containers[0].ImagePullPolicy)
 				assert.Equal(t, corev1.RestartPolicyOnFailure, pod.Spec.RestartPolicy)
-				assert.Equal(t, "test-sa", pod.Spec.ServiceAccountName)
+				assert.Equal(t, testServiceAccount, pod.Spec.ServiceAccountName)
 			},
 		},
 		{
@@ -378,7 +378,7 @@ func testCreatePods(t *testing.T) {
 			pod: &Pod{
 				Name:      "test-pod",
 				Namespace: nonexistentNS,
-				Image:     "nginx:latest",
+				Image:     nginxImage,
 			},
 			setupMock: func(mockCM *testmocks.MockClusterManager) {
 				fakeClient := fake.NewSimpleClientset()
@@ -453,7 +453,7 @@ func testGetPod(t *testing.T) {
 		{
 			name: "Pod not found",
 			pod: &Pod{
-				Name:      "nonexistent-pod",
+				Name:      nonexistentPodName,
 				Namespace: testNamespace,
 			},
 			setupMock: func(mockCM *testmocks.MockClusterManager) {
@@ -734,7 +734,7 @@ func testDeletePod(t *testing.T) {
 		{
 			name: "Pod not found",
 			pod: &Pod{
-				Name:      "nonexistent-pod",
+				Name:      nonexistentPodName,
 				Namespace: testNamespace,
 			},
 			force: false,
@@ -842,7 +842,7 @@ func testStreamPodLogs(t *testing.T) {
 		{
 			name: "Pod not found",
 			pod: &Pod{
-				Name:          "nonexistent-pod",
+				Name:          nonexistentPodName,
 				Namespace:     testNamespace,
 				ContainerName: "container1",
 			},

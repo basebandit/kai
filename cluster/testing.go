@@ -14,9 +14,6 @@ const (
 	// Pod constants
 	nonexistentPodName = "nonexistent-pod"
 
-	// Container constants
-	nonexistentContainer = "nonexistent-container"
-
 	// Image constants
 	nginxImage = "nginx:latest"
 
@@ -58,12 +55,21 @@ const (
 	nonexistentConfigMap = "nonexistent-configmap"
 
 	// Secret constants
-	secretName          = "test-secret"
-	secretName1         = "secret1"
-	secretName2         = "secret2"
-	secretName3         = "secret3"
-	nonexistentSecret   = "nonexistent-secret"
-	secretTypeOpaque    = "Opaque"
-	secretTypeTLS       = "kubernetes.io/tls"              // #nosec G101
-	secretTypeDockerCfg = "kubernetes.io/dockerconfigjson" // #nosec G101
+	secretName           = "test-secret"
+	secretName1          = "secret1"
+	secretName2          = "secret2"
+	secretName3          = "secret3"
+	nonexistentSecret    = "nonexistent-secret"
+	secretTypeTLS        = "kubernetes.io/tls"              // #nosec G101
+	secretTypeDockerCfg  = "kubernetes.io/dockerconfigjson" // #nosec G101
+	podServiceAccount    = "sa-pod"
+	testServiceAccount   = "test-sa"
+	restartPod           = "restart-pod"
+	failureRestartPolicy = "OnFailure"
+	cmdPod               = "cmd-pod"
+	envPod               = "env-pod"
+	labeledPod           = "labeled-pod"
+	nodeSelectorPod      = "node-selector-pod"
+	pullSecretPod        = "pull-secret-pod"
+	fullPod              = "full-pod"
 )
