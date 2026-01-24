@@ -1,6 +1,8 @@
 package cluster
 
-// Constants for common test values
+// This file contains test-only constants shared across test files.
+// These constants are not used in production code.
+
 const (
 	// Namespace constants
 	testNamespace    = "test-namespace"
@@ -10,32 +12,10 @@ const (
 	emptyNamespace   = "empty-namespace"
 
 	// Pod constants
-	podName            = "test-pod"
-	pod1Name           = "pod1"
-	pod2Name           = "pod2"
-	pod3Name           = "pod3"
-	fullPodName        = "full-pod"
-	noImagePodName     = "no-image-pod"
-	forcePodName       = "force-pod"
-	pendingPodName     = "pending-pod"
 	nonexistentPodName = "nonexistent-pod"
-
-	// Container constants
-	containerName        = "test-container"
-	customContainer      = "custom-container"
-	nonexistentContainer = "nonexistent-container"
 
 	// Image constants
 	nginxImage = "nginx:latest"
-
-	// Policy constants
-	alwaysPullPolicy = "Always"
-	onFailurePolicy  = "OnFailure"
-	neverPolicy      = "Never"
-
-	// Service account and secrets
-	testServiceAccount = "test-sa"
-	registrySecret     = "registry-secret"
 
 	// Test cluster constant
 	testCluster  = "test-cluster"
@@ -57,12 +37,6 @@ const (
 	testUser1 = "user1"
 	testUser2 = "user2"
 
-	// Message templates
-	podCreatedFmt    = "Pod %q created successfully"
-	notFoundErrMsg   = "not found"
-	deleteSuccessMsg = "Successfully delete pod"
-	noPodsFoundMsg   = "no pods found"
-
 	// Deployment constants
 	deploymentName1 = "deployment1"
 	deploymentName2 = "deployment2"
@@ -81,12 +55,21 @@ const (
 	nonexistentConfigMap = "nonexistent-configmap"
 
 	// Secret constants
-	secretName          = "test-secret"
-	secretName1         = "secret1"
-	secretName2         = "secret2"
-	secretName3         = "secret3"
-	nonexistentSecret   = "nonexistent-secret"
-	secretTypeOpaque    = "Opaque"
-	secretTypeTLS       = "kubernetes.io/tls"              // #nosec G101
-	secretTypeDockerCfg = "kubernetes.io/dockerconfigjson" // #nosec G101
+	secretName           = "test-secret"
+	secretName1          = "secret1"
+	secretName2          = "secret2"
+	secretName3          = "secret3"
+	nonexistentSecret    = "nonexistent-secret"
+	secretTypeTLS        = "kubernetes.io/tls"              // #nosec G101
+	secretTypeDockerCfg  = "kubernetes.io/dockerconfigjson" // #nosec G101
+	podServiceAccount    = "sa-pod"
+	testServiceAccount   = "test-sa"
+	restartPod           = "restart-pod"
+	failureRestartPolicy = "OnFailure"
+	cmdPod               = "cmd-pod"
+	envPod               = "env-pod"
+	labeledPod           = "labeled-pod"
+	nodeSelectorPod      = "node-selector-pod"
+	pullSecretPod        = "pull-secret-pod"
+	fullPod              = "full-pod"
 )

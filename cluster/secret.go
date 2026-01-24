@@ -186,6 +186,62 @@ func (s *Secret) Delete(ctx context.Context, cm kai.ClusterManager) (string, err
 	return result, nil
 }
 
+// Update modifies an existing Secret with the provided data.
+func (s *Secret) Update(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	var result string
+
+	if s.Name == "" {
+		return result, errors.New("Secret name is required for update")
+	}
+
+	client, err := cm.GetCurrentClient()
+	if err != nil {
+		return result, fmt.Errorf("error getting client: %w", err)
+	}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
+	defer cancel()
+
+	existingSecret, err := client.CoreV1().Secrets(s.Namespace).Get(timeoutCtx, s.Name, metav1.GetOptions{})
+	if err != nil {
+		return result, fmt.Errorf("Secret %q not found in namespace %q: %w", s.Name, s.Namespace, err)
+	}
+
+	if s.Data != nil {
+		existingSecret.Data = convertToSecretDataMap(s.Data)
+	}
+
+	if s.StringData != nil {
+		existingSecret.StringData = convertToStringMap(s.StringData)
+	}
+
+	if s.Type != "" {
+		existingSecret.Type = corev1.SecretType(s.Type)
+	}
+
+	if s.Labels != nil {
+		labels := convertToStringMap(s.Labels)
+		if len(labels) > 0 {
+			existingSecret.ObjectMeta.Labels = labels
+		}
+	}
+
+	if s.Annotations != nil {
+		annotations := convertToStringMap(s.Annotations)
+		if len(annotations) > 0 {
+			existingSecret.ObjectMeta.Annotations = annotations
+		}
+	}
+
+	updatedSecret, err := client.CoreV1().Secrets(s.Namespace).Update(timeoutCtx, existingSecret, metav1.UpdateOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to update Secret %q: %w", s.Name, err)
+	}
+
+	result = fmt.Sprintf("Secret %q updated successfully in namespace %q", updatedSecret.Name, updatedSecret.Namespace)
+	return result, nil
+}
+
 func (s *Secret) validate() error {
 	if s.Name == "" {
 		return errors.New("Secret name is required")

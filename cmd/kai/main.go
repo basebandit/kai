@@ -60,4 +60,6 @@ func registerAllTools(s *kai.Server, cm *cluster.Manager) {
 	tools.RegisterServiceTools(s, cm)
 	tools.RegisterContextTools(s, cm)
 	tools.RegisterConfigMapTools(s, cm)
+	tools.RegisterSecretTools(s, cm)
+	tools.RegisterJobTools(s, cm)
 }

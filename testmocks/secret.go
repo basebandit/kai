@@ -59,3 +59,9 @@ func (m *MockSecret) Delete(ctx context.Context, cm kai.ClusterManager) (string,
 	args := m.Called(ctx, cm)
 	return args.String(0), args.Error(1)
 }
+
+// Update mocks the Update method.
+func (m *MockSecret) Update(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	args := m.Called(ctx, cm)
+	return args.String(0), args.Error(1)
+}
