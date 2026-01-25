@@ -287,6 +287,8 @@ func (i *Ingress) Update(ctx context.Context, cm kai.ClusterManager) (string, er
 							pathType = networkingv1.PathTypePrefix
 						case "ImplementationSpecific":
 							pathType = networkingv1.PathTypeImplementationSpecific
+						default:
+							return result, fmt.Errorf("invalid path type: %s", path.PathType)
 						}
 					}
 
