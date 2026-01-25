@@ -431,3 +431,295 @@ func TestDeleteCronJobHandler(t *testing.T) {
 		})
 	}
 }
+
+func TestNewDefaultCronJobFactory(t *testing.T) {
+	factory := NewDefaultCronJobFactory()
+	assert.NotNil(t, factory)
+}
+
+func TestDefaultCronJobFactoryNewCronJob(t *testing.T) {
+	factory := NewDefaultCronJobFactory()
+
+	suspend := true
+	successfulJobsHistoryLimit := int32(3)
+	failedJobsHistoryLimit := int32(1)
+	startingDeadlineSeconds := int64(100)
+	backoffLimit := int32(6)
+
+	params := kai.CronJobParams{
+		Name:                       "test-cronjob",
+		Namespace:                  "default",
+		Schedule:                   "*/5 * * * *",
+		Image:                      "busybox:latest",
+		Command:                    []interface{}{"echo", "hello"},
+		Args:                       []interface{}{"world"},
+		RestartPolicy:              "OnFailure",
+		ConcurrencyPolicy:          "Forbid",
+		Suspend:                    &suspend,
+		SuccessfulJobsHistoryLimit: &successfulJobsHistoryLimit,
+		FailedJobsHistoryLimit:     &failedJobsHistoryLimit,
+		StartingDeadlineSeconds:    &startingDeadlineSeconds,
+		BackoffLimit:               &backoffLimit,
+		Labels:                     map[string]interface{}{"app": "test"},
+		Env:                        map[string]interface{}{"ENV": "test"},
+		ImagePullPolicy:            "Always",
+		ImagePullSecrets:           []interface{}{"registry-secret"},
+	}
+
+	cronJob := factory.NewCronJob(params)
+	assert.NotNil(t, cronJob)
+}
+
+func TestRegisterCronJobTools(t *testing.T) {
+	mockServer := new(testmocks.MockServer)
+	mockCM := testmocks.NewMockClusterManager()
+
+	mockServer.On("AddTool", mock.AnythingOfType("mcp.Tool"), mock.AnythingOfType("server.ToolHandlerFunc")).Return().Times(4)
+
+	RegisterCronJobTools(mockServer, mockCM)
+
+	mockServer.AssertExpectations(t)
+}
+
+func TestRegisterCronJobToolsWithFactory(t *testing.T) {
+	mockServer := new(testmocks.MockServer)
+	mockCM := testmocks.NewMockClusterManager()
+	mockFactory := new(testmocks.MockCronJobFactory)
+
+	mockServer.On("AddTool", mock.AnythingOfType("mcp.Tool"), mock.AnythingOfType("server.ToolHandlerFunc")).Return().Times(4)
+
+	RegisterCronJobToolsWithFactory(mockServer, mockCM, mockFactory)
+
+	mockServer.AssertExpectations(t)
+}
+
+func TestCreateCronJobHandlerError(t *testing.T) {
+	mockCM := &testmocks.MockClusterManager{}
+	mockFactory := &testmocks.MockCronJobFactory{}
+	mockCronJob := &testmocks.MockCronJob{}
+
+	mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+	mockFactory.On("NewCronJob", mock.Anything).Return(mockCronJob)
+	mockCronJob.On("Create", mock.Anything, mockCM).Return("", assert.AnError)
+
+	handler := createCronJobHandler(mockCM, mockFactory)
+	request := mcp.CallToolRequest{
+		Params: struct {
+			Name      string         `json:"name"`
+			Arguments map[string]any `json:"arguments,omitempty"`
+			Meta      *mcp.Meta      `json:"_meta,omitempty"`
+		}{
+			Arguments: map[string]any{
+				"name":     "test-cronjob",
+				"schedule": "*/5 * * * *",
+				"image":    "busybox:latest",
+			},
+		},
+	}
+
+	result, err := handler(context.Background(), request)
+	assert.NoError(t, err)
+	assert.Contains(t, result.Content[0].(mcp.TextContent).Text, "Failed to create CronJob")
+
+	mockCM.AssertExpectations(t)
+	mockFactory.AssertExpectations(t)
+	mockCronJob.AssertExpectations(t)
+}
+
+func TestGetCronJobHandlerError(t *testing.T) {
+	mockCM := &testmocks.MockClusterManager{}
+	mockFactory := &testmocks.MockCronJobFactory{}
+	mockCronJob := &testmocks.MockCronJob{}
+
+	mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+	mockFactory.On("NewCronJob", mock.Anything).Return(mockCronJob)
+	mockCronJob.On("Get", mock.Anything, mockCM).Return("", assert.AnError)
+
+	handler := getCronJobHandler(mockCM, mockFactory)
+	request := mcp.CallToolRequest{
+		Params: struct {
+			Name      string         `json:"name"`
+			Arguments map[string]any `json:"arguments,omitempty"`
+			Meta      *mcp.Meta      `json:"_meta,omitempty"`
+		}{
+			Arguments: map[string]any{
+				"name": "test-cronjob",
+			},
+		},
+	}
+
+	result, err := handler(context.Background(), request)
+	assert.NoError(t, err)
+	assert.Contains(t, result.Content[0].(mcp.TextContent).Text, "Failed to get CronJob")
+
+	mockCM.AssertExpectations(t)
+	mockFactory.AssertExpectations(t)
+	mockCronJob.AssertExpectations(t)
+}
+
+func TestListCronJobsHandlerError(t *testing.T) {
+	mockCM := &testmocks.MockClusterManager{}
+	mockFactory := &testmocks.MockCronJobFactory{}
+	mockCronJob := &testmocks.MockCronJob{}
+
+	mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+	mockFactory.On("NewCronJob", mock.Anything).Return(mockCronJob)
+	mockCronJob.On("List", mock.Anything, mockCM, false, "").Return("", assert.AnError)
+
+	handler := listCronJobsHandler(mockCM, mockFactory)
+	request := mcp.CallToolRequest{
+		Params: struct {
+			Name      string         `json:"name"`
+			Arguments map[string]any `json:"arguments,omitempty"`
+			Meta      *mcp.Meta      `json:"_meta,omitempty"`
+		}{
+			Arguments: map[string]any{},
+		},
+	}
+
+	result, err := handler(context.Background(), request)
+	assert.NoError(t, err)
+	assert.Contains(t, result.Content[0].(mcp.TextContent).Text, "Failed to list CronJobs")
+
+	mockCM.AssertExpectations(t)
+	mockFactory.AssertExpectations(t)
+	mockCronJob.AssertExpectations(t)
+}
+
+func TestDeleteCronJobHandlerError(t *testing.T) {
+	mockCM := &testmocks.MockClusterManager{}
+	mockFactory := &testmocks.MockCronJobFactory{}
+	mockCronJob := &testmocks.MockCronJob{}
+
+	mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+	mockFactory.On("NewCronJob", mock.Anything).Return(mockCronJob)
+	mockCronJob.On("Delete", mock.Anything, mockCM).Return("", assert.AnError)
+
+	handler := deleteCronJobHandler(mockCM, mockFactory)
+	request := mcp.CallToolRequest{
+		Params: struct {
+			Name      string         `json:"name"`
+			Arguments map[string]any `json:"arguments,omitempty"`
+			Meta      *mcp.Meta      `json:"_meta,omitempty"`
+		}{
+			Arguments: map[string]any{
+				"name": "test-cronjob",
+			},
+		},
+	}
+
+	result, err := handler(context.Background(), request)
+	assert.NoError(t, err)
+	assert.Contains(t, result.Content[0].(mcp.TextContent).Text, "Failed to delete CronJob")
+
+	mockCM.AssertExpectations(t)
+	mockFactory.AssertExpectations(t)
+	mockCronJob.AssertExpectations(t)
+}
+
+func TestCreateCronJobHandlerDefaultNamespace(t *testing.T) {
+	mockCM := &testmocks.MockClusterManager{}
+	mockFactory := &testmocks.MockCronJobFactory{}
+	mockCronJob := &testmocks.MockCronJob{}
+
+	mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+	mockFactory.On("NewCronJob", mock.MatchedBy(func(params kai.CronJobParams) bool {
+		return params.Name == "test-cronjob" &&
+			params.Namespace == defaultNamespace &&
+			params.Schedule == "*/5 * * * *" &&
+			params.Image == "busybox:latest"
+	})).Return(mockCronJob)
+	mockCronJob.On("Create", mock.Anything, mockCM).Return("CronJob \"test-cronjob\" created successfully", nil)
+
+	handler := createCronJobHandler(mockCM, mockFactory)
+	request := mcp.CallToolRequest{
+		Params: struct {
+			Name      string         `json:"name"`
+			Arguments map[string]any `json:"arguments,omitempty"`
+			Meta      *mcp.Meta      `json:"_meta,omitempty"`
+		}{
+			Arguments: map[string]any{
+				"name":     "test-cronjob",
+				"schedule": "*/5 * * * *",
+				"image":    "busybox:latest",
+				// No namespace provided - should use default
+			},
+		},
+	}
+
+	result, err := handler(context.Background(), request)
+	assert.NoError(t, err)
+	assert.Contains(t, result.Content[0].(mcp.TextContent).Text, "CronJob \"test-cronjob\" created successfully")
+
+	mockCM.AssertExpectations(t)
+	mockFactory.AssertExpectations(t)
+	mockCronJob.AssertExpectations(t)
+}
+
+func TestGetCronJobHandlerDefaultNamespace(t *testing.T) {
+	mockCM := &testmocks.MockClusterManager{}
+	mockFactory := &testmocks.MockCronJobFactory{}
+	mockCronJob := &testmocks.MockCronJob{}
+
+	mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+	mockFactory.On("NewCronJob", mock.MatchedBy(func(params kai.CronJobParams) bool {
+		return params.Name == "test-cronjob" && params.Namespace == defaultNamespace
+	})).Return(mockCronJob)
+	mockCronJob.On("Get", mock.Anything, mockCM).Return("CronJob: test-cronjob", nil)
+
+	handler := getCronJobHandler(mockCM, mockFactory)
+	request := mcp.CallToolRequest{
+		Params: struct {
+			Name      string         `json:"name"`
+			Arguments map[string]any `json:"arguments,omitempty"`
+			Meta      *mcp.Meta      `json:"_meta,omitempty"`
+		}{
+			Arguments: map[string]any{
+				"name": "test-cronjob",
+				// No namespace provided - should use default
+			},
+		},
+	}
+
+	result, err := handler(context.Background(), request)
+	assert.NoError(t, err)
+	assert.Contains(t, result.Content[0].(mcp.TextContent).Text, "CronJob: test-cronjob")
+
+	mockCM.AssertExpectations(t)
+	mockFactory.AssertExpectations(t)
+	mockCronJob.AssertExpectations(t)
+}
+
+func TestDeleteCronJobHandlerDefaultNamespace(t *testing.T) {
+	mockCM := &testmocks.MockClusterManager{}
+	mockFactory := &testmocks.MockCronJobFactory{}
+	mockCronJob := &testmocks.MockCronJob{}
+
+	mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+	mockFactory.On("NewCronJob", mock.MatchedBy(func(params kai.CronJobParams) bool {
+		return params.Name == "test-cronjob" && params.Namespace == defaultNamespace
+	})).Return(mockCronJob)
+	mockCronJob.On("Delete", mock.Anything, mockCM).Return("CronJob \"test-cronjob\" deleted successfully", nil)
+
+	handler := deleteCronJobHandler(mockCM, mockFactory)
+	request := mcp.CallToolRequest{
+		Params: struct {
+			Name      string         `json:"name"`
+			Arguments map[string]any `json:"arguments,omitempty"`
+			Meta      *mcp.Meta      `json:"_meta,omitempty"`
+		}{
+			Arguments: map[string]any{
+				"name": "test-cronjob",
+				// No namespace provided - should use default
+			},
+		},
+	}
+
+	result, err := handler(context.Background(), request)
+	assert.NoError(t, err)
+	assert.Contains(t, result.Content[0].(mcp.TextContent).Text, "CronJob \"test-cronjob\" deleted successfully")
+
+	mockCM.AssertExpectations(t)
+	mockFactory.AssertExpectations(t)
+	mockCronJob.AssertExpectations(t)
+}

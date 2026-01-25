@@ -122,6 +122,57 @@ func testCreateCronJob(t *testing.T) {
 			},
 			expectedError: "namespace \"nonexistent\" not found",
 		},
+		{
+			name: "GetCurrentClient error",
+			cronJob: &CronJob{
+				Name:      "test-cronjob",
+				Namespace: testNamespace,
+				Schedule:  "*/5 * * * *",
+				Image:     "busybox:latest",
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				mockCM.On("GetCurrentClient").Return(nil, assert.AnError)
+			},
+			expectedError: "error getting client",
+		},
+		{
+			name: "Create CronJob with all optional parameters",
+			cronJob: func() *CronJob {
+				suspend := true
+				successfulJobsHistoryLimit := int32(5)
+				failedJobsHistoryLimit := int32(2)
+				startingDeadlineSeconds := int64(300)
+				backoffLimit := int32(4)
+				return &CronJob{
+					Name:                       "full-options-cronjob",
+					Namespace:                  testNamespace,
+					Schedule:                   "0 */6 * * *",
+					Image:                      "alpine:latest",
+					Command:                    []interface{}{"/bin/sh"},
+					Args:                       []interface{}{"-c", "echo hello"},
+					RestartPolicy:              "Never",
+					ConcurrencyPolicy:          "Replace",
+					Suspend:                    &suspend,
+					SuccessfulJobsHistoryLimit: &successfulJobsHistoryLimit,
+					FailedJobsHistoryLimit:     &failedJobsHistoryLimit,
+					StartingDeadlineSeconds:    &startingDeadlineSeconds,
+					BackoffLimit:               &backoffLimit,
+					Labels:                     map[string]interface{}{"app": "test", "env": "dev"},
+					Env:                        map[string]interface{}{"VAR1": "value1", "VAR2": "value2"},
+					ImagePullPolicy:            "Always",
+					ImagePullSecrets:           []interface{}{"my-registry-secret"},
+				}
+			}(),
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "CronJob \"full-options-cronjob\" created successfully",
+			expectedError:  "",
+		},
 	}
 
 	for _, tc := range testCases {
@@ -195,6 +246,17 @@ func testGetCronJob(t *testing.T) {
 				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
 			},
 			expectedError: "not found",
+		},
+		{
+			name: "GetCurrentClient error",
+			cronJob: &CronJob{
+				Name:      "test-cronjob",
+				Namespace: testNamespace,
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				mockCM.On("GetCurrentClient").Return(nil, assert.AnError)
+			},
+			expectedError: "error getting client",
 		},
 	}
 
@@ -400,7 +462,6 @@ func testDeleteCronJob(t *testing.T) {
 					tc.validateDelete(t, client)
 				}
 			}
-
 			mockCM.AssertExpectations(t)
 		})
 	}
