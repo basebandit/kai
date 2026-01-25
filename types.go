@@ -132,3 +132,41 @@ type CronJobParams struct {
 	ImagePullPolicy            string
 	ImagePullSecrets           []interface{}
 }
+
+// IngressParams holds all possible ingress configuration parameters
+type IngressParams struct {
+	Name             string
+	Namespace        string
+	IngressClassName string
+	Labels           map[string]interface{}
+	Annotations      map[string]interface{}
+	Rules            []IngressRule
+	TLS              []IngressTLS
+	DefaultBackend   *IngressBackend
+}
+
+// IngressRule represents an ingress rule configuration
+type IngressRule struct {
+	Host  string
+	Paths []IngressPath
+}
+
+// IngressPath represents a path within an ingress rule
+type IngressPath struct {
+	Path        string
+	PathType    string
+	ServiceName string
+	ServicePort interface{} // Can be int32 or string
+}
+
+// IngressTLS represents TLS configuration for an ingress
+type IngressTLS struct {
+	Hosts      []string
+	SecretName string
+}
+
+// IngressBackend represents a default backend configuration
+type IngressBackend struct {
+	ServiceName string
+	ServicePort interface{} // Can be int32 or string
+}

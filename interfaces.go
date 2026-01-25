@@ -102,3 +102,12 @@ type CronJobOperator interface {
 	List(ctx context.Context, cm ClusterManager, allNamespaces bool, labelSelector string) (string, error)
 	Delete(ctx context.Context, cm ClusterManager) (string, error)
 }
+
+// IngressOperator defines the operations needed for Ingress management
+type IngressOperator interface {
+	Create(ctx context.Context, cm ClusterManager) (string, error)
+	Get(ctx context.Context, cm ClusterManager) (string, error)
+	List(ctx context.Context, cm ClusterManager, allNamespaces bool, labelSelector string) (string, error)
+	Delete(ctx context.Context, cm ClusterManager) (string, error)
+	Update(ctx context.Context, cm ClusterManager) (string, error)
+}

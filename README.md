@@ -20,7 +20,7 @@ Kai provides a bridge between large language models (LLMs) and your Kubernetes c
 
 ### Networking
 - [x] **Services** - Create, get, list, and delete
-- [ ] **Ingress** - HTTP/HTTPS routing and TLS configuration
+- [x] **Ingress** - HTTP/HTTPS routing, TLS configuration (create, get, list, update, delete)
 
 ### Configuration
 - [x] **ConfigMaps** - Configuration management (create, get, list, update, delete)
@@ -92,6 +92,7 @@ Once configured, you can interact with your cluster using natural language:
 - "Show me the logs for pod my-app"
 - "Delete the service named backend"
 - "Create a cronjob that runs every 5 minutes"
+- "Create an ingress for my-app with TLS enabled"
 
 ## Contributing
 
