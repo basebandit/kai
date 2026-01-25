@@ -111,3 +111,24 @@ type JobParams struct {
 	ImagePullPolicy  string
 	ImagePullSecrets []interface{}
 }
+
+// CronJobParams holds all possible cronjob configuration parameters
+type CronJobParams struct {
+	Name                       string
+	Namespace                  string
+	Schedule                   string
+	Image                      string
+	Command                    []interface{}
+	Args                       []interface{}
+	RestartPolicy              string
+	ConcurrencyPolicy          string
+	Suspend                    *bool
+	SuccessfulJobsHistoryLimit *int32
+	FailedJobsHistoryLimit     *int32
+	StartingDeadlineSeconds    *int64
+	BackoffLimit               *int32
+	Labels                     map[string]interface{}
+	Env                        map[string]interface{}
+	ImagePullPolicy            string
+	ImagePullSecrets           []interface{}
+}

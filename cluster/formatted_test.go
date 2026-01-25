@@ -945,3 +945,304 @@ func TestConvertToLocalObjectReferences(t *testing.T) {
 		assert.Equal(t, []corev1.LocalObjectReference{}, result)
 	})
 }
+
+func TestFormatCronJob(t *testing.T) {
+	t.Run("Format basic cronjob", func(t *testing.T) {
+		cronJob := &batchv1.CronJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "test-cronjob",
+				Namespace:         "default",
+				CreationTimestamp: metav1.Time{Time: time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)},
+			},
+			Spec: batchv1.CronJobSpec{
+				Schedule:          "*/5 * * * *",
+				ConcurrencyPolicy: batchv1.AllowConcurrent,
+				JobTemplate: batchv1.JobTemplateSpec{
+					Spec: batchv1.JobSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{{Name: "test", Image: "busybox:latest"}},
+							},
+						},
+					},
+				},
+			},
+			Status: batchv1.CronJobStatus{
+				Active: []corev1.ObjectReference{},
+			},
+		}
+
+		result := formatCronJob(cronJob)
+		assert.Contains(t, result, "CronJob: test-cronjob")
+		assert.Contains(t, result, "Namespace: default")
+		assert.Contains(t, result, "Schedule: */5 * * * *")
+		assert.Contains(t, result, "Suspend: No")
+		assert.Contains(t, result, "Concurrency Policy: Allow")
+		assert.Contains(t, result, "Active Jobs: 0")
+		assert.Contains(t, result, "Image: busybox:latest")
+	})
+
+	t.Run("Format suspended cronjob", func(t *testing.T) {
+		suspend := true
+		cronJob := &batchv1.CronJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "suspended-cronjob",
+				Namespace:         "default",
+				CreationTimestamp: metav1.Time{Time: time.Now()},
+			},
+			Spec: batchv1.CronJobSpec{
+				Schedule: "0 0 * * *",
+				Suspend:  &suspend,
+				JobTemplate: batchv1.JobTemplateSpec{
+					Spec: batchv1.JobSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{{Name: "test", Image: "nginx"}},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatCronJob(cronJob)
+		assert.Contains(t, result, "Suspend: Yes")
+	})
+
+	t.Run("Format cronjob with history limits", func(t *testing.T) {
+		successLimit := int32(5)
+		failedLimit := int32(3)
+		startingDeadline := int64(100)
+		cronJob := &batchv1.CronJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "limits-cronjob",
+				Namespace:         "default",
+				CreationTimestamp: metav1.Time{Time: time.Now()},
+			},
+			Spec: batchv1.CronJobSpec{
+				Schedule:                   "0 * * * *",
+				SuccessfulJobsHistoryLimit: &successLimit,
+				FailedJobsHistoryLimit:     &failedLimit,
+				StartingDeadlineSeconds:    &startingDeadline,
+				JobTemplate: batchv1.JobTemplateSpec{
+					Spec: batchv1.JobSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{{Name: "test", Image: "alpine"}},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatCronJob(cronJob)
+		assert.Contains(t, result, "Successful Jobs History Limit: 5")
+		assert.Contains(t, result, "Failed Jobs History Limit: 3")
+		assert.Contains(t, result, "Starting Deadline Seconds: 100")
+	})
+
+	t.Run("Format cronjob with last schedule time", func(t *testing.T) {
+		lastSchedule := metav1.Time{Time: time.Now().Add(-5 * time.Minute)}
+		lastSuccess := metav1.Time{Time: time.Now().Add(-3 * time.Minute)}
+		cronJob := &batchv1.CronJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "scheduled-cronjob",
+				Namespace:         "default",
+				CreationTimestamp: metav1.Time{Time: time.Now().Add(-1 * time.Hour)},
+			},
+			Spec: batchv1.CronJobSpec{
+				Schedule: "*/5 * * * *",
+				JobTemplate: batchv1.JobTemplateSpec{
+					Spec: batchv1.JobSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{{Name: "test", Image: "busybox"}},
+							},
+						},
+					},
+				},
+			},
+			Status: batchv1.CronJobStatus{
+				LastScheduleTime:   &lastSchedule,
+				LastSuccessfulTime: &lastSuccess,
+			},
+		}
+
+		result := formatCronJob(cronJob)
+		assert.Contains(t, result, "Last Schedule:")
+		assert.Contains(t, result, "Last Successful:")
+	})
+
+	t.Run("Format cronjob with labels", func(t *testing.T) {
+		cronJob := &batchv1.CronJob{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "labeled-cronjob",
+				Namespace:         "default",
+				Labels:            map[string]string{"app": "batch", "env": "prod"},
+				CreationTimestamp: metav1.Time{Time: time.Now()},
+			},
+			Spec: batchv1.CronJobSpec{
+				Schedule: "0 0 * * *",
+				JobTemplate: batchv1.JobTemplateSpec{
+					Spec: batchv1.JobSpec{
+						Template: corev1.PodTemplateSpec{
+							Spec: corev1.PodSpec{
+								Containers: []corev1.Container{{Name: "test", Image: "busybox"}},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatCronJob(cronJob)
+		assert.Contains(t, result, "Labels:")
+		assert.Contains(t, result, "app")
+		assert.Contains(t, result, "batch")
+	})
+}
+
+func TestFormatCronJobList(t *testing.T) {
+	t.Run("Format cronjob list single namespace", func(t *testing.T) {
+		cronJobList := &batchv1.CronJobList{
+			Items: []batchv1.CronJob{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              "cronjob-1",
+						Namespace:         "default",
+						CreationTimestamp: metav1.Time{Time: time.Now()},
+					},
+					Spec: batchv1.CronJobSpec{
+						Schedule: "*/5 * * * *",
+					},
+					Status: batchv1.CronJobStatus{
+						Active: []corev1.ObjectReference{},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              "cronjob-2",
+						Namespace:         "default",
+						CreationTimestamp: metav1.Time{Time: time.Now()},
+					},
+					Spec: batchv1.CronJobSpec{
+						Schedule: "0 0 * * *",
+					},
+					Status: batchv1.CronJobStatus{
+						Active: []corev1.ObjectReference{{Name: "job-1"}},
+					},
+				},
+			},
+		}
+
+		result := formatCronJobList(cronJobList, false)
+		assert.Contains(t, result, "CronJobs in namespace \"default\":")
+		assert.Contains(t, result, "cronjob-1")
+		assert.Contains(t, result, "cronjob-2")
+		assert.Contains(t, result, "Schedule=*/5 * * * *")
+		assert.Contains(t, result, "Schedule=0 0 * * *")
+		assert.Contains(t, result, "Active=0")
+		assert.Contains(t, result, "Active=1")
+		assert.Contains(t, result, "Total: 2 CronJob(s)")
+	})
+
+	t.Run("Format cronjob list all namespaces", func(t *testing.T) {
+		cronJobList := &batchv1.CronJobList{
+			Items: []batchv1.CronJob{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              "cronjob-1",
+						Namespace:         "default",
+						CreationTimestamp: metav1.Time{Time: time.Now()},
+					},
+					Spec: batchv1.CronJobSpec{
+						Schedule: "*/10 * * * *",
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              "cronjob-2",
+						Namespace:         "kube-system",
+						CreationTimestamp: metav1.Time{Time: time.Now()},
+					},
+					Spec: batchv1.CronJobSpec{
+						Schedule: "0 * * * *",
+					},
+				},
+			},
+		}
+
+		result := formatCronJobList(cronJobList, true)
+		assert.Contains(t, result, "CronJobs across all namespaces:")
+		assert.Contains(t, result, "default/cronjob-1")
+		assert.Contains(t, result, "kube-system/cronjob-2")
+	})
+
+	t.Run("Format suspended cronjob in list", func(t *testing.T) {
+		suspend := true
+		cronJobList := &batchv1.CronJobList{
+			Items: []batchv1.CronJob{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              "suspended-cronjob",
+						Namespace:         "default",
+						CreationTimestamp: metav1.Time{Time: time.Now()},
+					},
+					Spec: batchv1.CronJobSpec{
+						Schedule: "0 0 * * *",
+						Suspend:  &suspend,
+					},
+				},
+			},
+		}
+
+		result := formatCronJobList(cronJobList, false)
+		assert.Contains(t, result, "Suspended")
+	})
+
+	t.Run("Format cronjob list with last schedule", func(t *testing.T) {
+		lastSchedule := metav1.Time{Time: time.Now().Add(-5 * time.Minute)}
+		cronJobList := &batchv1.CronJobList{
+			Items: []batchv1.CronJob{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              "scheduled-cronjob",
+						Namespace:         "default",
+						CreationTimestamp: metav1.Time{Time: time.Now().Add(-1 * time.Hour)},
+					},
+					Spec: batchv1.CronJobSpec{
+						Schedule: "*/5 * * * *",
+					},
+					Status: batchv1.CronJobStatus{
+						LastScheduleTime: &lastSchedule,
+					},
+				},
+			},
+		}
+
+		result := formatCronJobList(cronJobList, false)
+		assert.Contains(t, result, "LastSchedule=5m")
+	})
+
+	t.Run("Format cronjob list with labels", func(t *testing.T) {
+		cronJobList := &batchv1.CronJobList{
+			Items: []batchv1.CronJob{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              "labeled-cronjob",
+						Namespace:         "default",
+						Labels:            map[string]string{"app": "batch", "env": "prod"},
+						CreationTimestamp: metav1.Time{Time: time.Now()},
+					},
+					Spec: batchv1.CronJobSpec{
+						Schedule: "0 0 * * *",
+					},
+				},
+			},
+		}
+
+		result := formatCronJobList(cronJobList, false)
+		assert.Contains(t, result, "Labels: 2")
+	})
+}

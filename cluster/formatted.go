@@ -889,3 +889,93 @@ func convertToLocalObjectReferences(input []interface{}) []corev1.LocalObjectRef
 	}
 	return refs
 }
+
+func formatCronJob(cronJob *batchv1.CronJob) string {
+	result := fmt.Sprintf("CronJob: %s\n", cronJob.Name)
+	result += fmt.Sprintf("Namespace: %s\n", cronJob.Namespace)
+	result += fmt.Sprintf("Schedule: %s\n", cronJob.Spec.Schedule)
+
+	suspended := "No"
+	if cronJob.Spec.Suspend != nil && *cronJob.Spec.Suspend {
+		suspended = "Yes"
+	}
+	result += fmt.Sprintf("Suspend: %s\n", suspended)
+
+	result += fmt.Sprintf("Concurrency Policy: %s\n", cronJob.Spec.ConcurrencyPolicy)
+
+	if cronJob.Status.LastScheduleTime != nil {
+		result += fmt.Sprintf("Last Schedule: %s\n", cronJob.Status.LastScheduleTime.Time.Format(time.RFC3339))
+	}
+
+	if cronJob.Status.LastSuccessfulTime != nil {
+		result += fmt.Sprintf("Last Successful: %s\n", cronJob.Status.LastSuccessfulTime.Time.Format(time.RFC3339))
+	}
+
+	result += fmt.Sprintf("Active Jobs: %d\n", len(cronJob.Status.Active))
+	result += fmt.Sprintf("Created: %s\n", cronJob.CreationTimestamp.Time.Format(time.RFC3339))
+
+	if cronJob.Spec.SuccessfulJobsHistoryLimit != nil {
+		result += fmt.Sprintf("Successful Jobs History Limit: %d\n", *cronJob.Spec.SuccessfulJobsHistoryLimit)
+	}
+	if cronJob.Spec.FailedJobsHistoryLimit != nil {
+		result += fmt.Sprintf("Failed Jobs History Limit: %d\n", *cronJob.Spec.FailedJobsHistoryLimit)
+	}
+	if cronJob.Spec.StartingDeadlineSeconds != nil {
+		result += fmt.Sprintf("Starting Deadline Seconds: %d\n", *cronJob.Spec.StartingDeadlineSeconds)
+	}
+
+	if len(cronJob.Labels) > 0 {
+		result += "\nLabels:\n"
+		for k, v := range cronJob.Labels {
+			result += fmt.Sprintf("- %s: %s\n", k, v)
+		}
+	}
+
+	if len(cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers) > 0 {
+		result += fmt.Sprintf("\nImage: %s\n", cronJob.Spec.JobTemplate.Spec.Template.Spec.Containers[0].Image)
+	}
+
+	return result
+}
+
+func formatCronJobList(cronJobs *batchv1.CronJobList, includeNamespace bool) string {
+	var result strings.Builder
+
+	if includeNamespace {
+		result.WriteString("CronJobs across all namespaces:\n")
+	} else {
+		result.WriteString(fmt.Sprintf("CronJobs in namespace %q:\n", cronJobs.Items[0].Namespace))
+	}
+
+	for _, cronJob := range cronJobs.Items {
+		age := time.Since(cronJob.CreationTimestamp.Time).Round(time.Second)
+
+		suspended := "Active"
+		if cronJob.Spec.Suspend != nil && *cronJob.Spec.Suspend {
+			suspended = "Suspended"
+		}
+
+		lastSchedule := "<none>"
+		if cronJob.Status.LastScheduleTime != nil {
+			lastSchedule = formatDuration(time.Since(cronJob.Status.LastScheduleTime.Time))
+		}
+
+		if includeNamespace {
+			result.WriteString(fmt.Sprintf("• %s/%s: Schedule=%s, %s, LastSchedule=%s, Active=%d, Age=%s",
+				cronJob.Namespace, cronJob.Name, cronJob.Spec.Schedule, suspended, lastSchedule, len(cronJob.Status.Active), formatDuration(age)))
+		} else {
+			result.WriteString(fmt.Sprintf("• %s: Schedule=%s, %s, LastSchedule=%s, Active=%d, Age=%s",
+				cronJob.Name, cronJob.Spec.Schedule, suspended, lastSchedule, len(cronJob.Status.Active), formatDuration(age)))
+		}
+
+		if len(cronJob.Labels) > 0 {
+			result.WriteString(fmt.Sprintf(" - Labels: %d", len(cronJob.Labels)))
+		}
+
+		result.WriteString("\n")
+	}
+
+	result.WriteString(fmt.Sprintf("\nTotal: %d CronJob(s)", len(cronJobs.Items)))
+
+	return result.String()
+}
