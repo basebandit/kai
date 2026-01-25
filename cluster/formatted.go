@@ -945,7 +945,11 @@ func formatCronJobList(cronJobs *batchv1.CronJobList, includeNamespace bool) str
 	if includeNamespace {
 		result.WriteString("CronJobs across all namespaces:\n")
 	} else {
-		result.WriteString(fmt.Sprintf("CronJobs in namespace %q:\n", cronJobs.Items[0].Namespace))
+		if len(cronJobs.Items) > 0 {
+			result.WriteString(fmt.Sprintf("CronJobs in namespace %q:\n", cronJobs.Items[0].Namespace))
+		} else {
+			result.WriteString("CronJobs in namespace:\n")
+		}
 	}
 
 	for _, cronJob := range cronJobs.Items {
