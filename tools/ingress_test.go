@@ -93,7 +93,7 @@ func TestCreateIngressHandler(t *testing.T) {
 							map[string]any{
 								"path":         "/",
 								"service_name": "web-service",
-								"service_port": float64(8080),
+								"service_port": 8080,
 							},
 						},
 					},
