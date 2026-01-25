@@ -1090,7 +1090,11 @@ func formatIngressList(ingresses *networkingv1.IngressList, includeNamespace boo
 	if includeNamespace {
 		result.WriteString("Ingresses across all namespaces:\n")
 	} else {
-		result.WriteString(fmt.Sprintf("Ingresses in namespace %q:\n", ingresses.Items[0].Namespace))
+		if len(ingresses.Items) > 0 {
+			result.WriteString(fmt.Sprintf("Ingresses in namespace %q:\n", ingresses.Items[0].Namespace))
+		} else {
+			result.WriteString("Ingresses in namespace:\n")
+		}
 	}
 
 	for _, ingress := range ingresses.Items {
