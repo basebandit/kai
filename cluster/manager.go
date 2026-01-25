@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -183,6 +184,9 @@ func (cm *Manager) ListContexts() []*kai.ContextInfo {
 		contextCopy := *contextInfo
 		contexts = append(contexts, &contextCopy)
 	}
+	sort.Slice(contexts, func(i, j int) bool {
+		return contexts[i].Name < contexts[j].Name
+	})
 	return contexts
 }
 

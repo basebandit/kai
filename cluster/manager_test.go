@@ -434,6 +434,8 @@ func testListContexts(t *testing.T) {
 
 		contexts := cm.ListContexts()
 		assert.Len(t, contexts, 2)
+		assert.Equal(t, testContext1, contexts[0].Name)
+		assert.Equal(t, testContext2, contexts[1].Name)
 
 		contextNames := make(map[string]bool)
 		for _, ctx := range contexts {
