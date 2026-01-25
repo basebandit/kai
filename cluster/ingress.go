@@ -317,6 +317,15 @@ func (i *Ingress) Update(ctx context.Context, cm kai.ClusterManager) (string, er
 		existingIngress.Spec.Rules = rules
 	}
 
+	// Update default backend if specified
+	if i.DefaultBackend != nil {
+		backend, err := i.createIngressBackend(i.DefaultBackend)
+		if err != nil {
+			return result, err
+		}
+		existingIngress.Spec.DefaultBackend = backend
+	}
+
 	// Update TLS if specified
 	if len(i.TLS) > 0 {
 		tlsConfigs := make([]networkingv1.IngressTLS, 0, len(i.TLS))

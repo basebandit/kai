@@ -107,6 +107,23 @@ func TestCreateIngressHandler(t *testing.T) {
 			expectedOutput: "Ingress \"annotated-ingress\" created successfully",
 		},
 		{
+			name: "Create Ingress with default backend",
+			args: map[string]any{
+				"name":      "default-backend-ingress",
+				"namespace": defaultNamespace,
+				"default_backend": map[string]any{
+					"service_name": "backend",
+					"service_port": float64(8080),
+				},
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockIngressFactory, mockIngress *testmocks.MockIngress) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockFactory.On("NewIngress", mock.Anything).Return(mockIngress)
+				mockIngress.On("Create", mock.Anything, mockCM).Return("Ingress \"default-backend-ingress\" created successfully", nil)
+			},
+			expectedOutput: "Ingress \"default-backend-ingress\" created successfully",
+		},
+		{
 			name: "Missing Ingress name",
 			args: map[string]any{
 				"rules": []any{
@@ -154,7 +171,7 @@ func TestCreateIngressHandler(t *testing.T) {
 			},
 			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockIngressFactory, mockIngress *testmocks.MockIngress) {
 			},
-			expectedOutput: "Required parameter 'rules' is missing",
+			expectedOutput: "Required parameter 'rules' or 'default_backend' is missing",
 		},
 		{
 			name: "Empty rules",

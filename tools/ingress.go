@@ -57,8 +57,10 @@ func RegisterIngressToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 			mcp.Description("Ingress class name (e.g., 'nginx', 'traefik')"),
 		),
 		mcp.WithArray("rules",
-			mcp.Required(),
 			mcp.Description("Ingress rules as array of objects with 'host' and 'paths'. Each path has 'path', 'path_type' (Prefix/Exact), 'service_name', and 'service_port'"),
+		),
+		mcp.WithObject("default_backend",
+			mcp.Description("Default backend as an object with 'service_name' and 'service_port'. Provide this if no rules are specified"),
 		),
 		mcp.WithArray("tls",
 			mcp.Description("TLS configuration as array of objects with 'hosts' (array) and 'secret_name'"),
@@ -113,6 +115,9 @@ func RegisterIngressToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 		mcp.WithArray("rules",
 			mcp.Description("New Ingress rules (replaces existing rules)"),
 		),
+		mcp.WithObject("default_backend",
+			mcp.Description("Default backend as an object with 'service_name' and 'service_port'"),
+		),
 		mcp.WithArray("tls",
 			mcp.Description("New TLS configuration (replaces existing TLS)"),
 		),
@@ -150,14 +155,22 @@ func createIngressHandler(cm kai.ClusterManager, factory IngressFactory) func(ct
 			return mcp.NewToolResultText(errEmptyName), nil
 		}
 
-		rulesArg, ok := request.Params.Arguments["rules"]
-		if !ok || rulesArg == nil {
-			return mcp.NewToolResultText("Required parameter 'rules' is missing"), nil
+		rulesArg, hasRules := request.Params.Arguments["rules"]
+		defaultBackendArg, hasDefaultBackend := request.Params.Arguments["default_backend"]
+		if !hasRules && !hasDefaultBackend {
+			return mcp.NewToolResultText("Required parameter 'rules' or 'default_backend' is missing"), nil
 		}
 
-		rulesSlice, ok := rulesArg.([]interface{})
-		if !ok || len(rulesSlice) == 0 {
-			return mcp.NewToolResultText("Parameter 'rules' must be a non-empty array"), nil
+		var rulesSlice []interface{}
+		if hasRules {
+			var ok bool
+			rulesSlice, ok = rulesArg.([]interface{})
+			if !ok || len(rulesSlice) == 0 {
+				if !hasDefaultBackend {
+					return mcp.NewToolResultText("Parameter 'rules' must be a non-empty array"), nil
+				}
+				rulesSlice = nil
+			}
 		}
 
 		namespace := cm.GetCurrentNamespace()
@@ -183,11 +196,22 @@ func createIngressHandler(cm kai.ClusterManager, factory IngressFactory) func(ct
 		}
 
 		// Parse rules
-		rules, err := parseIngressRules(rulesSlice)
-		if err != nil {
-			return mcp.NewToolResultText(fmt.Sprintf("Invalid rules: %s", err.Error())), nil
+		if len(rulesSlice) > 0 {
+			rules, err := parseIngressRules(rulesSlice)
+			if err != nil {
+				return mcp.NewToolResultText(fmt.Sprintf("Invalid rules: %s", err.Error())), nil
+			}
+			params.Rules = rules
 		}
-		params.Rules = rules
+
+		// Parse default backend
+		if hasDefaultBackend {
+			backend, err := parseIngressBackend(defaultBackendArg)
+			if err != nil {
+				return mcp.NewToolResultText(fmt.Sprintf("Invalid default backend: %s", err.Error())), nil
+			}
+			params.DefaultBackend = backend
+		}
 
 		// Parse TLS
 		if tlsArg, ok := request.Params.Arguments["tls"].([]interface{}); ok {
@@ -318,6 +342,15 @@ func updateIngressHandler(cm kai.ClusterManager, factory IngressFactory) func(ct
 			params.Rules = rules
 		}
 
+		// Parse default backend if provided
+		if defaultBackendArg, ok := request.Params.Arguments["default_backend"]; ok {
+			backend, err := parseIngressBackend(defaultBackendArg)
+			if err != nil {
+				return mcp.NewToolResultText(fmt.Sprintf("Invalid default backend: %s", err.Error())), nil
+			}
+			params.DefaultBackend = backend
+		}
+
 		// Parse TLS if provided
 		if tlsArg, ok := request.Params.Arguments["tls"].([]interface{}); ok {
 			tls, err := parseIngressTLS(tlsArg)
@@ -430,6 +463,28 @@ func parseIngressRules(rulesSlice []interface{}) ([]kai.IngressRule, error) {
 	}
 
 	return rules, nil
+}
+
+func parseIngressBackend(backendArg interface{}) (*kai.IngressBackend, error) {
+	backendMap, ok := backendArg.(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("default_backend must be an object")
+	}
+
+	serviceName, ok := backendMap["service_name"].(string)
+	if !ok || serviceName == "" {
+		return nil, fmt.Errorf("default_backend: 'service_name' is required")
+	}
+
+	servicePort := backendMap["service_port"]
+	if servicePort == nil {
+		return nil, fmt.Errorf("default_backend: 'service_port' is required")
+	}
+
+	return &kai.IngressBackend{
+		ServiceName: serviceName,
+		ServicePort: servicePort,
+	}, nil
 }
 
 func parseIngressTLS(tlsSlice []interface{}) ([]kai.IngressTLS, error) {
