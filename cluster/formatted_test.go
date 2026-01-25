@@ -1246,6 +1246,14 @@ func TestFormatCronJobList(t *testing.T) {
 		result := formatCronJobList(cronJobList, false)
 		assert.Contains(t, result, "Labels: 2")
 	})
+
+	t.Run("Format empty cronjob list", func(t *testing.T) {
+		cronJobList := &batchv1.CronJobList{Items: []batchv1.CronJob{}}
+
+		result := formatCronJobList(cronJobList, false)
+		assert.Contains(t, result, "CronJobs in namespace:")
+		assert.Contains(t, result, "Total: 0 CronJob(s)")
+	})
 }
 
 func TestFormatIngress(t *testing.T) {
