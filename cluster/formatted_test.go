@@ -8,6 +8,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -1243,6 +1244,374 @@ func TestFormatCronJobList(t *testing.T) {
 		}
 
 		result := formatCronJobList(cronJobList, false)
+		assert.Contains(t, result, "Labels: 2")
+	})
+}
+
+func TestFormatIngress(t *testing.T) {
+	t.Run("Format basic ingress", func(t *testing.T) {
+		pathType := networkingv1.PathTypePrefix
+		ingress := &networkingv1.Ingress{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "test-ingress",
+				Namespace:         "default",
+				CreationTimestamp: metav1.Time{Time: time.Date(2024, 1, 1, 12, 0, 0, 0, time.UTC)},
+			},
+			Spec: networkingv1.IngressSpec{
+				Rules: []networkingv1.IngressRule{
+					{
+						Host: "example.com",
+						IngressRuleValue: networkingv1.IngressRuleValue{
+							HTTP: &networkingv1.HTTPIngressRuleValue{
+								Paths: []networkingv1.HTTPIngressPath{
+									{
+										Path:     "/",
+										PathType: &pathType,
+										Backend: networkingv1.IngressBackend{
+											Service: &networkingv1.IngressServiceBackend{
+												Name: "backend",
+												Port: networkingv1.ServiceBackendPort{
+													Number: 80,
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatIngress(ingress)
+		assert.Contains(t, result, "Ingress: test-ingress")
+		assert.Contains(t, result, "Namespace: default")
+		assert.Contains(t, result, "example.com")
+		assert.Contains(t, result, "backend")
+	})
+
+	t.Run("Format ingress with TLS", func(t *testing.T) {
+		pathType := networkingv1.PathTypePrefix
+		ingress := &networkingv1.Ingress{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "tls-ingress",
+				Namespace:         "default",
+				CreationTimestamp: metav1.Time{Time: time.Now()},
+			},
+			Spec: networkingv1.IngressSpec{
+				Rules: []networkingv1.IngressRule{
+					{
+						Host: "secure.example.com",
+						IngressRuleValue: networkingv1.IngressRuleValue{
+							HTTP: &networkingv1.HTTPIngressRuleValue{
+								Paths: []networkingv1.HTTPIngressPath{
+									{
+										Path:     "/",
+										PathType: &pathType,
+										Backend: networkingv1.IngressBackend{
+											Service: &networkingv1.IngressServiceBackend{
+												Name: "secure-backend",
+												Port: networkingv1.ServiceBackendPort{
+													Name: "https",
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				TLS: []networkingv1.IngressTLS{
+					{
+						Hosts:      []string{"secure.example.com"},
+						SecretName: "tls-secret",
+					},
+				},
+			},
+		}
+
+		result := formatIngress(ingress)
+		assert.Contains(t, result, "TLS:")
+		assert.Contains(t, result, "secure.example.com")
+		assert.Contains(t, result, "tls-secret")
+	})
+
+	t.Run("Format ingress with ingress class", func(t *testing.T) {
+		ingressClass := "nginx"
+		ingress := &networkingv1.Ingress{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "class-ingress",
+				Namespace:         "default",
+				CreationTimestamp: metav1.Time{Time: time.Now()},
+			},
+			Spec: networkingv1.IngressSpec{
+				IngressClassName: &ingressClass,
+			},
+		}
+
+		result := formatIngress(ingress)
+		assert.Contains(t, result, "Ingress Class: nginx")
+	})
+
+	t.Run("Format ingress with default backend", func(t *testing.T) {
+		ingress := &networkingv1.Ingress{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "default-backend-ingress",
+				Namespace:         "default",
+				CreationTimestamp: metav1.Time{Time: time.Now()},
+			},
+			Spec: networkingv1.IngressSpec{
+				DefaultBackend: &networkingv1.IngressBackend{
+					Service: &networkingv1.IngressServiceBackend{
+						Name: "default-service",
+						Port: networkingv1.ServiceBackendPort{
+							Number: 8080,
+						},
+					},
+				},
+			},
+		}
+
+		result := formatIngress(ingress)
+		assert.Contains(t, result, "Default Backend:")
+		assert.Contains(t, result, "default-service")
+		assert.Contains(t, result, "8080")
+	})
+
+	t.Run("Format ingress with load balancer", func(t *testing.T) {
+		ingress := &networkingv1.Ingress{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "lb-ingress",
+				Namespace:         "default",
+				CreationTimestamp: metav1.Time{Time: time.Now()},
+			},
+			Spec: networkingv1.IngressSpec{},
+			Status: networkingv1.IngressStatus{
+				LoadBalancer: networkingv1.IngressLoadBalancerStatus{
+					Ingress: []networkingv1.IngressLoadBalancerIngress{
+						{
+							IP: "192.168.1.100",
+						},
+					},
+				},
+			},
+		}
+
+		result := formatIngress(ingress)
+		assert.Contains(t, result, "Load Balancer:")
+		assert.Contains(t, result, "192.168.1.100")
+	})
+
+	t.Run("Format ingress with labels and annotations", func(t *testing.T) {
+		ingress := &networkingv1.Ingress{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:              "labeled-ingress",
+				Namespace:         "default",
+				Labels:            map[string]string{"app": "web", "env": "prod"},
+				Annotations:       map[string]string{"nginx.ingress.kubernetes.io/rewrite-target": "/"},
+				CreationTimestamp: metav1.Time{Time: time.Now()},
+			},
+			Spec: networkingv1.IngressSpec{},
+		}
+
+		result := formatIngress(ingress)
+		assert.Contains(t, result, "Labels:")
+		assert.Contains(t, result, "app")
+		assert.Contains(t, result, "Annotations:")
+		assert.Contains(t, result, "rewrite-target")
+	})
+}
+
+func TestFormatIngressList(t *testing.T) {
+	t.Run("Format ingress list single namespace", func(t *testing.T) {
+		pathType := networkingv1.PathTypePrefix
+		ingressList := &networkingv1.IngressList{
+			Items: []networkingv1.Ingress{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              "ingress-1",
+						Namespace:         "default",
+						CreationTimestamp: metav1.Time{Time: time.Now()},
+					},
+					Spec: networkingv1.IngressSpec{
+						Rules: []networkingv1.IngressRule{
+							{
+								Host: "app1.example.com",
+								IngressRuleValue: networkingv1.IngressRuleValue{
+									HTTP: &networkingv1.HTTPIngressRuleValue{
+										Paths: []networkingv1.HTTPIngressPath{
+											{
+												Path:     "/",
+												PathType: &pathType,
+												Backend: networkingv1.IngressBackend{
+													Service: &networkingv1.IngressServiceBackend{
+														Name: "service1",
+														Port: networkingv1.ServiceBackendPort{Number: 80},
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              "ingress-2",
+						Namespace:         "default",
+						CreationTimestamp: metav1.Time{Time: time.Now()},
+					},
+					Spec: networkingv1.IngressSpec{
+						Rules: []networkingv1.IngressRule{
+							{
+								Host: "app2.example.com",
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatIngressList(ingressList, false)
+		assert.Contains(t, result, "Ingresses in namespace \"default\":")
+		assert.Contains(t, result, "ingress-1")
+		assert.Contains(t, result, "ingress-2")
+		assert.Contains(t, result, "app1.example.com")
+		assert.Contains(t, result, "Total: 2 Ingress(es)")
+	})
+
+	t.Run("Format ingress list all namespaces", func(t *testing.T) {
+		ingressList := &networkingv1.IngressList{
+			Items: []networkingv1.Ingress{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              "ingress-1",
+						Namespace:         "default",
+						CreationTimestamp: metav1.Time{Time: time.Now()},
+					},
+					Spec: networkingv1.IngressSpec{
+						Rules: []networkingv1.IngressRule{
+							{Host: "app1.example.com"},
+						},
+					},
+				},
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              "ingress-2",
+						Namespace:         "kube-system",
+						CreationTimestamp: metav1.Time{Time: time.Now()},
+					},
+					Spec: networkingv1.IngressSpec{
+						Rules: []networkingv1.IngressRule{
+							{Host: "app2.example.com"},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatIngressList(ingressList, true)
+		assert.Contains(t, result, "Ingresses across all namespaces:")
+		assert.Contains(t, result, "default/ingress-1")
+		assert.Contains(t, result, "kube-system/ingress-2")
+	})
+
+	t.Run("Format ingress list with TLS indicator", func(t *testing.T) {
+		ingressList := &networkingv1.IngressList{
+			Items: []networkingv1.Ingress{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              "tls-ingress",
+						Namespace:         "default",
+						CreationTimestamp: metav1.Time{Time: time.Now()},
+					},
+					Spec: networkingv1.IngressSpec{
+						Rules: []networkingv1.IngressRule{
+							{Host: "secure.example.com"},
+						},
+						TLS: []networkingv1.IngressTLS{
+							{
+								Hosts:      []string{"secure.example.com"},
+								SecretName: "tls-secret",
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatIngressList(ingressList, false)
+		assert.Contains(t, result, "[TLS]")
+	})
+
+	t.Run("Format ingress list with ingress class", func(t *testing.T) {
+		ingressClass := "nginx"
+		ingressList := &networkingv1.IngressList{
+			Items: []networkingv1.Ingress{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              "class-ingress",
+						Namespace:         "default",
+						CreationTimestamp: metav1.Time{Time: time.Now()},
+					},
+					Spec: networkingv1.IngressSpec{
+						IngressClassName: &ingressClass,
+					},
+				},
+			},
+		}
+
+		result := formatIngressList(ingressList, false)
+		assert.Contains(t, result, "Class=nginx")
+	})
+
+	t.Run("Format ingress list with load balancer address", func(t *testing.T) {
+		ingressList := &networkingv1.IngressList{
+			Items: []networkingv1.Ingress{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              "lb-ingress",
+						Namespace:         "default",
+						CreationTimestamp: metav1.Time{Time: time.Now()},
+					},
+					Spec: networkingv1.IngressSpec{},
+					Status: networkingv1.IngressStatus{
+						LoadBalancer: networkingv1.IngressLoadBalancerStatus{
+							Ingress: []networkingv1.IngressLoadBalancerIngress{
+								{
+									Hostname: "lb.example.com",
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		result := formatIngressList(ingressList, false)
+		assert.Contains(t, result, "Address=lb.example.com")
+	})
+
+	t.Run("Format ingress list with labels", func(t *testing.T) {
+		ingressList := &networkingv1.IngressList{
+			Items: []networkingv1.Ingress{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:              "labeled-ingress",
+						Namespace:         "default",
+						Labels:            map[string]string{"app": "web", "env": "prod"},
+						CreationTimestamp: metav1.Time{Time: time.Now()},
+					},
+					Spec: networkingv1.IngressSpec{},
+				},
+			},
+		}
+
+		result := formatIngressList(ingressList, false)
 		assert.Contains(t, result, "Labels: 2")
 	})
 }

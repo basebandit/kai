@@ -8,6 +8,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 )
 
 func formatPod(pod *corev1.Pod) string {
@@ -976,6 +977,179 @@ func formatCronJobList(cronJobs *batchv1.CronJobList, includeNamespace bool) str
 	}
 
 	result.WriteString(fmt.Sprintf("\nTotal: %d CronJob(s)", len(cronJobs.Items)))
+
+	return result.String()
+}
+
+func formatIngress(ingress *networkingv1.Ingress) string {
+	result := fmt.Sprintf("Ingress: %s\n", ingress.Name)
+	result += fmt.Sprintf("Namespace: %s\n", ingress.Namespace)
+
+	if ingress.Spec.IngressClassName != nil {
+		result += fmt.Sprintf("Ingress Class: %s\n", *ingress.Spec.IngressClassName)
+	}
+
+	result += fmt.Sprintf("Created: %s\n", ingress.CreationTimestamp.Time.Format(time.RFC3339))
+
+	// Default backend
+	if ingress.Spec.DefaultBackend != nil {
+		result += "\nDefault Backend:\n"
+		if ingress.Spec.DefaultBackend.Service != nil {
+			result += fmt.Sprintf("  Service: %s\n", ingress.Spec.DefaultBackend.Service.Name)
+			if ingress.Spec.DefaultBackend.Service.Port.Number > 0 {
+				result += fmt.Sprintf("  Port: %d\n", ingress.Spec.DefaultBackend.Service.Port.Number)
+			} else if ingress.Spec.DefaultBackend.Service.Port.Name != "" {
+				result += fmt.Sprintf("  Port: %s\n", ingress.Spec.DefaultBackend.Service.Port.Name)
+			}
+		}
+	}
+
+	// Rules
+	if len(ingress.Spec.Rules) > 0 {
+		result += "\nRules:\n"
+		for _, rule := range ingress.Spec.Rules {
+			host := rule.Host
+			if host == "" {
+				host = "*"
+			}
+			result += fmt.Sprintf("  Host: %s\n", host)
+
+			if rule.HTTP != nil {
+				for _, path := range rule.HTTP.Paths {
+					pathType := "Prefix"
+					if path.PathType != nil {
+						pathType = string(*path.PathType)
+					}
+					pathStr := path.Path
+					if pathStr == "" {
+						pathStr = "/"
+					}
+
+					if path.Backend.Service != nil {
+						portStr := ""
+						if path.Backend.Service.Port.Number > 0 {
+							portStr = fmt.Sprintf("%d", path.Backend.Service.Port.Number)
+						} else if path.Backend.Service.Port.Name != "" {
+							portStr = path.Backend.Service.Port.Name
+						}
+						result += fmt.Sprintf("    %s (%s) → %s:%s\n", pathStr, pathType, path.Backend.Service.Name, portStr)
+					}
+				}
+			}
+		}
+	}
+
+	// TLS configuration
+	if len(ingress.Spec.TLS) > 0 {
+		result += "\nTLS:\n"
+		for _, tls := range ingress.Spec.TLS {
+			if len(tls.Hosts) > 0 {
+				result += fmt.Sprintf("  Hosts: %s\n", strings.Join(tls.Hosts, ", "))
+			}
+			if tls.SecretName != "" {
+				result += fmt.Sprintf("  Secret: %s\n", tls.SecretName)
+			}
+		}
+	}
+
+	// Status - Load Balancer addresses
+	if len(ingress.Status.LoadBalancer.Ingress) > 0 {
+		result += "\nLoad Balancer:\n"
+		for _, lb := range ingress.Status.LoadBalancer.Ingress {
+			if lb.IP != "" {
+				result += fmt.Sprintf("  IP: %s\n", lb.IP)
+			}
+			if lb.Hostname != "" {
+				result += fmt.Sprintf("  Hostname: %s\n", lb.Hostname)
+			}
+		}
+	}
+
+	// Labels
+	if len(ingress.Labels) > 0 {
+		result += "\nLabels:\n"
+		for k, v := range ingress.Labels {
+			result += fmt.Sprintf("- %s: %s\n", k, v)
+		}
+	}
+
+	// Annotations
+	if len(ingress.Annotations) > 0 {
+		result += "\nAnnotations:\n"
+		for k, v := range ingress.Annotations {
+			result += fmt.Sprintf("- %s: %s\n", k, v)
+		}
+	}
+
+	return result
+}
+
+func formatIngressList(ingresses *networkingv1.IngressList, includeNamespace bool) string {
+	var result strings.Builder
+
+	if includeNamespace {
+		result.WriteString("Ingresses across all namespaces:\n")
+	} else {
+		if len(ingresses.Items) > 0 {
+			result.WriteString(fmt.Sprintf("Ingresses in namespace %q:\n", ingresses.Items[0].Namespace))
+		} else {
+			result.WriteString("Ingresses in namespace:\n")
+		}
+	}
+
+	for _, ingress := range ingresses.Items {
+		age := time.Since(ingress.CreationTimestamp.Time).Round(time.Second)
+
+		// Collect hosts
+		hosts := []string{}
+		for _, rule := range ingress.Spec.Rules {
+			if rule.Host != "" {
+				hosts = append(hosts, rule.Host)
+			}
+		}
+		hostStr := "*"
+		if len(hosts) > 0 {
+			hostStr = strings.Join(hosts, ", ")
+		}
+
+		// Get address from status
+		address := "<pending>"
+		if len(ingress.Status.LoadBalancer.Ingress) > 0 {
+			lb := ingress.Status.LoadBalancer.Ingress[0]
+			if lb.IP != "" {
+				address = lb.IP
+			} else if lb.Hostname != "" {
+				address = lb.Hostname
+			}
+		}
+
+		// Get ingress class
+		ingressClass := "<none>"
+		if ingress.Spec.IngressClassName != nil {
+			ingressClass = *ingress.Spec.IngressClassName
+		}
+
+		if includeNamespace {
+			result.WriteString(fmt.Sprintf("• %s/%s: Class=%s, Hosts=%s, Address=%s, Age=%s",
+				ingress.Namespace, ingress.Name, ingressClass, hostStr, address, formatDuration(age)))
+		} else {
+			result.WriteString(fmt.Sprintf("• %s: Class=%s, Hosts=%s, Address=%s, Age=%s",
+				ingress.Name, ingressClass, hostStr, address, formatDuration(age)))
+		}
+
+		// TLS indicator
+		if len(ingress.Spec.TLS) > 0 {
+			result.WriteString(" [TLS]")
+		}
+
+		if len(ingress.Labels) > 0 {
+			result.WriteString(fmt.Sprintf(" - Labels: %d", len(ingress.Labels)))
+		}
+
+		result.WriteString("\n")
+	}
+
+	result.WriteString(fmt.Sprintf("\nTotal: %d Ingress(es)", len(ingresses.Items)))
 
 	return result.String()
 }
