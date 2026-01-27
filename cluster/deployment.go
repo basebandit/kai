@@ -597,7 +597,7 @@ func (d *Deployment) RolloutStatus(ctx context.Context, cm kai.ClusterManager) (
 	}
 
 	if deployment.Status.Replicas == deployment.Status.UpdatedReplicas &&
-		deployment.Status.Replicas == deployment.Status.AvailableReplicas &&
+		deployment.Status.UpdatedReplicas == deployment.Status.AvailableReplicas &&
 		deployment.Status.ObservedGeneration >= deployment.Generation {
 		result += "\nRollout complete!"
 	} else {
