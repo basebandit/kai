@@ -474,7 +474,7 @@ func TestRegisterCronJobTools(t *testing.T) {
 	mockServer := new(testmocks.MockServer)
 	mockCM := testmocks.NewMockClusterManager()
 
-	mockServer.On("AddTool", mock.AnythingOfType("mcp.Tool"), mock.AnythingOfType("server.ToolHandlerFunc")).Return().Times(4)
+	mockServer.On("AddTool", mock.AnythingOfType("mcp.Tool"), mock.AnythingOfType("server.ToolHandlerFunc")).Return().Times(7)
 
 	RegisterCronJobTools(mockServer, mockCM)
 
@@ -486,7 +486,7 @@ func TestRegisterCronJobToolsWithFactory(t *testing.T) {
 	mockCM := testmocks.NewMockClusterManager()
 	mockFactory := new(testmocks.MockCronJobFactory)
 
-	mockServer.On("AddTool", mock.AnythingOfType("mcp.Tool"), mock.AnythingOfType("server.ToolHandlerFunc")).Return().Times(4)
+	mockServer.On("AddTool", mock.AnythingOfType("mcp.Tool"), mock.AnythingOfType("server.ToolHandlerFunc")).Return().Times(7)
 
 	RegisterCronJobToolsWithFactory(mockServer, mockCM, mockFactory)
 

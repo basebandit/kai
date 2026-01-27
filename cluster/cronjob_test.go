@@ -18,6 +18,8 @@ func TestCronJobOperations(t *testing.T) {
 	t.Run("GetCronJob", testGetCronJob)
 	t.Run("ListCronJobs", testListCronJobs)
 	t.Run("DeleteCronJob", testDeleteCronJob)
+	t.Run("UpdateCronJob", testUpdateCronJob)
+	t.Run("SetSuspended", testSetSuspended)
 }
 
 func testCreateCronJob(t *testing.T) {
@@ -462,6 +464,326 @@ func testDeleteCronJob(t *testing.T) {
 					tc.validateDelete(t, client)
 				}
 			}
+			mockCM.AssertExpectations(t)
+		})
+	}
+}
+
+func testUpdateCronJob(t *testing.T) {
+	ctx := context.Background()
+	suspend := false
+	historyLimit := int32(3)
+
+	existingCronJob := &batchv1.CronJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cronjob",
+			Namespace: testNamespace,
+			Labels: map[string]string{
+				"version": "v1",
+			},
+		},
+		Spec: batchv1.CronJobSpec{
+			Schedule:                   "0 * * * *",
+			Suspend:                    &suspend,
+			SuccessfulJobsHistoryLimit: &historyLimit,
+			FailedJobsHistoryLimit:     &historyLimit,
+			JobTemplate: batchv1.JobTemplateSpec{
+				Spec: batchv1.JobSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "test-container",
+									Image: "busybox:1.35",
+								},
+							},
+							RestartPolicy: corev1.RestartPolicyOnFailure,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	testCases := []struct {
+		name           string
+		cronJob        *CronJob
+		setupMock      func(*testmocks.MockClusterManager)
+		expectedResult string
+		expectedError  string
+		validateUpdate func(*testing.T, kubernetes.Interface)
+	}{
+		{
+			name: "Update cronjob schedule",
+			cronJob: &CronJob{
+				Name:      "test-cronjob",
+				Namespace: testNamespace,
+				Schedule:  "0 0 * * *",
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(existingCronJob, ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "updated successfully",
+			validateUpdate: func(t *testing.T, client kubernetes.Interface) {
+				cronJob, err := client.BatchV1().CronJobs(testNamespace).Get(ctx, "test-cronjob", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, "0 0 * * *", cronJob.Spec.Schedule)
+			},
+		},
+		{
+			name: "Update cronjob labels",
+			cronJob: &CronJob{
+				Name:      "test-cronjob",
+				Namespace: testNamespace,
+				Labels: map[string]interface{}{
+					"version": "v2",
+					"env":     "prod",
+				},
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(existingCronJob, ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "updated successfully",
+			validateUpdate: func(t *testing.T, client kubernetes.Interface) {
+				cronJob, err := client.BatchV1().CronJobs(testNamespace).Get(ctx, "test-cronjob", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, "v2", cronJob.Labels["version"])
+				assert.Equal(t, "prod", cronJob.Labels["env"])
+			},
+		},
+		{
+			name: "Update cronjob concurrency policy",
+			cronJob: &CronJob{
+				Name:              "test-cronjob",
+				Namespace:         testNamespace,
+				ConcurrencyPolicy: "Forbid",
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(existingCronJob, ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "updated successfully",
+			validateUpdate: func(t *testing.T, client kubernetes.Interface) {
+				cronJob, err := client.BatchV1().CronJobs(testNamespace).Get(ctx, "test-cronjob", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, batchv1.ForbidConcurrent, cronJob.Spec.ConcurrencyPolicy)
+			},
+		},
+		{
+			name: "Update cronjob history limits",
+			cronJob: &CronJob{
+				Name:                       "test-cronjob",
+				Namespace:                  testNamespace,
+				SuccessfulJobsHistoryLimit: func() *int32 { v := int32(5); return &v }(),
+				FailedJobsHistoryLimit:     func() *int32 { v := int32(2); return &v }(),
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(existingCronJob, ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "updated successfully",
+			validateUpdate: func(t *testing.T, client kubernetes.Interface) {
+				cronJob, err := client.BatchV1().CronJobs(testNamespace).Get(ctx, "test-cronjob", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, int32(5), *cronJob.Spec.SuccessfulJobsHistoryLimit)
+				assert.Equal(t, int32(2), *cronJob.Spec.FailedJobsHistoryLimit)
+			},
+		},
+		{
+			name: "CronJob not found",
+			cronJob: &CronJob{
+				Name:      "nonexistent-cronjob",
+				Namespace: testNamespace,
+				Schedule:  "0 0 * * *",
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedError: "failed to get CronJob",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockCM := testmocks.NewMockClusterManager()
+			tc.setupMock(mockCM)
+
+			result, err := tc.cronJob.Update(ctx, mockCM)
+
+			if tc.expectedError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedError)
+			} else {
+				assert.NoError(t, err)
+				assert.Contains(t, result, tc.expectedResult)
+
+				if tc.validateUpdate != nil {
+					client, _ := mockCM.GetCurrentClient()
+					tc.validateUpdate(t, client)
+				}
+			}
+
+			mockCM.AssertExpectations(t)
+		})
+	}
+}
+
+func testSetSuspended(t *testing.T) {
+	ctx := context.Background()
+	suspend := false
+
+	existingCronJob := &batchv1.CronJob{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cronjob",
+			Namespace: testNamespace,
+		},
+		Spec: batchv1.CronJobSpec{
+			Schedule: "0 * * * *",
+			Suspend:  &suspend,
+			JobTemplate: batchv1.JobTemplateSpec{
+				Spec: batchv1.JobSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name:  "test-container",
+									Image: "busybox:1.35",
+								},
+							},
+							RestartPolicy: corev1.RestartPolicyOnFailure,
+						},
+					},
+				},
+			},
+		},
+	}
+
+	testCases := []struct {
+		name           string
+		cronJob        *CronJob
+		suspend        bool
+		setupMock      func(*testmocks.MockClusterManager)
+		expectedResult string
+		expectedError  string
+		validateUpdate func(*testing.T, kubernetes.Interface)
+	}{
+		{
+			name: "Suspend cronjob",
+			cronJob: &CronJob{
+				Name:      "test-cronjob",
+				Namespace: testNamespace,
+			},
+			suspend: true,
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(existingCronJob, ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "suspended in namespace",
+			validateUpdate: func(t *testing.T, client kubernetes.Interface) {
+				cronJob, err := client.BatchV1().CronJobs(testNamespace).Get(ctx, "test-cronjob", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.True(t, *cronJob.Spec.Suspend)
+			},
+		},
+		{
+			name: "Resume cronjob",
+			cronJob: &CronJob{
+				Name:      "test-cronjob",
+				Namespace: testNamespace,
+			},
+			suspend: false,
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				suspendedCronJob := existingCronJob.DeepCopy()
+				suspendTrue := true
+				suspendedCronJob.Spec.Suspend = &suspendTrue
+				fakeClient := fake.NewSimpleClientset(suspendedCronJob, ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "resumed in namespace",
+			validateUpdate: func(t *testing.T, client kubernetes.Interface) {
+				cronJob, err := client.BatchV1().CronJobs(testNamespace).Get(ctx, "test-cronjob", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.False(t, *cronJob.Spec.Suspend)
+			},
+		},
+		{
+			name: "CronJob not found - suspend",
+			cronJob: &CronJob{
+				Name:      "nonexistent-cronjob",
+				Namespace: testNamespace,
+			},
+			suspend: true,
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedError: "failed to get CronJob",
+		},
+		{
+			name: "CronJob not found - resume",
+			cronJob: &CronJob{
+				Name:      "nonexistent-cronjob",
+				Namespace: testNamespace,
+			},
+			suspend: false,
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedError: "failed to get CronJob",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockCM := testmocks.NewMockClusterManager()
+			tc.setupMock(mockCM)
+
+			result, err := tc.cronJob.SetSuspended(ctx, mockCM, tc.suspend)
+
+			if tc.expectedError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedError)
+			} else {
+				assert.NoError(t, err)
+				assert.Contains(t, result, tc.expectedResult)
+
+				if tc.validateUpdate != nil {
+					client, _ := mockCM.GetCurrentClient()
+					tc.validateUpdate(t, client)
+				}
+			}
+
 			mockCM.AssertExpectations(t)
 		})
 	}
