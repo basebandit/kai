@@ -53,7 +53,7 @@ func TestRegisterServiceTools(t *testing.T) {
 	mockClusterMgr := testmocks.NewMockClusterManager()
 
 	// Expect AddTool to be called once for each tool we register
-	mockServer.On("AddTool", mock.AnythingOfType("mcp.Tool"), mock.AnythingOfType("server.ToolHandlerFunc")).Return().Times(4)
+	mockServer.On("AddTool", mock.AnythingOfType("mcp.Tool"), mock.AnythingOfType("server.ToolHandlerFunc")).Return().Times(6)
 	RegisterServiceTools(mockServer, mockClusterMgr)
 	mockServer.AssertExpectations(t)
 }
@@ -64,7 +64,7 @@ func TestRegisterServiceToolsWithFactory(t *testing.T) {
 	mockFactory := testmocks.NewMockServiceFactory()
 
 	// Expect AddTool to be called once for each tool we register
-	mockServer.On("AddTool", mock.AnythingOfType("mcp.Tool"), mock.AnythingOfType("server.ToolHandlerFunc")).Return().Times(4)
+	mockServer.On("AddTool", mock.AnythingOfType("mcp.Tool"), mock.AnythingOfType("server.ToolHandlerFunc")).Return().Times(6)
 	RegisterServiceToolsWithFactory(mockServer, mockClusterMgr, mockFactory)
 	mockServer.AssertExpectations(t)
 }

@@ -17,6 +17,8 @@ func TestServiceOperations(t *testing.T) {
 	t.Run("GetService", testGetService)
 	t.Run("ListServices", testListServices)
 	t.Run("DeleteService", testDeleteService)
+	t.Run("UpdateService", testUpdateService)
+	t.Run("PatchService", testPatchService)
 }
 
 func testCreateServices(t *testing.T) {
@@ -876,6 +878,434 @@ func testDeleteService(t *testing.T) {
 				if tc.validateDelete != nil {
 					client, _ := mockCM.GetCurrentClient()
 					tc.validateDelete(t, client)
+				}
+			}
+
+			mockCM.AssertExpectations(t)
+		})
+	}
+}
+func testUpdateService(t *testing.T) {
+	ctx := context.Background()
+
+	existingService := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-service",
+			Namespace: testNamespace,
+			Labels:    map[string]string{"version": "v1"},
+		},
+		Spec: corev1.ServiceSpec{
+			Type: corev1.ServiceTypeClusterIP,
+			Ports: []corev1.ServicePort{
+				{
+					Port:     80,
+					Protocol: corev1.ProtocolTCP,
+				},
+			},
+			Selector: map[string]string{"app": "test"},
+		},
+	}
+
+	testCases := []struct {
+		name           string
+		service        *Service
+		setupMock      func(*testmocks.MockClusterManager)
+		expectedResult string
+		expectedError  string
+		validateUpdate func(*testing.T, kubernetes.Interface)
+	}{
+		{
+			name: "Update service type to NodePort",
+			service: &Service{
+				Name:      "test-service",
+				Namespace: testNamespace,
+				Type:      "NodePort",
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(existingService, ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "updated successfully",
+			validateUpdate: func(t *testing.T, client kubernetes.Interface) {
+				svc, err := client.CoreV1().Services(testNamespace).Get(ctx, "test-service", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, corev1.ServiceTypeNodePort, svc.Spec.Type)
+			},
+		},
+		{
+			name: "Update service labels",
+			service: &Service{
+				Name:      "test-service",
+				Namespace: testNamespace,
+				Labels: map[string]interface{}{
+					"version": "v2",
+					"env":     "prod",
+				},
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(existingService, ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "updated successfully",
+			validateUpdate: func(t *testing.T, client kubernetes.Interface) {
+				svc, err := client.CoreV1().Services(testNamespace).Get(ctx, "test-service", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, "v2", svc.Labels["version"])
+				assert.Equal(t, "prod", svc.Labels["env"])
+			},
+		},
+		{
+			name: "Update service selector",
+			service: &Service{
+				Name:      "test-service",
+				Namespace: testNamespace,
+				Selector: map[string]interface{}{
+					"app":     "updated",
+					"version": "v2",
+				},
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(existingService, ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "updated successfully",
+			validateUpdate: func(t *testing.T, client kubernetes.Interface) {
+				svc, err := client.CoreV1().Services(testNamespace).Get(ctx, "test-service", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, "updated", svc.Spec.Selector["app"])
+				assert.Equal(t, "v2", svc.Spec.Selector["version"])
+			},
+		},
+		{
+			name: "Update service ports",
+			service: &Service{
+				Name:      "test-service",
+				Namespace: testNamespace,
+				Ports: []ServicePort{
+					{
+						Name:       "http",
+						Port:       80,
+						TargetPort: int32(8080),
+						Protocol:   "TCP",
+					},
+					{
+						Name:       "https",
+						Port:       443,
+						TargetPort: int32(8443),
+						Protocol:   "TCP",
+					},
+				},
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(existingService, ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "updated successfully",
+			validateUpdate: func(t *testing.T, client kubernetes.Interface) {
+				svc, err := client.CoreV1().Services(testNamespace).Get(ctx, "test-service", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Len(t, svc.Spec.Ports, 2)
+				assert.Equal(t, "http", svc.Spec.Ports[0].Name)
+				assert.Equal(t, "https", svc.Spec.Ports[1].Name)
+			},
+		},
+		{
+			name: "Update service session affinity",
+			service: &Service{
+				Name:            "test-service",
+				Namespace:       testNamespace,
+				SessionAffinity: "ClientIP",
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(existingService, ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "updated successfully",
+			validateUpdate: func(t *testing.T, client kubernetes.Interface) {
+				svc, err := client.CoreV1().Services(testNamespace).Get(ctx, "test-service", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, corev1.ServiceAffinityClientIP, svc.Spec.SessionAffinity)
+			},
+		},
+		{
+			name: "Update service external IPs",
+			service: &Service{
+				Name:        "test-service",
+				Namespace:   testNamespace,
+				ExternalIPs: []string{"1.2.3.4", "5.6.7.8"},
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(existingService, ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "updated successfully",
+			validateUpdate: func(t *testing.T, client kubernetes.Interface) {
+				svc, err := client.CoreV1().Services(testNamespace).Get(ctx, "test-service", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, []string{"1.2.3.4", "5.6.7.8"}, svc.Spec.ExternalIPs)
+			},
+		},
+		{
+			name: "Service not found",
+			service: &Service{
+				Name:      "nonexistent-service",
+				Namespace: testNamespace,
+				Type:      "NodePort",
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedError: "failed to get service",
+		},
+		{
+			name: "Invalid service type",
+			service: &Service{
+				Name:      "test-service",
+				Namespace: testNamespace,
+				Type:      "InvalidType",
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(existingService, ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedError: "invalid service type",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockCM := testmocks.NewMockClusterManager()
+			tc.setupMock(mockCM)
+
+			result, err := tc.service.Update(ctx, mockCM)
+
+			if tc.expectedError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedError)
+			} else {
+				assert.NoError(t, err)
+				assert.Contains(t, result, tc.expectedResult)
+
+				if tc.validateUpdate != nil {
+					client, _ := mockCM.GetCurrentClient()
+					tc.validateUpdate(t, client)
+				}
+			}
+
+			mockCM.AssertExpectations(t)
+		})
+	}
+}
+
+func testPatchService(t *testing.T) {
+	ctx := context.Background()
+
+	existingService := &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-service",
+			Namespace: testNamespace,
+			Labels:    map[string]string{"version": "v1"},
+		},
+		Spec: corev1.ServiceSpec{
+			Type: corev1.ServiceTypeClusterIP,
+			Ports: []corev1.ServicePort{
+				{
+					Port:     80,
+					Protocol: corev1.ProtocolTCP,
+				},
+			},
+			Selector: map[string]string{"app": "test"},
+		},
+	}
+
+	testCases := []struct {
+		name           string
+		service        *Service
+		patchData      map[string]interface{}
+		setupMock      func(*testmocks.MockClusterManager)
+		expectedResult string
+		expectedError  string
+		validatePatch  func(*testing.T, kubernetes.Interface)
+	}{
+		{
+			name: "Patch service labels",
+			service: &Service{
+				Name:      "test-service",
+				Namespace: testNamespace,
+			},
+			patchData: map[string]interface{}{
+				"labels": map[string]interface{}{
+					"patched": "true",
+				},
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(existingService, ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "patched successfully",
+			validatePatch: func(t *testing.T, client kubernetes.Interface) {
+				svc, err := client.CoreV1().Services(testNamespace).Get(ctx, "test-service", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, "true", svc.Labels["patched"])
+			},
+		},
+		{
+			name: "Patch service selector",
+			service: &Service{
+				Name:      "test-service",
+				Namespace: testNamespace,
+			},
+			patchData: map[string]interface{}{
+				"selector": map[string]interface{}{
+					"new-key": "new-value",
+				},
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(existingService, ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "patched successfully",
+			validatePatch: func(t *testing.T, client kubernetes.Interface) {
+				svc, err := client.CoreV1().Services(testNamespace).Get(ctx, "test-service", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, "new-value", svc.Spec.Selector["new-key"])
+			},
+		},
+		{
+			name: "Patch service type",
+			service: &Service{
+				Name:      "test-service",
+				Namespace: testNamespace,
+			},
+			patchData: map[string]interface{}{
+				"type": "LoadBalancer",
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(existingService, ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "patched successfully",
+			validatePatch: func(t *testing.T, client kubernetes.Interface) {
+				svc, err := client.CoreV1().Services(testNamespace).Get(ctx, "test-service", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, corev1.ServiceTypeLoadBalancer, svc.Spec.Type)
+			},
+		},
+		{
+			name: "Patch service external IPs",
+			service: &Service{
+				Name:      "test-service",
+				Namespace: testNamespace,
+			},
+			patchData: map[string]interface{}{
+				"externalIPs": []interface{}{"10.0.0.1", "10.0.0.2"},
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(existingService, ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "patched successfully",
+			validatePatch: func(t *testing.T, client kubernetes.Interface) {
+				svc, err := client.CoreV1().Services(testNamespace).Get(ctx, "test-service", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Contains(t, svc.Spec.ExternalIPs, "10.0.0.1")
+				assert.Contains(t, svc.Spec.ExternalIPs, "10.0.0.2")
+			},
+		},
+		{
+			name: "Service not found",
+			service: &Service{
+				Name:      "nonexistent-service",
+				Namespace: testNamespace,
+			},
+			patchData: map[string]interface{}{
+				"labels": map[string]interface{}{
+					"patched": "true",
+				},
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedError: "failed to get service",
+		},
+		{
+			name: "Invalid service type in patch",
+			service: &Service{
+				Name:      "test-service",
+				Namespace: testNamespace,
+			},
+			patchData: map[string]interface{}{
+				"type": "InvalidType",
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(existingService, ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedError: "invalid service type",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockCM := testmocks.NewMockClusterManager()
+			tc.setupMock(mockCM)
+
+			result, err := tc.service.Patch(ctx, mockCM, tc.patchData)
+
+			if tc.expectedError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedError)
+			} else {
+				assert.NoError(t, err)
+				assert.Contains(t, result, tc.expectedResult)
+
+				if tc.validatePatch != nil {
+					client, _ := mockCM.GetCurrentClient()
+					tc.validatePatch(t, client)
 				}
 			}
 
