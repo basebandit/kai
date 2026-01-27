@@ -312,7 +312,7 @@ func TestRegisterNamespaceTools(t *testing.T) {
 	mockServer := &testmocks.MockServer{}
 	mockCM := testmocks.NewMockClusterManager()
 
-	mockServer.On("AddTool", mock.AnythingOfType("mcp.Tool"), mock.AnythingOfType("server.ToolHandlerFunc")).Return().Times(4)
+	mockServer.On("AddTool", mock.AnythingOfType("mcp.Tool"), mock.AnythingOfType("server.ToolHandlerFunc")).Return().Times(5)
 
 	RegisterNamespaceTools(mockServer, mockCM)
 
