@@ -203,6 +203,50 @@ func (n *Namespace) Delete(ctx context.Context, cm kai.ClusterManager) (string, 
 	return result, errors.New("either namespace name or label selector must be provided")
 }
 
+// Update updates an existing namespace
+func (n *Namespace) Update(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	var result string
+
+	client, err := cm.GetCurrentClient()
+	if err != nil {
+		return result, fmt.Errorf("error getting client: %w", err)
+	}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
+	defer cancel()
+
+	namespace, err := client.CoreV1().Namespaces().Get(timeoutCtx, n.Name, metav1.GetOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to get namespace: %w", err)
+	}
+
+	if len(n.Labels) > 0 {
+		if namespace.Labels == nil {
+			namespace.Labels = make(map[string]string)
+		}
+		for k, v := range convertToStringMap(n.Labels) {
+			namespace.Labels[k] = v
+		}
+	}
+
+	if len(n.Annotations) > 0 {
+		if namespace.Annotations == nil {
+			namespace.Annotations = make(map[string]string)
+		}
+		for k, v := range convertToStringMap(n.Annotations) {
+			namespace.Annotations[k] = v
+		}
+	}
+
+	updatedNamespace, err := client.CoreV1().Namespaces().Update(timeoutCtx, namespace, metav1.UpdateOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to update namespace: %w", err)
+	}
+
+	result = fmt.Sprintf("Namespace %q updated successfully", updatedNamespace.Name)
+	return result, nil
+}
+
 func (n *Namespace) validate() error {
 	if n.Name == "" {
 		return errors.New("namespace name is required")

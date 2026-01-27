@@ -252,6 +252,97 @@ func (c *CronJob) Delete(ctx context.Context, cm kai.ClusterManager) (string, er
 	return result, nil
 }
 
+// Update updates mutable fields of an existing CronJob
+func (c *CronJob) Update(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	var result string
+
+	if c.Name == "" {
+		return result, errors.New("CronJob name is required")
+	}
+
+	client, err := cm.GetCurrentClient()
+	if err != nil {
+		return result, fmt.Errorf("error getting client: %w", err)
+	}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
+	defer cancel()
+
+	cronJob, err := client.BatchV1().CronJobs(c.Namespace).Get(timeoutCtx, c.Name, metav1.GetOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to get CronJob: %w", err)
+	}
+
+	if len(c.Labels) > 0 {
+		if cronJob.Labels == nil {
+			cronJob.Labels = make(map[string]string)
+		}
+		for k, v := range convertToStringMap(c.Labels) {
+			cronJob.Labels[k] = v
+		}
+	}
+
+	if c.Schedule != "" {
+		cronJob.Spec.Schedule = c.Schedule
+	}
+
+	if c.ConcurrencyPolicy != "" {
+		cronJob.Spec.ConcurrencyPolicy = batchv1.ConcurrencyPolicy(c.ConcurrencyPolicy)
+	}
+
+	if c.SuccessfulJobsHistoryLimit != nil {
+		cronJob.Spec.SuccessfulJobsHistoryLimit = c.SuccessfulJobsHistoryLimit
+	}
+
+	if c.FailedJobsHistoryLimit != nil {
+		cronJob.Spec.FailedJobsHistoryLimit = c.FailedJobsHistoryLimit
+	}
+
+	updatedCronJob, err := client.BatchV1().CronJobs(c.Namespace).Update(timeoutCtx, cronJob, metav1.UpdateOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to update CronJob: %w", err)
+	}
+
+	result = fmt.Sprintf("CronJob %q updated successfully in namespace %q", updatedCronJob.Name, updatedCronJob.Namespace)
+	return result, nil
+}
+
+// SetSuspended sets the suspend state of a CronJob
+func (c *CronJob) SetSuspended(ctx context.Context, cm kai.ClusterManager, suspend bool) (string, error) {
+	var result string
+
+	if c.Name == "" {
+		return result, errors.New("CronJob name is required")
+	}
+
+	client, err := cm.GetCurrentClient()
+	if err != nil {
+		return result, fmt.Errorf("error getting client: %w", err)
+	}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
+	defer cancel()
+
+	cronJob, err := client.BatchV1().CronJobs(c.Namespace).Get(timeoutCtx, c.Name, metav1.GetOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to get CronJob: %w", err)
+	}
+
+	cronJob.Spec.Suspend = &suspend
+
+	_, err = client.BatchV1().CronJobs(c.Namespace).Update(timeoutCtx, cronJob, metav1.UpdateOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to set suspend state for CronJob: %w", err)
+	}
+
+	if suspend {
+		result = fmt.Sprintf("CronJob %q suspended in namespace %q", c.Name, c.Namespace)
+	} else {
+		result = fmt.Sprintf("CronJob %q resumed in namespace %q", c.Name, c.Namespace)
+	}
+	return result, nil
+}
+
 func (c *CronJob) validate() error {
 	if c.Name == "" {
 		return errors.New("CronJob name is required")

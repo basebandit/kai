@@ -449,3 +449,192 @@ func (s *Service) validate() error {
 
 	return nil
 }
+
+// Update updates an existing service in the cluster
+func (s *Service) Update(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	var result string
+
+	client, err := cm.GetCurrentClient()
+	if err != nil {
+		return result, fmt.Errorf("error getting client: %w", err)
+	}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	service, err := client.CoreV1().Services(s.Namespace).Get(timeoutCtx, s.Name, metav1.GetOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to get service: %w", err)
+	}
+
+	if len(s.Labels) > 0 {
+		if service.Labels == nil {
+			service.Labels = make(map[string]string)
+		}
+		for k, v := range convertToStringMap(s.Labels) {
+			service.Labels[k] = v
+		}
+	}
+
+	if len(s.Selector) > 0 {
+		service.Spec.Selector = convertToStringMap(s.Selector)
+	}
+
+	if s.Type != "" {
+		validTypes := map[string]corev1.ServiceType{
+			"ClusterIP":    corev1.ServiceTypeClusterIP,
+			"NodePort":     corev1.ServiceTypeNodePort,
+			"LoadBalancer": corev1.ServiceTypeLoadBalancer,
+			"ExternalName": corev1.ServiceTypeExternalName,
+		}
+		if serviceType, ok := validTypes[s.Type]; ok {
+			service.Spec.Type = serviceType
+		} else {
+			return result, fmt.Errorf("invalid service type: %s", s.Type)
+		}
+	}
+
+	if s.ClusterIP != "" {
+		service.Spec.ClusterIP = s.ClusterIP
+	}
+
+	if s.ExternalName != "" {
+		service.Spec.ExternalName = s.ExternalName
+	}
+
+	if len(s.ExternalIPs) > 0 {
+		service.Spec.ExternalIPs = s.ExternalIPs
+	}
+
+	if s.SessionAffinity != "" {
+		validAffinity := map[string]corev1.ServiceAffinity{
+			"None":     corev1.ServiceAffinityNone,
+			"ClientIP": corev1.ServiceAffinityClientIP,
+		}
+		if affinity, ok := validAffinity[s.SessionAffinity]; ok {
+			service.Spec.SessionAffinity = affinity
+		} else {
+			return result, fmt.Errorf("invalid session affinity: %s", s.SessionAffinity)
+		}
+	}
+
+	if len(s.Ports) > 0 {
+		servicePorts := make([]corev1.ServicePort, 0, len(s.Ports))
+		for _, port := range s.Ports {
+			servicePort := corev1.ServicePort{
+				Port:     port.Port,
+				Protocol: corev1.ProtocolTCP,
+			}
+
+			if port.Name != "" {
+				servicePort.Name = port.Name
+			}
+
+			if port.NodePort != 0 {
+				servicePort.NodePort = port.NodePort
+			}
+
+			if port.Protocol != "" {
+				protocol := corev1.Protocol(strings.ToUpper(port.Protocol))
+				if protocol == corev1.ProtocolTCP || protocol == corev1.ProtocolUDP || protocol == corev1.ProtocolSCTP {
+					servicePort.Protocol = protocol
+				} else {
+					return result, fmt.Errorf("invalid protocol: %s", port.Protocol)
+				}
+			}
+
+			if port.TargetPort != nil {
+				switch v := port.TargetPort.(type) {
+				case int32:
+					servicePort.TargetPort = intstr.FromInt(int(v))
+				case int:
+					servicePort.TargetPort = intstr.FromInt(v)
+				case float64:
+					servicePort.TargetPort = intstr.FromInt(int(v))
+				case string:
+					servicePort.TargetPort = intstr.FromString(v)
+				default:
+					return result, fmt.Errorf("unsupported targetPort type: %T", v)
+				}
+			} else {
+				servicePort.TargetPort = intstr.FromInt(int(port.Port))
+			}
+
+			servicePorts = append(servicePorts, servicePort)
+		}
+		service.Spec.Ports = servicePorts
+	}
+
+	updatedService, err := client.CoreV1().Services(s.Namespace).Update(timeoutCtx, service, metav1.UpdateOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to update service: %w", err)
+	}
+
+	result = fmt.Sprintf("Service %q updated successfully in namespace %q (Type: %s)", updatedService.Name, updatedService.Namespace, updatedService.Spec.Type)
+	return result, nil
+}
+
+// Patch applies a partial update to an existing service
+func (s *Service) Patch(ctx context.Context, cm kai.ClusterManager, patchData map[string]interface{}) (string, error) {
+	var result string
+
+	client, err := cm.GetCurrentClient()
+	if err != nil {
+		return result, fmt.Errorf("error getting client: %w", err)
+	}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	service, err := client.CoreV1().Services(s.Namespace).Get(timeoutCtx, s.Name, metav1.GetOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to get service: %w", err)
+	}
+
+	if labels, ok := patchData["labels"].(map[string]interface{}); ok {
+		if service.Labels == nil {
+			service.Labels = make(map[string]string)
+		}
+		for k, v := range convertToStringMap(labels) {
+			service.Labels[k] = v
+		}
+	}
+
+	if selector, ok := patchData["selector"].(map[string]interface{}); ok {
+		for k, v := range convertToStringMap(selector) {
+			service.Spec.Selector[k] = v
+		}
+	}
+
+	if serviceType, ok := patchData["type"].(string); ok {
+		validTypes := map[string]corev1.ServiceType{
+			"ClusterIP":    corev1.ServiceTypeClusterIP,
+			"NodePort":     corev1.ServiceTypeNodePort,
+			"LoadBalancer": corev1.ServiceTypeLoadBalancer,
+			"ExternalName": corev1.ServiceTypeExternalName,
+		}
+		if st, ok := validTypes[serviceType]; ok {
+			service.Spec.Type = st
+		} else {
+			return result, fmt.Errorf("invalid service type: %s", serviceType)
+		}
+	}
+
+	if externalIPs, ok := patchData["externalIPs"].([]interface{}); ok {
+		ips := make([]string, 0, len(externalIPs))
+		for _, ip := range externalIPs {
+			if ipStr, ok := ip.(string); ok {
+				ips = append(ips, ipStr)
+			}
+		}
+		service.Spec.ExternalIPs = ips
+	}
+
+	updatedService, err := client.CoreV1().Services(s.Namespace).Update(timeoutCtx, service, metav1.UpdateOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to patch service: %w", err)
+	}
+
+	result = fmt.Sprintf("Service %q patched successfully in namespace %q", updatedService.Name, updatedService.Namespace)
+	return result, nil
+}
