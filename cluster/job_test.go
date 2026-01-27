@@ -18,6 +18,7 @@ func TestJobOperations(t *testing.T) {
 	t.Run("GetJob", testGetJob)
 	t.Run("ListJobs", testListJobs)
 	t.Run("DeleteJob", testDeleteJob)
+	t.Run("UpdateJob", testUpdateJob)
 }
 
 func testCreateJob(t *testing.T) {
@@ -344,6 +345,160 @@ func testDeleteJob(t *testing.T) {
 				if tc.validateDelete != nil {
 					client, _ := mockCM.GetCurrentClient()
 					tc.validateDelete(t, client)
+				}
+			}
+
+			mockCM.AssertExpectations(t)
+		})
+	}
+}
+
+func testUpdateJob(t *testing.T) {
+	ctx := context.Background()
+	parallelism := int32(2)
+	completions := int32(1)
+
+	existingJob := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-job",
+			Namespace: testNamespace,
+			Labels: map[string]string{
+				"version": "v1",
+			},
+		},
+		Spec: batchv1.JobSpec{
+			Parallelism: &parallelism,
+			Completions: &completions,
+			Template: corev1.PodTemplateSpec{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Name:  "test-container",
+							Image: "nginx:1.19",
+						},
+					},
+					RestartPolicy: corev1.RestartPolicyNever,
+				},
+			},
+		},
+	}
+
+	testCases := []struct {
+		name           string
+		job            *Job
+		setupMock      func(*testmocks.MockClusterManager)
+		expectedResult string
+		expectedError  string
+		validateUpdate func(*testing.T, kubernetes.Interface)
+	}{
+		{
+			name: "Update job labels",
+			job: &Job{
+				Name:      "test-job",
+				Namespace: testNamespace,
+				Labels: map[string]interface{}{
+					"version": "v2",
+					"env":     "prod",
+				},
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(existingJob, ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "updated successfully",
+			validateUpdate: func(t *testing.T, client kubernetes.Interface) {
+				job, err := client.BatchV1().Jobs(testNamespace).Get(ctx, "test-job", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, "v2", job.Labels["version"])
+				assert.Equal(t, "prod", job.Labels["env"])
+			},
+		},
+		{
+			name: "Update job parallelism",
+			job: &Job{
+				Name:        "test-job",
+				Namespace:   testNamespace,
+				Parallelism: func() *int32 { v := int32(5); return &v }(),
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(existingJob, ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "updated successfully",
+			validateUpdate: func(t *testing.T, client kubernetes.Interface) {
+				job, err := client.BatchV1().Jobs(testNamespace).Get(ctx, "test-job", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, int32(5), *job.Spec.Parallelism)
+			},
+		},
+		{
+			name: "Update job with both labels and parallelism",
+			job: &Job{
+				Name:      "test-job",
+				Namespace: testNamespace,
+				Labels: map[string]interface{}{
+					"updated": "true",
+				},
+				Parallelism: func() *int32 { v := int32(3); return &v }(),
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(existingJob, ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "updated successfully",
+			validateUpdate: func(t *testing.T, client kubernetes.Interface) {
+				job, err := client.BatchV1().Jobs(testNamespace).Get(ctx, "test-job", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, "true", job.Labels["updated"])
+				assert.Equal(t, int32(3), *job.Spec.Parallelism)
+			},
+		},
+		{
+			name: "Job not found",
+			job: &Job{
+				Name:      "nonexistent-job",
+				Namespace: testNamespace,
+				Labels: map[string]interface{}{
+					"test": "true",
+				},
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				ns := &corev1.Namespace{
+					ObjectMeta: metav1.ObjectMeta{Name: testNamespace},
+				}
+				fakeClient := fake.NewSimpleClientset(ns)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedError: "failed to get Job",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockCM := testmocks.NewMockClusterManager()
+			tc.setupMock(mockCM)
+
+			result, err := tc.job.Update(ctx, mockCM)
+
+			if tc.expectedError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedError)
+			} else {
+				assert.NoError(t, err)
+				assert.Contains(t, result, tc.expectedResult)
+
+				if tc.validateUpdate != nil {
+					client, _ := mockCM.GetCurrentClient()
+					tc.validateUpdate(t, client)
 				}
 			}
 
