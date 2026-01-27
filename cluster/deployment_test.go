@@ -841,3 +841,806 @@ func TestDeployment_Describe(t *testing.T) {
 		})
 	}
 }
+
+func TestDeployment_Delete(t *testing.T) {
+	ctx := context.Background()
+
+	createDeploymentObj := func(name, namespace string, replicas int32) *appsv1.Deployment {
+		return &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+				Labels: map[string]string{
+					"app": name,
+				},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: &replicas,
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"app": name,
+					},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app": name,
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  name,
+								Image: nginxImage,
+								Ports: []corev1.ContainerPort{
+									{
+										ContainerPort: 80,
+										Protocol:      corev1.ProtocolTCP,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+	}
+
+	testCases := []struct {
+		name           string
+		deployment     *Deployment
+		setupMock      func(*testmocks.MockClusterManager)
+		expectedError  string
+		expectedResult string
+	}{
+		{
+			name: "Delete existing deployment",
+			deployment: &Deployment{
+				Name:      deploymentName1,
+				Namespace: testNamespace,
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				deployment := createDeploymentObj(deploymentName1, testNamespace, 3)
+				fakeClient := fake.NewSimpleClientset(deployment)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: fmt.Sprintf("Deployment %q deleted successfully from namespace %q", deploymentName1, testNamespace),
+		},
+		{
+			name: "Deployment not found",
+			deployment: &Deployment{
+				Name:      "nonexistent",
+				Namespace: testNamespace,
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset()
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedError: "failed to delete deployment",
+		},
+		{
+			name: "Error getting client",
+			deployment: &Deployment{
+				Name:      deploymentName1,
+				Namespace: testNamespace,
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				mockCM.On("GetCurrentClient").Return(nil, errors.New("client unavailable"))
+			},
+			expectedError: "error getting client: client unavailable",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockCM := testmocks.NewMockClusterManager()
+			tc.setupMock(mockCM)
+
+			result, err := tc.deployment.Delete(ctx, mockCM)
+
+			if tc.expectedError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedError)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedResult, result)
+			}
+
+			mockCM.AssertExpectations(t)
+		})
+	}
+}
+
+func TestDeployment_Scale(t *testing.T) {
+	ctx := context.Background()
+
+	createDeploymentObj := func(name, namespace string, replicas int32) *appsv1.Deployment {
+		return &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+				Labels: map[string]string{
+					"app": name,
+				},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: &replicas,
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"app": name,
+					},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app": name,
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  name,
+								Image: nginxImage,
+								Ports: []corev1.ContainerPort{
+									{
+										ContainerPort: 80,
+										Protocol:      corev1.ProtocolTCP,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+	}
+
+	testCases := []struct {
+		name           string
+		deployment     *Deployment
+		setupMock      func(*testmocks.MockClusterManager)
+		expectedError  string
+		expectedResult string
+	}{
+		{
+			name: "Scale deployment to 5 replicas",
+			deployment: &Deployment{
+				Name:      deploymentName1,
+				Namespace: testNamespace,
+				Replicas:  5,
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				deployment := createDeploymentObj(deploymentName1, testNamespace, 3)
+				fakeClient := fake.NewSimpleClientset(deployment)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: fmt.Sprintf("Deployment %q scaled to 5 replica(s) in namespace %q", deploymentName1, testNamespace),
+		},
+		{
+			name: "Scale to 0 replicas",
+			deployment: &Deployment{
+				Name:      deploymentName1,
+				Namespace: testNamespace,
+				Replicas:  0,
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				deployment := createDeploymentObj(deploymentName1, testNamespace, 3)
+				fakeClient := fake.NewSimpleClientset(deployment)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: fmt.Sprintf("Deployment %q scaled to 0 replica(s) in namespace %q", deploymentName1, testNamespace),
+		},
+		{
+			name: "Deployment not found",
+			deployment: &Deployment{
+				Name:      "nonexistent",
+				Namespace: testNamespace,
+				Replicas:  3,
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset()
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedError: "failed to get deployment",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockCM := testmocks.NewMockClusterManager()
+			tc.setupMock(mockCM)
+
+			result, err := tc.deployment.Scale(ctx, mockCM)
+
+			if tc.expectedError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedError)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedResult, result)
+			}
+
+			mockCM.AssertExpectations(t)
+		})
+	}
+}
+
+func TestDeployment_RolloutStatus(t *testing.T) {
+	ctx := context.Background()
+
+	createDeploymentObj := func(name, namespace string, replicas int32) *appsv1.Deployment {
+		return &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+				Labels: map[string]string{
+					"app": name,
+				},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: &replicas,
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"app": name,
+					},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app": name,
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  name,
+								Image: nginxImage,
+								Ports: []corev1.ContainerPort{
+									{
+										ContainerPort: 80,
+										Protocol:      corev1.ProtocolTCP,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+	}
+
+	testCases := []struct {
+		name          string
+		deployment    *Deployment
+		setupMock     func(*testmocks.MockClusterManager)
+		expectedError string
+		checkResult   func(*testing.T, string)
+	}{
+		{
+			name: "Get rollout status - complete",
+			deployment: &Deployment{
+				Name:      deploymentName1,
+				Namespace: testNamespace,
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				deployment := createDeploymentObj(deploymentName1, testNamespace, 3)
+				deployment.Status.Replicas = 3
+				deployment.Status.UpdatedReplicas = 3
+				deployment.Status.AvailableReplicas = 3
+				deployment.Status.UnavailableReplicas = 0
+				deployment.Status.ObservedGeneration = deployment.Generation
+				fakeClient := fake.NewSimpleClientset(deployment)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			checkResult: func(t *testing.T, result string) {
+				assert.Contains(t, result, "Deployment")
+				assert.Contains(t, result, "rollout status")
+				assert.Contains(t, result, "Replicas:")
+				assert.Contains(t, result, "Rollout complete!")
+			},
+		},
+		{
+			name: "Rollout in progress",
+			deployment: &Deployment{
+				Name:      deploymentName1,
+				Namespace: testNamespace,
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				deployment := createDeploymentObj(deploymentName1, testNamespace, 3)
+				deployment.Status.Replicas = 3
+				deployment.Status.UpdatedReplicas = 2
+				deployment.Status.AvailableReplicas = 2
+				deployment.Status.UnavailableReplicas = 1
+				fakeClient := fake.NewSimpleClientset(deployment)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			checkResult: func(t *testing.T, result string) {
+				assert.Contains(t, result, "Rollout in progress...")
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockCM := testmocks.NewMockClusterManager()
+			tc.setupMock(mockCM)
+
+			result, err := tc.deployment.RolloutStatus(ctx, mockCM)
+
+			if tc.expectedError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedError)
+			} else {
+				assert.NoError(t, err)
+				if tc.checkResult != nil {
+					tc.checkResult(t, result)
+				}
+			}
+
+			mockCM.AssertExpectations(t)
+		})
+	}
+}
+
+func TestDeployment_RolloutHistory(t *testing.T) {
+	ctx := context.Background()
+
+	createDeploymentObj := func(name, namespace string, replicas int32) *appsv1.Deployment {
+		return &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+				Labels: map[string]string{
+					"app": name,
+				},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: &replicas,
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"app": name,
+					},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app": name,
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  name,
+								Image: nginxImage,
+								Ports: []corev1.ContainerPort{
+									{
+										ContainerPort: 80,
+										Protocol:      corev1.ProtocolTCP,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+	}
+
+	testCases := []struct {
+		name          string
+		deployment    *Deployment
+		setupMock     func(*testmocks.MockClusterManager)
+		expectedError string
+		checkResult   func(*testing.T, string)
+	}{
+		{
+			name: "Get rollout history",
+			deployment: &Deployment{
+				Name:      deploymentName1,
+				Namespace: testNamespace,
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				deployment := createDeploymentObj(deploymentName1, testNamespace, 3)
+				rs := &appsv1.ReplicaSet{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      deploymentName1 + "-abc123",
+						Namespace: testNamespace,
+						Annotations: map[string]string{
+							"deployment.kubernetes.io/revision": "1",
+							"kubernetes.io/change-cause":        "Initial deployment",
+						},
+					},
+				}
+				fakeClient := fake.NewSimpleClientset(deployment, rs)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			checkResult: func(t *testing.T, result string) {
+				assert.Contains(t, result, "Rollout history")
+				assert.Contains(t, result, "REVISION")
+				assert.Contains(t, result, "CHANGE-CAUSE")
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockCM := testmocks.NewMockClusterManager()
+			tc.setupMock(mockCM)
+
+			result, err := tc.deployment.RolloutHistory(ctx, mockCM)
+
+			if tc.expectedError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedError)
+			} else {
+				assert.NoError(t, err)
+				if tc.checkResult != nil {
+					tc.checkResult(t, result)
+				}
+			}
+
+			mockCM.AssertExpectations(t)
+		})
+	}
+}
+
+func TestDeployment_RolloutUndo(t *testing.T) {
+	ctx := context.Background()
+
+	createDeploymentObj := func(name, namespace string, replicas int32) *appsv1.Deployment {
+		return &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+				Labels: map[string]string{
+					"app": name,
+				},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: &replicas,
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"app": name,
+					},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app": name,
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  name,
+								Image: nginxImage,
+								Ports: []corev1.ContainerPort{
+									{
+										ContainerPort: 80,
+										Protocol:      corev1.ProtocolTCP,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+	}
+
+	testCases := []struct {
+		name           string
+		deployment     *Deployment
+		revision       int64
+		setupMock      func(*testmocks.MockClusterManager)
+		expectedError  string
+		expectedResult string
+	}{
+		{
+			name: "Rollback to previous revision",
+			deployment: &Deployment{
+				Name:      deploymentName1,
+				Namespace: testNamespace,
+			},
+			revision: 0,
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				deployment := createDeploymentObj(deploymentName1, testNamespace, 3)
+				fakeClient := fake.NewSimpleClientset(deployment)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: fmt.Sprintf("Deployment %q rolled back to previous revision in namespace %q", deploymentName1, testNamespace),
+		},
+		{
+			name: "Rollback to specific revision",
+			deployment: &Deployment{
+				Name:      deploymentName1,
+				Namespace: testNamespace,
+			},
+			revision: 2,
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				deployment := createDeploymentObj(deploymentName1, testNamespace, 3)
+				fakeClient := fake.NewSimpleClientset(deployment)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: fmt.Sprintf("Deployment %q rolled back to revision 2 in namespace %q", deploymentName1, testNamespace),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockCM := testmocks.NewMockClusterManager()
+			tc.setupMock(mockCM)
+
+			result, err := tc.deployment.RolloutUndo(ctx, mockCM, tc.revision)
+
+			if tc.expectedError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedError)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedResult, result)
+			}
+
+			mockCM.AssertExpectations(t)
+		})
+	}
+}
+
+func TestDeployment_RolloutRestart(t *testing.T) {
+	ctx := context.Background()
+
+	createDeploymentObj := func(name, namespace string, replicas int32) *appsv1.Deployment {
+		return &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+				Labels: map[string]string{
+					"app": name,
+				},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: &replicas,
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"app": name,
+					},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app": name,
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  name,
+								Image: nginxImage,
+								Ports: []corev1.ContainerPort{
+									{
+										ContainerPort: 80,
+										Protocol:      corev1.ProtocolTCP,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+	}
+
+	testCases := []struct {
+		name           string
+		deployment     *Deployment
+		setupMock      func(*testmocks.MockClusterManager)
+		expectedError  string
+		expectedResult string
+	}{
+		{
+			name: "Restart deployment",
+			deployment: &Deployment{
+				Name:      deploymentName1,
+				Namespace: testNamespace,
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				deployment := createDeploymentObj(deploymentName1, testNamespace, 3)
+				fakeClient := fake.NewSimpleClientset(deployment)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: fmt.Sprintf("Deployment %q restarted in namespace %q", deploymentName1, testNamespace),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockCM := testmocks.NewMockClusterManager()
+			tc.setupMock(mockCM)
+
+			result, err := tc.deployment.RolloutRestart(ctx, mockCM)
+
+			if tc.expectedError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedError)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedResult, result)
+			}
+
+			mockCM.AssertExpectations(t)
+		})
+	}
+}
+
+func TestDeployment_RolloutPause(t *testing.T) {
+	ctx := context.Background()
+
+	createDeploymentObj := func(name, namespace string, replicas int32) *appsv1.Deployment {
+		return &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+				Labels: map[string]string{
+					"app": name,
+				},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: &replicas,
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"app": name,
+					},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app": name,
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  name,
+								Image: nginxImage,
+								Ports: []corev1.ContainerPort{
+									{
+										ContainerPort: 80,
+										Protocol:      corev1.ProtocolTCP,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+	}
+
+	testCases := []struct {
+		name           string
+		deployment     *Deployment
+		setupMock      func(*testmocks.MockClusterManager)
+		expectedError  string
+		expectedResult string
+	}{
+		{
+			name: "Pause deployment rollout",
+			deployment: &Deployment{
+				Name:      deploymentName1,
+				Namespace: testNamespace,
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				deployment := createDeploymentObj(deploymentName1, testNamespace, 3)
+				fakeClient := fake.NewSimpleClientset(deployment)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: fmt.Sprintf("Deployment %q paused in namespace %q", deploymentName1, testNamespace),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockCM := testmocks.NewMockClusterManager()
+			tc.setupMock(mockCM)
+
+			result, err := tc.deployment.RolloutPause(ctx, mockCM)
+
+			if tc.expectedError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedError)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedResult, result)
+			}
+
+			mockCM.AssertExpectations(t)
+		})
+	}
+}
+
+func TestDeployment_RolloutResume(t *testing.T) {
+	ctx := context.Background()
+
+	createDeploymentObj := func(name, namespace string, replicas int32) *appsv1.Deployment {
+		return &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: namespace,
+				Labels: map[string]string{
+					"app": name,
+				},
+			},
+			Spec: appsv1.DeploymentSpec{
+				Replicas: &replicas,
+				Selector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{
+						"app": name,
+					},
+				},
+				Template: corev1.PodTemplateSpec{
+					ObjectMeta: metav1.ObjectMeta{
+						Labels: map[string]string{
+							"app": name,
+						},
+					},
+					Spec: corev1.PodSpec{
+						Containers: []corev1.Container{
+							{
+								Name:  name,
+								Image: nginxImage,
+								Ports: []corev1.ContainerPort{
+									{
+										ContainerPort: 80,
+										Protocol:      corev1.ProtocolTCP,
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+	}
+
+	testCases := []struct {
+		name           string
+		deployment     *Deployment
+		setupMock      func(*testmocks.MockClusterManager)
+		expectedError  string
+		expectedResult string
+	}{
+		{
+			name: "Resume paused deployment",
+			deployment: &Deployment{
+				Name:      deploymentName1,
+				Namespace: testNamespace,
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				deployment := createDeploymentObj(deploymentName1, testNamespace, 3)
+				deployment.Spec.Paused = true
+				fakeClient := fake.NewSimpleClientset(deployment)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: fmt.Sprintf("Deployment %q resumed in namespace %q", deploymentName1, testNamespace),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockCM := testmocks.NewMockClusterManager()
+			tc.setupMock(mockCM)
+
+			result, err := tc.deployment.RolloutResume(ctx, mockCM)
+
+			if tc.expectedError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedError)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expectedResult, result)
+			}
+
+			mockCM.AssertExpectations(t)
+		})
+	}
+}
