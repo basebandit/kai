@@ -132,6 +132,24 @@ func RegisterJobToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, f
 		),
 	)
 	s.AddTool(deleteJobTool, deleteJobHandler(cm, factory))
+
+	updateJobTool := mcp.NewTool("update_job",
+		mcp.WithDescription("Update an existing Job (limited to mutable fields like labels and parallelism)"),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Name of the Job to update"),
+		),
+		mcp.WithString("namespace",
+			mcp.Description("Namespace of the Job (defaults to current namespace)"),
+		),
+		mcp.WithObject("labels",
+			mcp.Description("Labels to add or update"),
+		),
+		mcp.WithNumber("parallelism",
+			mcp.Description("Number of pods to run in parallel"),
+		),
+	)
+	s.AddTool(updateJobTool, updateJobHandler(cm, factory))
 }
 
 func createJobHandler(cm kai.ClusterManager, factory JobFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -313,6 +331,47 @@ func deleteJobHandler(cm kai.ClusterManager, factory JobFactory) func(ctx contex
 		result, err := job.Delete(ctx, cm)
 		if err != nil {
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to delete Job: %s", err.Error())), nil
+		}
+
+		return mcp.NewToolResultText(result), nil
+	}
+}
+
+func updateJobHandler(cm kai.ClusterManager, factory JobFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		nameArg, ok := request.Params.Arguments["name"]
+		if !ok || nameArg == nil {
+			return mcp.NewToolResultText(errMissingName), nil
+		}
+
+		name, ok := nameArg.(string)
+		if !ok || name == "" {
+			return mcp.NewToolResultText(errEmptyName), nil
+		}
+
+		namespace := cm.GetCurrentNamespace()
+		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+			namespace = namespaceArg
+		}
+
+		params := kai.JobParams{
+			Name:      name,
+			Namespace: namespace,
+		}
+
+		if labelsArg, ok := request.Params.Arguments["labels"].(map[string]interface{}); ok {
+			params.Labels = labelsArg
+		}
+
+		if parallelismArg, ok := request.Params.Arguments["parallelism"].(float64); ok {
+			parallelism := int32(parallelismArg)
+			params.Parallelism = &parallelism
+		}
+
+		job := factory.NewJob(params)
+		result, err := job.Update(ctx, cm)
+		if err != nil {
+			return mcp.NewToolResultText(fmt.Sprintf("Failed to update Job: %s", err.Error())), nil
 		}
 
 		return mcp.NewToolResultText(result), nil

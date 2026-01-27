@@ -153,6 +153,117 @@ func RegisterDeploymentToolsWithFactory(s kai.ServerInterface, cm kai.ClusterMan
 	)
 
 	s.AddTool(updateDeploymentTool, updateDeploymentHandler(cm, factory))
+
+	deleteDeploymentTool := mcp.NewTool("delete_deployment",
+		mcp.WithDescription("Delete a deployment from the cluster"),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Name of the deployment to delete"),
+		),
+		mcp.WithString("namespace",
+			mcp.Description("Namespace of the deployment (defaults to current namespace)"),
+		),
+	)
+
+	s.AddTool(deleteDeploymentTool, deleteDeploymentHandler(cm, factory))
+
+	scaleDeploymentTool := mcp.NewTool("scale_deployment",
+		mcp.WithDescription("Scale a deployment to a specified number of replicas"),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Name of the deployment to scale"),
+		),
+		mcp.WithNumber("replicas",
+			mcp.Required(),
+			mcp.Description("Number of replicas to scale to"),
+		),
+		mcp.WithString("namespace",
+			mcp.Description("Namespace of the deployment (defaults to current namespace)"),
+		),
+	)
+
+	s.AddTool(scaleDeploymentTool, scaleDeploymentHandler(cm, factory))
+
+	rolloutStatusTool := mcp.NewTool("rollout_status_deployment",
+		mcp.WithDescription("Check the rollout status of a deployment"),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Name of the deployment"),
+		),
+		mcp.WithString("namespace",
+			mcp.Description("Namespace of the deployment (defaults to current namespace)"),
+		),
+	)
+
+	s.AddTool(rolloutStatusTool, rolloutStatusHandler(cm, factory))
+
+	rolloutHistoryTool := mcp.NewTool("rollout_history_deployment",
+		mcp.WithDescription("View the rollout history of a deployment"),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Name of the deployment"),
+		),
+		mcp.WithString("namespace",
+			mcp.Description("Namespace of the deployment (defaults to current namespace)"),
+		),
+	)
+
+	s.AddTool(rolloutHistoryTool, rolloutHistoryHandler(cm, factory))
+
+	rolloutUndoTool := mcp.NewTool("rollout_undo_deployment",
+		mcp.WithDescription("Roll back a deployment to a previous revision"),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Name of the deployment"),
+		),
+		mcp.WithNumber("revision",
+			mcp.Description("Specific revision to roll back to (defaults to previous revision)"),
+		),
+		mcp.WithString("namespace",
+			mcp.Description("Namespace of the deployment (defaults to current namespace)"),
+		),
+	)
+
+	s.AddTool(rolloutUndoTool, rolloutUndoHandler(cm, factory))
+
+	rolloutRestartTool := mcp.NewTool("rollout_restart_deployment",
+		mcp.WithDescription("Restart a deployment by recreating its pods"),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Name of the deployment"),
+		),
+		mcp.WithString("namespace",
+			mcp.Description("Namespace of the deployment (defaults to current namespace)"),
+		),
+	)
+
+	s.AddTool(rolloutRestartTool, rolloutRestartHandler(cm, factory))
+
+	rolloutPauseTool := mcp.NewTool("rollout_pause_deployment",
+		mcp.WithDescription("Pause a deployment rollout"),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Name of the deployment"),
+		),
+		mcp.WithString("namespace",
+			mcp.Description("Namespace of the deployment (defaults to current namespace)"),
+		),
+	)
+
+	s.AddTool(rolloutPauseTool, rolloutPauseHandler(cm, factory))
+
+	rolloutResumeTool := mcp.NewTool("rollout_resume_deployment",
+		mcp.WithDescription("Resume a paused deployment rollout"),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Name of the deployment"),
+		),
+		mcp.WithString("namespace",
+			mcp.Description("Namespace of the deployment (defaults to current namespace)"),
+		),
+	)
+
+	s.AddTool(rolloutResumeTool, rolloutResumeHandler(cm, factory))
 }
 
 // getDeploymentHandler handles the get_deployment tool
@@ -363,7 +474,7 @@ func updateDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) f
 		}
 		params.Namespace = namespace
 
-		var hasUpdateParams bool // false
+		var hasUpdateParams bool
 
 		if imageArg, ok := request.Params.Arguments["image"].(string); ok && imageArg != "" {
 			params.Image = imageArg
@@ -414,6 +525,278 @@ func updateDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) f
 
 		deployment := factory.NewDeployment(params)
 		resultText, err := deployment.Update(ctx, cm)
+		if err != nil {
+			return mcp.NewToolResultText(err.Error()), nil
+		}
+
+		return mcp.NewToolResultText(resultText), nil
+	}
+}
+
+func deleteDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		nameArg, ok := request.Params.Arguments["name"]
+		if !ok || nameArg == nil {
+			return mcp.NewToolResultText(errMissingName), nil
+		}
+
+		name, ok := nameArg.(string)
+		if !ok || name == "" {
+			return mcp.NewToolResultText(errEmptyName), nil
+		}
+
+		namespace := cm.GetCurrentNamespace()
+		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+			namespace = namespaceArg
+		}
+
+		params := kai.DeploymentParams{
+			Name:      name,
+			Namespace: namespace,
+		}
+
+		deployment := factory.NewDeployment(params)
+		resultText, err := deployment.Delete(ctx, cm)
+		if err != nil {
+			return mcp.NewToolResultText(err.Error()), nil
+		}
+
+		return mcp.NewToolResultText(resultText), nil
+	}
+}
+
+func scaleDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		nameArg, ok := request.Params.Arguments["name"]
+		if !ok || nameArg == nil {
+			return mcp.NewToolResultText(errMissingName), nil
+		}
+
+		name, ok := nameArg.(string)
+		if !ok || name == "" {
+			return mcp.NewToolResultText(errEmptyName), nil
+		}
+
+		replicasArg, ok := request.Params.Arguments["replicas"]
+		if !ok || replicasArg == nil {
+			return mcp.NewToolResultText("missing required parameter: replicas"), nil
+		}
+
+		replicas, ok := replicasArg.(float64)
+		if !ok {
+			return mcp.NewToolResultText("invalid replicas parameter: must be a number"), nil
+		}
+
+		namespace := cm.GetCurrentNamespace()
+		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+			namespace = namespaceArg
+		}
+
+		params := kai.DeploymentParams{
+			Name:      name,
+			Namespace: namespace,
+			Replicas:  replicas,
+		}
+
+		deployment := factory.NewDeployment(params)
+		resultText, err := deployment.Scale(ctx, cm)
+		if err != nil {
+			return mcp.NewToolResultText(err.Error()), nil
+		}
+
+		return mcp.NewToolResultText(resultText), nil
+	}
+}
+
+func rolloutStatusHandler(cm kai.ClusterManager, factory DeploymentFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		nameArg, ok := request.Params.Arguments["name"]
+		if !ok || nameArg == nil {
+			return mcp.NewToolResultText(errMissingName), nil
+		}
+
+		name, ok := nameArg.(string)
+		if !ok || name == "" {
+			return mcp.NewToolResultText(errEmptyName), nil
+		}
+
+		namespace := cm.GetCurrentNamespace()
+		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+			namespace = namespaceArg
+		}
+
+		params := kai.DeploymentParams{
+			Name:      name,
+			Namespace: namespace,
+		}
+
+		deployment := factory.NewDeployment(params)
+		resultText, err := deployment.RolloutStatus(ctx, cm)
+		if err != nil {
+			return mcp.NewToolResultText(err.Error()), nil
+		}
+
+		return mcp.NewToolResultText(resultText), nil
+	}
+}
+
+func rolloutHistoryHandler(cm kai.ClusterManager, factory DeploymentFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		nameArg, ok := request.Params.Arguments["name"]
+		if !ok || nameArg == nil {
+			return mcp.NewToolResultText(errMissingName), nil
+		}
+
+		name, ok := nameArg.(string)
+		if !ok || name == "" {
+			return mcp.NewToolResultText(errEmptyName), nil
+		}
+
+		namespace := cm.GetCurrentNamespace()
+		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+			namespace = namespaceArg
+		}
+
+		params := kai.DeploymentParams{
+			Name:      name,
+			Namespace: namespace,
+		}
+
+		deployment := factory.NewDeployment(params)
+		resultText, err := deployment.RolloutHistory(ctx, cm)
+		if err != nil {
+			return mcp.NewToolResultText(err.Error()), nil
+		}
+
+		return mcp.NewToolResultText(resultText), nil
+	}
+}
+
+func rolloutUndoHandler(cm kai.ClusterManager, factory DeploymentFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		nameArg, ok := request.Params.Arguments["name"]
+		if !ok || nameArg == nil {
+			return mcp.NewToolResultText(errMissingName), nil
+		}
+
+		name, ok := nameArg.(string)
+		if !ok || name == "" {
+			return mcp.NewToolResultText(errEmptyName), nil
+		}
+
+		var revision int64
+		if revisionArg, ok := request.Params.Arguments["revision"].(float64); ok {
+			revision = int64(revisionArg)
+		}
+
+		namespace := cm.GetCurrentNamespace()
+		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+			namespace = namespaceArg
+		}
+
+		params := kai.DeploymentParams{
+			Name:      name,
+			Namespace: namespace,
+		}
+
+		deployment := factory.NewDeployment(params)
+		resultText, err := deployment.RolloutUndo(ctx, cm, revision)
+		if err != nil {
+			return mcp.NewToolResultText(err.Error()), nil
+		}
+
+		return mcp.NewToolResultText(resultText), nil
+	}
+}
+
+func rolloutRestartHandler(cm kai.ClusterManager, factory DeploymentFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		nameArg, ok := request.Params.Arguments["name"]
+		if !ok || nameArg == nil {
+			return mcp.NewToolResultText(errMissingName), nil
+		}
+
+		name, ok := nameArg.(string)
+		if !ok || name == "" {
+			return mcp.NewToolResultText(errEmptyName), nil
+		}
+
+		namespace := cm.GetCurrentNamespace()
+		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+			namespace = namespaceArg
+		}
+
+		params := kai.DeploymentParams{
+			Name:      name,
+			Namespace: namespace,
+		}
+
+		deployment := factory.NewDeployment(params)
+		resultText, err := deployment.RolloutRestart(ctx, cm)
+		if err != nil {
+			return mcp.NewToolResultText(err.Error()), nil
+		}
+
+		return mcp.NewToolResultText(resultText), nil
+	}
+}
+
+func rolloutPauseHandler(cm kai.ClusterManager, factory DeploymentFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		nameArg, ok := request.Params.Arguments["name"]
+		if !ok || nameArg == nil {
+			return mcp.NewToolResultText(errMissingName), nil
+		}
+
+		name, ok := nameArg.(string)
+		if !ok || name == "" {
+			return mcp.NewToolResultText(errEmptyName), nil
+		}
+
+		namespace := cm.GetCurrentNamespace()
+		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+			namespace = namespaceArg
+		}
+
+		params := kai.DeploymentParams{
+			Name:      name,
+			Namespace: namespace,
+		}
+
+		deployment := factory.NewDeployment(params)
+		resultText, err := deployment.RolloutPause(ctx, cm)
+		if err != nil {
+			return mcp.NewToolResultText(err.Error()), nil
+		}
+
+		return mcp.NewToolResultText(resultText), nil
+	}
+}
+
+func rolloutResumeHandler(cm kai.ClusterManager, factory DeploymentFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		nameArg, ok := request.Params.Arguments["name"]
+		if !ok || nameArg == nil {
+			return mcp.NewToolResultText(errMissingName), nil
+		}
+
+		name, ok := nameArg.(string)
+		if !ok || name == "" {
+			return mcp.NewToolResultText(errEmptyName), nil
+		}
+
+		namespace := cm.GetCurrentNamespace()
+		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+			namespace = namespaceArg
+		}
+
+		params := kai.DeploymentParams{
+			Name:      name,
+			Namespace: namespace,
+		}
+
+		deployment := factory.NewDeployment(params)
+		resultText, err := deployment.RolloutResume(ctx, cm)
 		if err != nil {
 			return mcp.NewToolResultText(err.Error()), nil
 		}
