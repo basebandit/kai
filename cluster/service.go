@@ -601,6 +601,9 @@ func (s *Service) Patch(ctx context.Context, cm kai.ClusterManager, patchData ma
 	}
 
 	if selector, ok := patchData["selector"].(map[string]interface{}); ok {
+		if service.Spec.Selector == nil {
+			service.Spec.Selector = make(map[string]string)
+		}
 		for k, v := range convertToStringMap(selector) {
 			service.Spec.Selector[k] = v
 		}
