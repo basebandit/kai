@@ -18,6 +18,7 @@ func TestNamespaceTools(t *testing.T) {
 	t.Run("GetNamespace", testGetNamespaceHandler)
 	t.Run("ListNamespaces", testListNamespacesHandler)
 	t.Run("DeleteNamespace", testDeleteNamespaceHandler)
+	t.Run("UpdateNamespace", testUpdateNamespaceHandler)
 }
 
 func testCreateNamespaceHandler(t *testing.T) {
@@ -425,5 +426,143 @@ func deleteNamespaceHandlerWithFactory(cm kai.ClusterManager, factory testmocks.
 		}
 
 		return mcp.NewToolResultText(result), nil
+	}
+}
+
+func updateNamespaceHandlerWithFactory(cm kai.ClusterManager, factory testmocks.NamespaceFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		nameArg, ok := request.Params.Arguments["name"]
+		if !ok || nameArg == nil {
+			return mcp.NewToolResultText(errMissingName), nil
+		}
+
+		name, ok := nameArg.(string)
+		if !ok || name == "" {
+			return mcp.NewToolResultText(errEmptyName), nil
+		}
+
+		params := kai.NamespaceParams{
+			Name: name,
+		}
+
+		if labelsArg, ok := request.Params.Arguments["labels"].(map[string]interface{}); ok {
+			params.Labels = labelsArg
+		}
+
+		if annotationsArg, ok := request.Params.Arguments["annotations"].(map[string]interface{}); ok {
+			params.Annotations = annotationsArg
+		}
+
+		namespace := factory.NewNamespace(params)
+
+		result, err := namespace.Update(ctx, cm)
+		if err != nil {
+			return mcp.NewToolResultText(fmt.Sprintf("Failed to update namespace: %s", err.Error())), nil
+		}
+
+		return mcp.NewToolResultText(result), nil
+	}
+}
+
+func testUpdateNamespaceHandler(t *testing.T) {
+	tests := []struct {
+		name           string
+		args           map[string]interface{}
+		setupMock      func(*testmocks.MockNamespace)
+		expectedOutput string
+	}{
+		{
+			name:           "MissingName",
+			args:           map[string]interface{}{},
+			setupMock:      func(mockNS *testmocks.MockNamespace) {},
+			expectedOutput: errMissingName,
+		},
+		{
+			name:           "EmptyName",
+			args:           map[string]interface{}{"name": ""},
+			setupMock:      func(mockNS *testmocks.MockNamespace) {},
+			expectedOutput: errEmptyName,
+		},
+		{
+			name: "UpdateLabels",
+			args: map[string]interface{}{
+				"name": testNamespace,
+				"labels": map[string]interface{}{
+					"env": "prod",
+				},
+			},
+			setupMock: func(mockNS *testmocks.MockNamespace) {
+				mockNS.On("Update", mock.Anything, mock.Anything).Return("Namespace \"test-namespace\" updated successfully", nil)
+			},
+			expectedOutput: "Namespace \"test-namespace\" updated successfully",
+		},
+		{
+			name: "UpdateAnnotations",
+			args: map[string]interface{}{
+				"name": testNamespace,
+				"annotations": map[string]interface{}{
+					"description": "updated namespace",
+				},
+			},
+			setupMock: func(mockNS *testmocks.MockNamespace) {
+				mockNS.On("Update", mock.Anything, mock.Anything).Return("Namespace \"test-namespace\" updated successfully", nil)
+			},
+			expectedOutput: "Namespace \"test-namespace\" updated successfully",
+		},
+		{
+			name: "UpdateBothLabelsAndAnnotations",
+			args: map[string]interface{}{
+				"name": testNamespace,
+				"labels": map[string]interface{}{
+					"env": "prod",
+				},
+				"annotations": map[string]interface{}{
+					"description": "production namespace",
+				},
+			},
+			setupMock: func(mockNS *testmocks.MockNamespace) {
+				mockNS.On("Update", mock.Anything, mock.Anything).Return("Namespace \"test-namespace\" updated successfully", nil)
+			},
+			expectedOutput: "Namespace \"test-namespace\" updated successfully",
+		},
+		{
+			name: "UpdateError",
+			args: map[string]interface{}{"name": testNamespace},
+			setupMock: func(mockNS *testmocks.MockNamespace) {
+				mockNS.On("Update", mock.Anything, mock.Anything).Return("", errors.New("namespace not found"))
+			},
+			expectedOutput: "Failed to update namespace: namespace not found",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockCM := testmocks.NewMockClusterManager()
+			mockFactory := testmocks.NewMockNamespaceFactory()
+			mockNS := testmocks.NewMockNamespace()
+
+			tt.setupMock(mockNS)
+
+			if tt.name != "MissingName" && tt.name != "EmptyName" {
+				mockFactory.On("NewNamespace", mock.Anything).Return(mockNS)
+			}
+
+			handler := updateNamespaceHandlerWithFactory(mockCM, mockFactory)
+			request := mcp.CallToolRequest{
+				Params: struct {
+					Name      string         `json:"name"`
+					Arguments map[string]any `json:"arguments,omitempty"`
+					Meta      *mcp.Meta      `json:"_meta,omitempty"`
+				}{
+					Arguments: tt.args,
+				},
+			}
+
+			result, err := handler(context.Background(), request)
+
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expectedOutput, result.Content[0].(mcp.TextContent).Text)
+			mockNS.AssertExpectations(t)
+		})
 	}
 }
