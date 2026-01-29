@@ -39,9 +39,13 @@ Kai provides a bridge between large language models (LLMs) and your Kubernetes c
 ### Security
 - [ ] **RBAC** - Roles, RoleBindings, and ServiceAccounts
 
+### Utilities
+- [x] **Port Forwarding** - Forward ports to pods and services (start, stop, list sessions)
+
 ### Advanced
 - [ ] **Custom Resources** - CRD and custom resource operations
-- [ ] **Utilities** - Port forwarding, events, and API exploration
+- [ ] **Events** - Event streaming and filtering
+- [ ] **API Discovery** - API resource exploration
 
 ## Requirements
 
@@ -93,6 +97,7 @@ Once configured, you can interact with your cluster using natural language:
 - "Delete the service named backend"
 - "Create a cronjob that runs every 5 minutes"
 - "Create an ingress for my-app with TLS enabled"
+- "Port forward service nginx on port 8080:80"
 
 ## Contributing
 

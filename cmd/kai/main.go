@@ -64,4 +64,5 @@ func registerAllTools(s *kai.Server, cm *cluster.Manager) {
 	tools.RegisterJobTools(s, cm)
 	tools.RegisterCronJobTools(s, cm)
 	tools.RegisterIngressTools(s, cm)
+	tools.RegisterOperationsTools(s, cm)
 }
