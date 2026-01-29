@@ -57,9 +57,22 @@ The server connects to your current kubectl context by default. Ensure you have 
 go install github.com/basebandit/kai/cmd/kai@latest
 ```
 
+## CLI Options
+
+```
+kai [options]
+
+Options:
+  -kubeconfig string   Path to kubeconfig file (default "~/.kube/config")
+  -context string      Name for the loaded context (default "local")
+  -transport string    Transport mode: stdio (default) or sse
+  -sse-addr string     Address for SSE server (default ":8080")
+  -version             Show version information
+```
+
 ## Configuration
 
-### Claude for Desktop
+### Claude Desktop
 
 Edit your Claude Desktop configuration:
 
@@ -83,9 +96,69 @@ Add the server configuration:
 }
 ```
 
+With custom kubeconfig:
+
+```json
+{
+  "mcpServers": {
+    "kubernetes": {
+      "command": "/path/to/kai",
+      "args": ["-kubeconfig", "/path/to/custom/kubeconfig"]
+    }
+  }
+}
+```
+
+### Cursor
+
+Add to your Cursor MCP settings:
+
+```json
+{
+  "mcpServers": {
+    "kubernetes": {
+      "command": "/path/to/kai"
+    }
+  }
+}
+```
+
+### Continue
+
+Add to your Continue configuration (`~/.continue/config.json`):
+
+```json
+{
+  "experimental": {
+    "modelContextProtocolServers": [
+      {
+        "transport": {
+          "type": "stdio",
+          "command": "/path/to/kai"
+        }
+      }
+    ]
+  }
+}
+```
+
+### SSE Mode (Web Clients)
+
+For web-based clients or custom integrations, run in SSE mode:
+
+```sh
+kai -transport=sse -sse-addr=:8080
+```
+
+Then connect to `http://localhost:8080/sse`.
+
 ### Custom Kubeconfig
 
-By default, Kai uses `~/.kube/config`. The server automatically loads your current context on startup.
+By default, Kai uses `~/.kube/config`. You can specify a different kubeconfig:
+
+```sh
+kai -kubeconfig=/path/to/custom/kubeconfig -context=my-cluster
+```
 
 ## Usage Examples
 
