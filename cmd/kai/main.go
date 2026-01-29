@@ -2,7 +2,8 @@ package main
 
 import (
 	"flag"
-	"log"
+	"fmt"
+	"log/slog"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -26,6 +27,8 @@ func main() {
 		contextName string
 		transport   string
 		sseAddr     string
+		logFormat   string
+		logLevel    string
 		showVersion bool
 	)
 
@@ -35,11 +38,17 @@ func main() {
 	flag.StringVar(&contextName, "context", "local", "Name for the loaded context")
 	flag.StringVar(&transport, "transport", "stdio", "Transport mode: stdio (default) or sse")
 	flag.StringVar(&sseAddr, "sse-addr", ":8080", "Address for SSE server (only used with -transport=sse)")
+	flag.StringVar(&logFormat, "log-format", "json", "Log format: json (default) or text")
+	flag.StringVar(&logLevel, "log-level", "info", "Log level: debug, info, warn, error")
 	flag.BoolVar(&showVersion, "version", false, "Show version information")
 	flag.Parse()
 
+	// Initialize structured logger
+	logger := initLogger(logFormat, logLevel)
+	slog.SetDefault(logger)
+
 	if showVersion {
-		log.Printf("kai version %s (commit: %s, built: %s)", version, commit, date)
+		fmt.Printf("kai version %s (commit: %s, built: %s)\n", version, commit, date)
 		os.Exit(0)
 	}
 
@@ -47,10 +56,17 @@ func main() {
 	cm := cluster.New()
 
 	if err := cm.LoadKubeConfig(contextName, kubeconfig); err != nil {
-		log.Fatalf("Failed to load kubeconfig: %v", err)
+		logger.Error("failed to load kubeconfig",
+			slog.String("path", kubeconfig),
+			slog.String("error", err.Error()),
+		)
+		os.Exit(1)
 	}
 
-	log.Printf("Loaded kubeconfig from %s as context %q", kubeconfig, contextName)
+	logger.Info("kubeconfig loaded",
+		slog.String("path", kubeconfig),
+		slog.String("context", contextName),
+	)
 
 	// Create and configure server
 	s := kai.NewServer(
@@ -68,10 +84,15 @@ func main() {
 	go func() {
 		switch transport {
 		case "sse":
-			log.Printf("Starting SSE server on %s", sseAddr)
+			logger.Info("starting server",
+				slog.String("transport", "sse"),
+				slog.String("address", sseAddr),
+			)
 			errChan <- s.ServeSSE(sseAddr)
 		default:
-			log.Print("Starting stdio server")
+			logger.Info("starting server",
+				slog.String("transport", "stdio"),
+			)
 			errChan <- s.Serve()
 		}
 	}()
@@ -79,13 +100,42 @@ func main() {
 	select {
 	case err := <-errChan:
 		if err != nil {
-			log.Fatalf("Server error: %v", err)
+			logger.Error("server error", slog.String("error", err.Error()))
+			os.Exit(1)
 		}
 	case sig := <-sigChan:
-		log.Printf("Received signal %v, shutting down...", sig)
+		logger.Info("shutdown initiated", slog.String("signal", sig.String()))
 	}
 
-	log.Print("Server stopped")
+	logger.Info("server stopped")
+}
+
+func initLogger(format, level string) *slog.Logger {
+	var lvl slog.Level
+	switch level {
+	case "debug":
+		lvl = slog.LevelDebug
+	case "warn":
+		lvl = slog.LevelWarn
+	case "error":
+		lvl = slog.LevelError
+	default:
+		lvl = slog.LevelInfo
+	}
+
+	opts := &slog.HandlerOptions{
+		Level: lvl,
+	}
+
+	var handler slog.Handler
+	switch format {
+	case "text":
+		handler = slog.NewTextHandler(os.Stderr, opts)
+	default:
+		handler = slog.NewJSONHandler(os.Stderr, opts)
+	}
+
+	return slog.New(handler)
 }
 
 func registerAllTools(s *kai.Server, cm *cluster.Manager) {
