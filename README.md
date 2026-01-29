@@ -67,7 +67,16 @@ Options:
   -context string      Name for the loaded context (default "local")
   -transport string    Transport mode: stdio (default) or sse
   -sse-addr string     Address for SSE server (default ":8080")
+  -log-format string   Log format: json (default) or text
+  -log-level string    Log level: debug, info, warn, error (default "info")
   -version             Show version information
+```
+
+Logs are written to stderr in structured JSON format by default, making them easy to parse:
+
+```json
+{"time":"2024-01-15T10:30:00Z","level":"INFO","msg":"kubeconfig loaded","path":"/home/user/.kube/config","context":"local"}
+{"time":"2024-01-15T10:30:00Z","level":"INFO","msg":"starting server","transport":"stdio"}
 ```
 
 ## Configuration
