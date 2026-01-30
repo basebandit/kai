@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 
@@ -60,6 +61,8 @@ func registerPortForwardTools(s kai.ServerInterface, manager *cluster.Manager) {
 // startPortForwardHandler handles the start_port_forward tool
 func startPortForwardHandler(manager *cluster.Manager) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "start_port_forward"))
+
 		target, ok := request.Params.Arguments["target"].(string)
 		if !ok || target == "" {
 			return mcp.NewToolResultError("target is required"), nil
@@ -77,16 +80,22 @@ func startPortForwardHandler(manager *cluster.Manager) func(ctx context.Context,
 
 		targetType, targetName, err := parseTarget(target)
 		if err != nil {
+			slog.Debug("invalid target format", slog.String("target", target), slog.String("error", err.Error()))
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		localPort, remotePort, err := parsePortMapping(portsStr)
 		if err != nil {
+			slog.Debug("invalid port mapping", slog.String("ports", portsStr), slog.String("error", err.Error()))
 			return mcp.NewToolResultError(err.Error()), nil
 		}
 
 		session, err := manager.StartPortForward(ctx, namespace, targetType, targetName, localPort, remotePort)
 		if err != nil {
+			slog.Warn("failed to start port forward",
+				slog.String("target", target),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to start port forward: %s", err.Error())), nil
 		}
 
@@ -98,6 +107,8 @@ func startPortForwardHandler(manager *cluster.Manager) func(ctx context.Context,
 // stopPortForwardHandler handles the stop_port_forward tool
 func stopPortForwardHandler(manager *cluster.Manager) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "stop_port_forward"))
+
 		sessionID, ok := request.Params.Arguments["session_id"].(string)
 		if !ok || sessionID == "" {
 			return mcp.NewToolResultError("session_id is required"), nil
@@ -105,6 +116,10 @@ func stopPortForwardHandler(manager *cluster.Manager) func(ctx context.Context, 
 
 		err := manager.StopPortForward(sessionID)
 		if err != nil {
+			slog.Warn("failed to stop port forward",
+				slog.String("session_id", sessionID),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultError(fmt.Sprintf("Failed to stop port forward: %s", err.Error())), nil
 		}
 
@@ -115,6 +130,7 @@ func stopPortForwardHandler(manager *cluster.Manager) func(ctx context.Context, 
 // listPortForwardsHandler handles the list_port_forwards tool
 func listPortForwardsHandler(manager *cluster.Manager) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "list_port_forwards"))
 		sessions := manager.ListPortForwards()
 		result := formatPortForwardList(sessions)
 		return mcp.NewToolResultText(result), nil
