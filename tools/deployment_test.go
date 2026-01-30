@@ -879,9 +879,7 @@ func TestDeleteDeploymentHandler(t *testing.T) {
 		},
 	}
 
-	runDeploymentTests(t, testCases, func(cm kai.ClusterManager, factory DeploymentFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return deleteDeploymentHandler(cm, factory)
-	})
+	runDeploymentTests(t, testCases, deleteDeploymentHandler)
 }
 
 func TestScaleDeploymentHandler(t *testing.T) {
@@ -990,9 +988,7 @@ func TestScaleDeploymentHandler(t *testing.T) {
 		},
 	}
 
-	runDeploymentTests(t, testCases, func(cm kai.ClusterManager, factory DeploymentFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return scaleDeploymentHandler(cm, factory)
-	})
+	runDeploymentTests(t, testCases, scaleDeploymentHandler)
 }
 
 func TestRolloutStatusHandler(t *testing.T) {
@@ -1053,9 +1049,7 @@ func TestRolloutStatusHandler(t *testing.T) {
 		},
 	}
 
-	runDeploymentTests(t, testCases, func(cm kai.ClusterManager, factory DeploymentFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return rolloutStatusHandler(cm, factory)
-	})
+	runDeploymentTests(t, testCases, rolloutStatusHandler)
 }
 
 func TestRolloutHistoryHandler(t *testing.T) {
@@ -1116,9 +1110,7 @@ func TestRolloutHistoryHandler(t *testing.T) {
 		},
 	}
 
-	runDeploymentTests(t, testCases, func(cm kai.ClusterManager, factory DeploymentFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return rolloutHistoryHandler(cm, factory)
-	})
+	runDeploymentTests(t, testCases, rolloutHistoryHandler)
 }
 
 func TestRolloutUndoHandler(t *testing.T) {
@@ -1197,9 +1189,7 @@ func TestRolloutUndoHandler(t *testing.T) {
 		},
 	}
 
-	runDeploymentTests(t, testCases, func(cm kai.ClusterManager, factory DeploymentFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return rolloutUndoHandler(cm, factory)
-	})
+	runDeploymentTests(t, testCases, rolloutUndoHandler)
 }
 
 func TestRolloutRestartHandler(t *testing.T) {
@@ -1260,9 +1250,7 @@ func TestRolloutRestartHandler(t *testing.T) {
 		},
 	}
 
-	runDeploymentTests(t, testCases, func(cm kai.ClusterManager, factory DeploymentFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return rolloutRestartHandler(cm, factory)
-	})
+	runDeploymentTests(t, testCases, rolloutRestartHandler)
 }
 
 func TestRolloutPauseHandler(t *testing.T) {
@@ -1323,9 +1311,7 @@ func TestRolloutPauseHandler(t *testing.T) {
 		},
 	}
 
-	runDeploymentTests(t, testCases, func(cm kai.ClusterManager, factory DeploymentFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return rolloutPauseHandler(cm, factory)
-	})
+	runDeploymentTests(t, testCases, rolloutPauseHandler)
 }
 
 func TestRolloutResumeHandler(t *testing.T) {
@@ -1386,9 +1372,7 @@ func TestRolloutResumeHandler(t *testing.T) {
 		},
 	}
 
-	runDeploymentTests(t, testCases, func(cm kai.ClusterManager, factory DeploymentFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		return rolloutResumeHandler(cm, factory)
-	})
+	runDeploymentTests(t, testCases, rolloutResumeHandler)
 }
 
 // runDeploymentTests is a helper that runs a set of deployment test cases with a given handler constructor.
