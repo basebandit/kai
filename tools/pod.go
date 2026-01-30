@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"time"
 
 	"github.com/basebandit/kai"
@@ -168,6 +169,8 @@ func RegisterPodToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, f
 // createPodHandler handles the create_pod tool
 func createPodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "create_pod"))
+
 		params := kai.PodParams{
 			RestartPolicy: "Always", // Default restart policy
 		}
@@ -273,6 +276,11 @@ func createPodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx contex
 
 		resultText, err := pod.Create(ctx, cm)
 		if err != nil {
+			slog.Warn("failed to create Pod",
+				slog.String("name", name),
+				slog.String("namespace", namespace),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(err.Error()), nil
 		}
 
@@ -282,6 +290,8 @@ func createPodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx contex
 
 func listPodsHandler(cm kai.ClusterManager, factory PodFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "list_pods"))
+
 		var allNamespaces bool
 
 		if allNamespacesArg, ok := request.Params.Arguments["all_namespaces"].(bool); ok {
@@ -319,6 +329,13 @@ func listPodsHandler(cm kai.ClusterManager, factory PodFactory) func(ctx context
 
 		resultText, err := pod.List(ctx, cm, limit, labelSelector, fieldSelector)
 		if err != nil {
+			slog.Warn("failed to list Pods",
+				slog.Bool("all_namespaces", allNamespaces),
+				slog.String("namespace", namespace),
+				slog.String("label_selector", labelSelector),
+				slog.String("field_selector", fieldSelector),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(err.Error()), nil
 		}
 
@@ -328,6 +345,8 @@ func listPodsHandler(cm kai.ClusterManager, factory PodFactory) func(ctx context
 
 func getPodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "get_pod"))
+
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
@@ -352,6 +371,11 @@ func getPodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx context.C
 
 		resultText, err := pod.Get(ctx, cm)
 		if err != nil {
+			slog.Warn("failed to get Pod",
+				slog.String("name", name),
+				slog.String("namespace", namespace),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(err.Error()), nil
 		}
 
@@ -361,6 +385,7 @@ func getPodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx context.C
 
 func deletePodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "delete_pod"))
 
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
@@ -391,6 +416,12 @@ func deletePodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx contex
 
 		resultText, err := pod.Delete(ctx, cm, force)
 		if err != nil {
+			slog.Warn("failed to delete Pod",
+				slog.String("name", name),
+				slog.String("namespace", namespace),
+				slog.Bool("force", force),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(err.Error()), nil
 		}
 
@@ -400,6 +431,8 @@ func deletePodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx contex
 
 func streamLogsHandler(cm kai.ClusterManager, factory PodFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "stream_pod_logs"))
+
 		podArg, ok := request.Params.Arguments["pod"]
 		if !ok || podArg == nil {
 			return mcp.NewToolResultText(errMissingPod), nil
@@ -450,6 +483,12 @@ func streamLogsHandler(cm kai.ClusterManager, factory PodFactory) func(ctx conte
 		resultText, err := pod.StreamLogs(ctx, cm, tailLines, previous, sinceDuration)
 
 		if err != nil {
+			slog.Warn("failed to stream pod logs",
+				slog.String("pod", podName),
+				slog.String("namespace", namespace),
+				slog.String("container", containerName),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(err.Error()), nil
 		}
 		return mcp.NewToolResultText(resultText), nil
