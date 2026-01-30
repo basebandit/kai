@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strconv"
 
 	"github.com/basebandit/kai"
@@ -197,6 +198,8 @@ func RegisterServiceToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 // listServicesHandler handles the list_services tool
 func listServicesHandler(cm kai.ClusterManager, factory ServiceFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "list_services"))
+
 		var allNamespaces bool
 
 		if allNamespacesArg, ok := request.Params.Arguments["all_namespaces"].(bool); ok {
@@ -224,6 +227,12 @@ func listServicesHandler(cm kai.ClusterManager, factory ServiceFactory) func(ctx
 
 		resultText, err := service.List(ctx, cm, allNamespaces, labelSelector)
 		if err != nil {
+			slog.Warn("failed to list services",
+				slog.Bool("all_namespaces", allNamespaces),
+				slog.String("namespace", namespace),
+				slog.String("label_selector", labelSelector),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(err.Error()), nil
 		}
 
@@ -234,6 +243,8 @@ func listServicesHandler(cm kai.ClusterManager, factory ServiceFactory) func(ctx
 // getServiceHandler handles the get_service tool
 func getServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "get_service"))
+
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
@@ -258,6 +269,11 @@ func getServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ctx c
 
 		resultText, err := service.Get(ctx, cm)
 		if err != nil {
+			slog.Warn("failed to get service",
+				slog.String("name", name),
+				slog.String("namespace", namespace),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(err.Error()), nil
 		}
 
@@ -268,6 +284,8 @@ func getServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ctx c
 // createServiceHandler handles the create_service tool
 func createServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "create_service"))
+
 		params := kai.ServiceParams{}
 
 		nameArg, ok := request.Params.Arguments["name"]
@@ -375,6 +393,11 @@ func createServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ct
 		service := factory.NewService(params)
 		resultText, err := service.Create(ctx, cm)
 		if err != nil {
+			slog.Warn("failed to create service",
+				slog.String("name", name),
+				slog.String("namespace", namespace),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(err.Error()), nil
 		}
 
@@ -385,6 +408,8 @@ func createServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ct
 // deleteServiceHandler handles the delete_service tool
 func deleteServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "delete_service"))
+
 		params := kai.ServiceParams{}
 
 		namespace := cm.GetCurrentNamespace()
@@ -422,6 +447,11 @@ func deleteServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ct
 
 		resultText, err := service.Delete(ctx, cm)
 		if err != nil {
+			slog.Warn("failed to delete service",
+				slog.String("name", params.Name),
+				slog.String("namespace", params.Namespace),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(err.Error()), nil
 		}
 

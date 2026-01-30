@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/basebandit/kai"
 	"github.com/basebandit/kai/cluster"
@@ -131,6 +132,8 @@ func RegisterConfigMapToolsWithFactory(s kai.ServerInterface, cm kai.ClusterMana
 
 func createConfigMapHandler(cm kai.ClusterManager, factory ConfigMapFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "create_configmap"))
+
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
@@ -170,6 +173,11 @@ func createConfigMapHandler(cm kai.ClusterManager, factory ConfigMapFactory) fun
 		configMap := factory.NewConfigMap(params)
 		result, err := configMap.Create(ctx, cm)
 		if err != nil {
+			slog.Warn("failed to create ConfigMap",
+				slog.String("name", name),
+				slog.String("namespace", namespace),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to create ConfigMap: %s", err.Error())), nil
 		}
 
@@ -179,6 +187,8 @@ func createConfigMapHandler(cm kai.ClusterManager, factory ConfigMapFactory) fun
 
 func getConfigMapHandler(cm kai.ClusterManager, factory ConfigMapFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "get_configmap"))
+
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
@@ -202,6 +212,11 @@ func getConfigMapHandler(cm kai.ClusterManager, factory ConfigMapFactory) func(c
 		configMap := factory.NewConfigMap(params)
 		result, err := configMap.Get(ctx, cm)
 		if err != nil {
+			slog.Warn("failed to get ConfigMap",
+				slog.String("name", name),
+				slog.String("namespace", namespace),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to get ConfigMap: %s", err.Error())), nil
 		}
 
@@ -211,6 +226,8 @@ func getConfigMapHandler(cm kai.ClusterManager, factory ConfigMapFactory) func(c
 
 func listConfigMapsHandler(cm kai.ClusterManager, factory ConfigMapFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "list_configmaps"))
+
 		var allNamespaces bool
 		if allNamespacesArg, ok := request.Params.Arguments["all_namespaces"].(bool); ok {
 			allNamespaces = allNamespacesArg
@@ -237,6 +254,12 @@ func listConfigMapsHandler(cm kai.ClusterManager, factory ConfigMapFactory) func
 		configMap := factory.NewConfigMap(params)
 		result, err := configMap.List(ctx, cm, allNamespaces, labelSelector)
 		if err != nil {
+			slog.Warn("failed to list ConfigMaps",
+				slog.Bool("all_namespaces", allNamespaces),
+				slog.String("namespace", namespace),
+				slog.String("label_selector", labelSelector),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to list ConfigMaps: %s", err.Error())), nil
 		}
 
@@ -246,6 +269,8 @@ func listConfigMapsHandler(cm kai.ClusterManager, factory ConfigMapFactory) func
 
 func deleteConfigMapHandler(cm kai.ClusterManager, factory ConfigMapFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "delete_configmap"))
+
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
@@ -269,6 +294,11 @@ func deleteConfigMapHandler(cm kai.ClusterManager, factory ConfigMapFactory) fun
 		configMap := factory.NewConfigMap(params)
 		result, err := configMap.Delete(ctx, cm)
 		if err != nil {
+			slog.Warn("failed to delete ConfigMap",
+				slog.String("name", name),
+				slog.String("namespace", namespace),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to delete ConfigMap: %s", err.Error())), nil
 		}
 
@@ -278,6 +308,8 @@ func deleteConfigMapHandler(cm kai.ClusterManager, factory ConfigMapFactory) fun
 
 func updateConfigMapHandler(cm kai.ClusterManager, factory ConfigMapFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "update_configmap"))
+
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
@@ -317,6 +349,11 @@ func updateConfigMapHandler(cm kai.ClusterManager, factory ConfigMapFactory) fun
 		configMap := factory.NewConfigMap(params)
 		result, err := configMap.Update(ctx, cm)
 		if err != nil {
+			slog.Warn("failed to update ConfigMap",
+				slog.String("name", name),
+				slog.String("namespace", namespace),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to update ConfigMap: %s", err.Error())), nil
 		}
 

@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/basebandit/kai"
 	"github.com/basebandit/kai/cluster"
@@ -138,6 +139,8 @@ func RegisterSecretToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager
 
 func createSecretHandler(cm kai.ClusterManager, factory SecretFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "create_secret"))
+
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
@@ -184,6 +187,11 @@ func createSecretHandler(cm kai.ClusterManager, factory SecretFactory) func(ctx 
 		secret := factory.NewSecret(params)
 		result, err := secret.Create(ctx, cm)
 		if err != nil {
+			slog.Warn("failed to create Secret",
+				slog.String("name", name),
+				slog.String("namespace", namespace),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to create Secret: %s", err.Error())), nil
 		}
 
@@ -193,6 +201,8 @@ func createSecretHandler(cm kai.ClusterManager, factory SecretFactory) func(ctx 
 
 func getSecretHandler(cm kai.ClusterManager, factory SecretFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "get_secret"))
+
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
@@ -216,6 +226,11 @@ func getSecretHandler(cm kai.ClusterManager, factory SecretFactory) func(ctx con
 		secret := factory.NewSecret(params)
 		result, err := secret.Get(ctx, cm)
 		if err != nil {
+			slog.Warn("failed to get Secret",
+				slog.String("name", name),
+				slog.String("namespace", namespace),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to get Secret: %s", err.Error())), nil
 		}
 
@@ -225,6 +240,8 @@ func getSecretHandler(cm kai.ClusterManager, factory SecretFactory) func(ctx con
 
 func listSecretsHandler(cm kai.ClusterManager, factory SecretFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "list_secrets"))
+
 		var allNamespaces bool
 		if allNamespacesArg, ok := request.Params.Arguments["all_namespaces"].(bool); ok {
 			allNamespaces = allNamespacesArg
@@ -251,6 +268,12 @@ func listSecretsHandler(cm kai.ClusterManager, factory SecretFactory) func(ctx c
 		secret := factory.NewSecret(params)
 		result, err := secret.List(ctx, cm, allNamespaces, labelSelector)
 		if err != nil {
+			slog.Warn("failed to list Secrets",
+				slog.Bool("all_namespaces", allNamespaces),
+				slog.String("namespace", namespace),
+				slog.String("label_selector", labelSelector),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to list Secrets: %s", err.Error())), nil
 		}
 
@@ -260,6 +283,8 @@ func listSecretsHandler(cm kai.ClusterManager, factory SecretFactory) func(ctx c
 
 func deleteSecretHandler(cm kai.ClusterManager, factory SecretFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "delete_secret"))
+
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
@@ -283,6 +308,11 @@ func deleteSecretHandler(cm kai.ClusterManager, factory SecretFactory) func(ctx 
 		secret := factory.NewSecret(params)
 		result, err := secret.Delete(ctx, cm)
 		if err != nil {
+			slog.Warn("failed to delete Secret",
+				slog.String("name", name),
+				slog.String("namespace", namespace),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to delete Secret: %s", err.Error())), nil
 		}
 
@@ -292,6 +322,8 @@ func deleteSecretHandler(cm kai.ClusterManager, factory SecretFactory) func(ctx 
 
 func updateSecretHandler(cm kai.ClusterManager, factory SecretFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "update_secret"))
+
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
@@ -338,6 +370,11 @@ func updateSecretHandler(cm kai.ClusterManager, factory SecretFactory) func(ctx 
 		secret := factory.NewSecret(params)
 		result, err := secret.Update(ctx, cm)
 		if err != nil {
+			slog.Warn("failed to update Secret",
+				slog.String("name", name),
+				slog.String("namespace", namespace),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to update Secret: %s", err.Error())), nil
 		}
 

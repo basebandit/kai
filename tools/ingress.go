@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/basebandit/kai"
 	"github.com/basebandit/kai/cluster"
@@ -145,6 +146,8 @@ func RegisterIngressToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 
 func createIngressHandler(cm kai.ClusterManager, factory IngressFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "create_ingress"))
+
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
@@ -225,6 +228,11 @@ func createIngressHandler(cm kai.ClusterManager, factory IngressFactory) func(ct
 		ingress := factory.NewIngress(params)
 		result, err := ingress.Create(ctx, cm)
 		if err != nil {
+			slog.Warn("failed to create Ingress",
+				slog.String("name", name),
+				slog.String("namespace", namespace),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to create Ingress: %s", err.Error())), nil
 		}
 
@@ -234,6 +242,8 @@ func createIngressHandler(cm kai.ClusterManager, factory IngressFactory) func(ct
 
 func getIngressHandler(cm kai.ClusterManager, factory IngressFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "get_ingress"))
+
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
@@ -257,6 +267,11 @@ func getIngressHandler(cm kai.ClusterManager, factory IngressFactory) func(ctx c
 		ingress := factory.NewIngress(params)
 		result, err := ingress.Get(ctx, cm)
 		if err != nil {
+			slog.Warn("failed to get Ingress",
+				slog.String("name", name),
+				slog.String("namespace", namespace),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to get Ingress: %s", err.Error())), nil
 		}
 
@@ -266,6 +281,8 @@ func getIngressHandler(cm kai.ClusterManager, factory IngressFactory) func(ctx c
 
 func listIngressesHandler(cm kai.ClusterManager, factory IngressFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "list_ingresses"))
+
 		var allNamespaces bool
 		if allNamespacesArg, ok := request.Params.Arguments["all_namespaces"].(bool); ok {
 			allNamespaces = allNamespacesArg
@@ -292,6 +309,12 @@ func listIngressesHandler(cm kai.ClusterManager, factory IngressFactory) func(ct
 		ingress := factory.NewIngress(params)
 		result, err := ingress.List(ctx, cm, allNamespaces, labelSelector)
 		if err != nil {
+			slog.Warn("failed to list Ingresses",
+				slog.Bool("all_namespaces", allNamespaces),
+				slog.String("namespace", namespace),
+				slog.String("label_selector", labelSelector),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to list Ingresses: %s", err.Error())), nil
 		}
 
@@ -301,6 +324,8 @@ func listIngressesHandler(cm kai.ClusterManager, factory IngressFactory) func(ct
 
 func updateIngressHandler(cm kai.ClusterManager, factory IngressFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "update_ingress"))
+
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
@@ -363,6 +388,11 @@ func updateIngressHandler(cm kai.ClusterManager, factory IngressFactory) func(ct
 		ingress := factory.NewIngress(params)
 		result, err := ingress.Update(ctx, cm)
 		if err != nil {
+			slog.Warn("failed to update Ingress",
+				slog.String("name", name),
+				slog.String("namespace", namespace),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to update Ingress: %s", err.Error())), nil
 		}
 
@@ -372,6 +402,8 @@ func updateIngressHandler(cm kai.ClusterManager, factory IngressFactory) func(ct
 
 func deleteIngressHandler(cm kai.ClusterManager, factory IngressFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "delete_ingress"))
+
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
@@ -395,6 +427,11 @@ func deleteIngressHandler(cm kai.ClusterManager, factory IngressFactory) func(ct
 		ingress := factory.NewIngress(params)
 		result, err := ingress.Delete(ctx, cm)
 		if err != nil {
+			slog.Warn("failed to delete Ingress",
+				slog.String("name", name),
+				slog.String("namespace", namespace),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to delete Ingress: %s", err.Error())), nil
 		}
 

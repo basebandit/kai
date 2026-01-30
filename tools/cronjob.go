@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/basebandit/kai"
 	"github.com/basebandit/kai/cluster"
@@ -204,6 +205,8 @@ func RegisterCronJobToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 
 func createCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "create_cronjob"))
+
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
@@ -305,6 +308,11 @@ func createCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(ct
 		cronJob := factory.NewCronJob(params)
 		result, err := cronJob.Create(ctx, cm)
 		if err != nil {
+			slog.Warn("failed to create CronJob",
+				slog.String("name", name),
+				slog.String("namespace", namespace),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to create CronJob: %s", err.Error())), nil
 		}
 
@@ -314,6 +322,8 @@ func createCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(ct
 
 func getCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "get_cronjob"))
+
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
@@ -337,6 +347,11 @@ func getCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(ctx c
 		cronJob := factory.NewCronJob(params)
 		result, err := cronJob.Get(ctx, cm)
 		if err != nil {
+			slog.Warn("failed to get CronJob",
+				slog.String("name", name),
+				slog.String("namespace", namespace),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to get CronJob: %s", err.Error())), nil
 		}
 
@@ -346,6 +361,8 @@ func getCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(ctx c
 
 func listCronJobsHandler(cm kai.ClusterManager, factory CronJobFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "list_cronjobs"))
+
 		var allNamespaces bool
 		if allNamespacesArg, ok := request.Params.Arguments["all_namespaces"].(bool); ok {
 			allNamespaces = allNamespacesArg
@@ -372,6 +389,12 @@ func listCronJobsHandler(cm kai.ClusterManager, factory CronJobFactory) func(ctx
 		cronJob := factory.NewCronJob(params)
 		result, err := cronJob.List(ctx, cm, allNamespaces, labelSelector)
 		if err != nil {
+			slog.Warn("failed to list CronJobs",
+				slog.Bool("all_namespaces", allNamespaces),
+				slog.String("namespace", namespace),
+				slog.String("label_selector", labelSelector),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to list CronJobs: %s", err.Error())), nil
 		}
 
@@ -381,6 +404,8 @@ func listCronJobsHandler(cm kai.ClusterManager, factory CronJobFactory) func(ctx
 
 func deleteCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "delete_cronjob"))
+
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
@@ -404,6 +429,11 @@ func deleteCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(ct
 		cronJob := factory.NewCronJob(params)
 		result, err := cronJob.Delete(ctx, cm)
 		if err != nil {
+			slog.Warn("failed to delete CronJob",
+				slog.String("name", name),
+				slog.String("namespace", namespace),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to delete CronJob: %s", err.Error())), nil
 		}
 

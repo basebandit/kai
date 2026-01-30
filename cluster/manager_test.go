@@ -640,3 +640,177 @@ users:
 		assert.Contains(t, err.Error(), "error reading kubeconfig file")
 	})
 }
+
+func TestPortForwardOperations(t *testing.T) {
+	t.Run("ListPortForwards", testListPortForwards)
+	t.Run("StopPortForward", testStopPortForward)
+	t.Run("StartPortForwardErrors", testStartPortForwardErrors)
+}
+
+func testListPortForwards(t *testing.T) {
+	cm := New()
+
+	// Clear any existing sessions
+	pfMutex.Lock()
+	portForwardSessions = make(map[string]*PortForwardSession)
+	pfMutex.Unlock()
+
+	// Test empty list
+	sessions := cm.ListPortForwards()
+	assert.Empty(t, sessions)
+
+	// Add some sessions
+	pfMutex.Lock()
+	portForwardSessions["pf-test-1"] = &PortForwardSession{
+		ID:         "pf-test-1",
+		Namespace:  "default",
+		Target:     "nginx",
+		TargetType: "pod",
+		LocalPort:  8080,
+		RemotePort: 80,
+		PodName:    "nginx",
+		stopChan:   make(chan struct{}),
+	}
+	portForwardSessions["pf-test-2"] = &PortForwardSession{
+		ID:         "pf-test-2",
+		Namespace:  "web",
+		Target:     "my-service",
+		TargetType: "service",
+		LocalPort:  3000,
+		RemotePort: 80,
+		PodName:    "my-service-pod",
+		stopChan:   make(chan struct{}),
+	}
+	pfMutex.Unlock()
+
+	// Test list with sessions
+	sessions = cm.ListPortForwards()
+	assert.Len(t, sessions, 2)
+
+	// Verify session contents
+	foundSession1 := false
+	foundSession2 := false
+	for _, s := range sessions {
+		if s.ID == "pf-test-1" {
+			foundSession1 = true
+			assert.Equal(t, "default", s.Namespace)
+			assert.Equal(t, "nginx", s.Target)
+			assert.Equal(t, "pod", s.TargetType)
+			assert.Equal(t, 8080, s.LocalPort)
+			assert.Equal(t, 80, s.RemotePort)
+		}
+		if s.ID == "pf-test-2" {
+			foundSession2 = true
+			assert.Equal(t, "web", s.Namespace)
+			assert.Equal(t, "my-service", s.Target)
+			assert.Equal(t, "service", s.TargetType)
+		}
+	}
+	assert.True(t, foundSession1, "Session pf-test-1 should be found")
+	assert.True(t, foundSession2, "Session pf-test-2 should be found")
+
+	// Cleanup
+	pfMutex.Lock()
+	portForwardSessions = make(map[string]*PortForwardSession)
+	pfMutex.Unlock()
+}
+
+func testStopPortForward(t *testing.T) {
+	cm := New()
+
+	// Clear any existing sessions
+	pfMutex.Lock()
+	portForwardSessions = make(map[string]*PortForwardSession)
+	pfMutex.Unlock()
+
+	// Test stopping non-existent session
+	err := cm.StopPortForward("nonexistent")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "port forward session \"nonexistent\" not found")
+
+	// Add a session
+	stopChan := make(chan struct{})
+	pfMutex.Lock()
+	portForwardSessions["pf-stop-test"] = &PortForwardSession{
+		ID:         "pf-stop-test",
+		Namespace:  "default",
+		Target:     "test-pod",
+		TargetType: "pod",
+		LocalPort:  9090,
+		RemotePort: 90,
+		PodName:    "test-pod",
+		stopChan:   stopChan,
+	}
+	pfMutex.Unlock()
+
+	// Verify session exists
+	sessions := cm.ListPortForwards()
+	assert.Len(t, sessions, 1)
+
+	// Stop the session
+	err = cm.StopPortForward("pf-stop-test")
+	assert.NoError(t, err)
+
+	// Verify session is removed
+	sessions = cm.ListPortForwards()
+	assert.Empty(t, sessions)
+
+	// Verify stop channel was closed
+	select {
+	case <-stopChan:
+		// Channel is closed, as expected
+	default:
+		t.Error("Stop channel should be closed")
+	}
+
+	// Stopping again should fail
+	err = cm.StopPortForward("pf-stop-test")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "not found")
+}
+
+func testStartPortForwardErrors(t *testing.T) {
+	cm := New()
+
+	// Clear any existing sessions
+	pfMutex.Lock()
+	portForwardSessions = make(map[string]*PortForwardSession)
+	pfMutex.Unlock()
+
+	t.Run("NoKubeconfigPath", func(t *testing.T) {
+		// Manager without kubeconfig path should fail
+		_, err := cm.StartPortForward(
+			t.Context(),
+			"default",
+			"pod",
+			"nginx",
+			8080,
+			80,
+		)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "kubeconfig path not found")
+	})
+
+	t.Run("InvalidKubeconfigPath", func(t *testing.T) {
+		// Set invalid kubeconfig path
+		cm.kubeconfigs["test-context"] = "/nonexistent/path/config"
+		cm.currentContext = "test-context"
+
+		_, err := cm.StartPortForward(
+			t.Context(),
+			"default",
+			"pod",
+			"nginx",
+			8080,
+			80,
+		)
+		assert.Error(t, err)
+		// Should fail when building config
+		assert.Contains(t, err.Error(), "failed to build config")
+	})
+
+	// Cleanup
+	pfMutex.Lock()
+	portForwardSessions = make(map[string]*PortForwardSession)
+	pfMutex.Unlock()
+}

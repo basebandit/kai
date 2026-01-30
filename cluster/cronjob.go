@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/basebandit/kai"
@@ -39,11 +40,26 @@ func (c *CronJob) Create(ctx context.Context, cm kai.ClusterManager) (string, er
 	var result string
 
 	if err := c.validate(); err != nil {
+		slog.Warn("invalid CronJob input",
+			slog.String("name", c.Name),
+			slog.String("namespace", c.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, err
 	}
 
+	slog.Debug("CronJob create requested",
+		slog.String("name", c.Name),
+		slog.String("namespace", c.Namespace),
+	)
+
 	client, err := cm.GetCurrentClient()
 	if err != nil {
+		slog.Warn("failed to get client for CronJob create",
+			slog.String("name", c.Name),
+			slog.String("namespace", c.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("error getting client: %w", err)
 	}
 
@@ -52,6 +68,11 @@ func (c *CronJob) Create(ctx context.Context, cm kai.ClusterManager) (string, er
 
 	_, err = client.CoreV1().Namespaces().Get(timeoutCtx, c.Namespace, metav1.GetOptions{})
 	if err != nil {
+		slog.Warn("namespace not found for CronJob create",
+			slog.String("name", c.Name),
+			slog.String("namespace", c.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("namespace %q not found: %w", c.Namespace, err)
 	}
 
@@ -142,8 +163,19 @@ func (c *CronJob) Create(ctx context.Context, cm kai.ClusterManager) (string, er
 
 	createdCronJob, err := client.BatchV1().CronJobs(c.Namespace).Create(timeoutCtx, cronJob, metav1.CreateOptions{})
 	if err != nil {
+		slog.Warn("failed to create CronJob",
+			slog.String("name", c.Name),
+			slog.String("namespace", c.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("failed to create CronJob: %w", err)
 	}
+
+	slog.Info("CronJob created",
+		slog.String("name", createdCronJob.Name),
+		slog.String("namespace", createdCronJob.Namespace),
+		slog.String("schedule", createdCronJob.Spec.Schedule),
+	)
 
 	result = fmt.Sprintf("CronJob %q created successfully in namespace %q with schedule %q", createdCronJob.Name, createdCronJob.Namespace, createdCronJob.Spec.Schedule)
 	return result, nil
@@ -153,8 +185,18 @@ func (c *CronJob) Create(ctx context.Context, cm kai.ClusterManager) (string, er
 func (c *CronJob) Get(ctx context.Context, cm kai.ClusterManager) (string, error) {
 	var result string
 
+	slog.Debug("CronJob get requested",
+		slog.String("name", c.Name),
+		slog.String("namespace", c.Namespace),
+	)
+
 	client, err := cm.GetCurrentClient()
 	if err != nil {
+		slog.Warn("failed to get client for CronJob get",
+			slog.String("name", c.Name),
+			slog.String("namespace", c.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("error getting client: %w", err)
 	}
 
@@ -169,8 +211,18 @@ func (c *CronJob) Get(ctx context.Context, cm kai.ClusterManager) (string, error
 
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
+			slog.Warn("CronJob not found",
+				slog.String("name", c.Name),
+				slog.String("namespace", c.Namespace),
+				slog.String("error", err.Error()),
+			)
 			return result, fmt.Errorf("CronJob %q not found in namespace %q", c.Name, c.Namespace)
 		}
+		slog.Warn("failed to get CronJob",
+			slog.String("name", c.Name),
+			slog.String("namespace", c.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("failed to get CronJob %q: %v", c.Name, err)
 	}
 
@@ -181,8 +233,19 @@ func (c *CronJob) Get(ctx context.Context, cm kai.ClusterManager) (string, error
 func (c *CronJob) List(ctx context.Context, cm kai.ClusterManager, allNamespaces bool, labelSelector string) (string, error) {
 	var result string
 
+	slog.Debug("CronJob list requested",
+		slog.Bool("all_namespaces", allNamespaces),
+		slog.String("namespace", c.Namespace),
+		slog.String("label_selector", labelSelector),
+	)
+
 	client, err := cm.GetCurrentClient()
 	if err != nil {
+		slog.Warn("failed to get client for CronJob list",
+			slog.Bool("all_namespaces", allNamespaces),
+			slog.String("namespace", c.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("error getting client: %w", err)
 	}
 
@@ -201,6 +264,12 @@ func (c *CronJob) List(ctx context.Context, cm kai.ClusterManager, allNamespaces
 	}
 
 	if err != nil {
+		slog.Warn("failed to list CronJobs",
+			slog.Bool("all_namespaces", allNamespaces),
+			slog.String("namespace", c.Namespace),
+			slog.String("label_selector", labelSelector),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("failed to list CronJobs: %w", err)
 	}
 
@@ -222,11 +291,24 @@ func (c *CronJob) Delete(ctx context.Context, cm kai.ClusterManager) (string, er
 	var result string
 
 	if c.Name == "" {
+		slog.Warn("CronJob delete missing name",
+			slog.String("namespace", c.Namespace),
+		)
 		return result, errors.New("CronJob name is required for deletion")
 	}
 
+	slog.Debug("CronJob delete requested",
+		slog.String("name", c.Name),
+		slog.String("namespace", c.Namespace),
+	)
+
 	client, err := cm.GetCurrentClient()
 	if err != nil {
+		slog.Warn("failed to get client for CronJob delete",
+			slog.String("name", c.Name),
+			slog.String("namespace", c.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("error getting client: %w", err)
 	}
 
@@ -235,6 +317,11 @@ func (c *CronJob) Delete(ctx context.Context, cm kai.ClusterManager) (string, er
 
 	_, err = client.BatchV1().CronJobs(c.Namespace).Get(timeoutCtx, c.Name, metav1.GetOptions{})
 	if err != nil {
+		slog.Warn("CronJob not found for delete",
+			slog.String("name", c.Name),
+			slog.String("namespace", c.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("CronJob %q not found in namespace %q: %w", c.Name, c.Namespace, err)
 	}
 
@@ -245,8 +332,18 @@ func (c *CronJob) Delete(ctx context.Context, cm kai.ClusterManager) (string, er
 
 	err = client.BatchV1().CronJobs(c.Namespace).Delete(timeoutCtx, c.Name, deleteOptions)
 	if err != nil {
+		slog.Warn("failed to delete CronJob",
+			slog.String("name", c.Name),
+			slog.String("namespace", c.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("failed to delete CronJob %q: %w", c.Name, err)
 	}
+
+	slog.Info("CronJob deleted",
+		slog.String("name", c.Name),
+		slog.String("namespace", c.Namespace),
+	)
 
 	result = fmt.Sprintf("CronJob %q deleted successfully from namespace %q", c.Name, c.Namespace)
 	return result, nil

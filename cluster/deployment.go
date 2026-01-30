@@ -3,6 +3,7 @@ package cluster
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -29,6 +30,11 @@ type Deployment struct {
 // Create creates a new deployment in the cluster
 func (d *Deployment) Create(ctx context.Context, cm kai.ClusterManager) (string, error) {
 	var result string
+
+	slog.Debug("deployment create requested",
+		slog.String("name", d.Name),
+		slog.String("namespace", d.Namespace),
+	)
 
 	// Add default app label for when no labels provided
 	labels := map[string]interface{}{
@@ -144,13 +150,28 @@ func (d *Deployment) Create(ctx context.Context, cm kai.ClusterManager) (string,
 
 	client, err := cm.GetCurrentDynamicClient()
 	if err != nil {
+		slog.Warn("failed to get dynamic client for deployment create",
+			slog.String("name", d.Name),
+			slog.String("namespace", d.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("failed to get a dynamic client: %w", err)
 	}
 
 	_, err = client.Resource(gvr).Namespace(d.Namespace).Create(timeoutCtx, deployment, metav1.CreateOptions{})
 	if err != nil {
+		slog.Warn("failed to create deployment",
+			slog.String("name", d.Name),
+			slog.String("namespace", d.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("failed to create deployment: %w", err)
 	}
+
+	slog.Info("deployment created",
+		slog.String("name", d.Name),
+		slog.String("namespace", d.Namespace),
+	)
 
 	result = fmt.Sprintf("Deployment %q created successfully in namespace %q with %g replica(s)", d.Name, d.Namespace, d.Replicas)
 
@@ -161,8 +182,18 @@ func (d *Deployment) Create(ctx context.Context, cm kai.ClusterManager) (string,
 func (d *Deployment) Get(ctx context.Context, cm kai.ClusterManager) (string, error) {
 	var result string
 
+	slog.Debug("deployment get requested",
+		slog.String("name", d.Name),
+		slog.String("namespace", d.Namespace),
+	)
+
 	client, err := cm.GetCurrentClient()
 	if err != nil {
+		slog.Warn("failed to get client for deployment get",
+			slog.String("name", d.Name),
+			slog.String("namespace", d.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("error getting client: %w", err)
 	}
 
@@ -178,6 +209,11 @@ func (d *Deployment) Get(ctx context.Context, cm kai.ClusterManager) (string, er
 	// Get the deployment
 	deployment, err := client.AppsV1().Deployments(namespace).Get(timeoutCtx, d.Name, metav1.GetOptions{})
 	if err != nil {
+		slog.Warn("failed to get deployment",
+			slog.String("name", d.Name),
+			slog.String("namespace", namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("failed to get deployment: %w", err)
 	}
 
@@ -189,8 +225,18 @@ func (d *Deployment) Get(ctx context.Context, cm kai.ClusterManager) (string, er
 func (d *Deployment) Update(ctx context.Context, cm kai.ClusterManager) (string, error) {
 	var result string
 
+	slog.Debug("deployment update requested",
+		slog.String("name", d.Name),
+		slog.String("namespace", d.Namespace),
+	)
+
 	client, err := cm.GetCurrentClient()
 	if err != nil {
+		slog.Warn("failed to get client for deployment update",
+			slog.String("name", d.Name),
+			slog.String("namespace", d.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("error getting client: %w", err)
 	}
 
@@ -206,6 +252,11 @@ func (d *Deployment) Update(ctx context.Context, cm kai.ClusterManager) (string,
 	// Get the current deployment
 	deployment, err := client.AppsV1().Deployments(namespace).Get(timeoutCtx, d.Name, metav1.GetOptions{})
 	if err != nil {
+		slog.Warn("failed to get deployment for update",
+			slog.String("name", d.Name),
+			slog.String("namespace", namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("failed to get deployment: %w", err)
 	}
 
@@ -229,6 +280,10 @@ func (d *Deployment) Update(ctx context.Context, cm kai.ClusterManager) (string,
 		if containerIndex >= 0 {
 			deployment.Spec.Template.Spec.Containers[containerIndex].Image = d.Image
 		} else {
+			slog.Warn("no suitable container found to update image",
+				slog.String("name", d.Name),
+				slog.String("namespace", namespace),
+			)
 			return result, fmt.Errorf("no suitable container found to update image")
 		}
 	}
@@ -314,6 +369,10 @@ func (d *Deployment) Update(ctx context.Context, cm kai.ClusterManager) (string,
 				}
 			}
 		} else {
+			slog.Warn("no suitable container found to update environment variables",
+				slog.String("name", d.Name),
+				slog.String("namespace", namespace),
+			)
 			return result, fmt.Errorf("no suitable container found to update environment variables")
 		}
 	}
@@ -364,6 +423,10 @@ func (d *Deployment) Update(ctx context.Context, cm kai.ClusterManager) (string,
 				}
 			}
 		} else {
+			slog.Warn("no suitable container found to update container port",
+				slog.String("name", d.Name),
+				slog.String("namespace", namespace),
+			)
 			return result, fmt.Errorf("no suitable container found to update container port")
 		}
 	}
@@ -389,6 +452,10 @@ func (d *Deployment) Update(ctx context.Context, cm kai.ClusterManager) (string,
 				deployment.Spec.Template.Spec.Containers[containerIndex].ImagePullPolicy = policy
 			}
 		} else {
+			slog.Warn("no suitable container found to update image pull policy",
+				slog.String("name", d.Name),
+				slog.String("namespace", namespace),
+			)
 			return result, fmt.Errorf("no suitable container found to update image pull policy")
 		}
 	}
@@ -411,8 +478,18 @@ func (d *Deployment) Update(ctx context.Context, cm kai.ClusterManager) (string,
 	// Update the deployment
 	updatedDeployment, err := client.AppsV1().Deployments(namespace).Update(timeoutCtx, deployment, metav1.UpdateOptions{})
 	if err != nil {
+		slog.Warn("failed to update deployment",
+			slog.String("name", d.Name),
+			slog.String("namespace", namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("failed to update deployment: %w", err)
 	}
+
+	slog.Info("deployment updated",
+		slog.String("name", updatedDeployment.Name),
+		slog.String("namespace", updatedDeployment.Namespace),
+	)
 
 	result = fmt.Sprintf("Deployment %q updated successfully in namespace %q", updatedDeployment.Name, updatedDeployment.Namespace)
 	if updatedDeployment.Spec.Replicas != nil {
@@ -426,8 +503,19 @@ func (d *Deployment) Update(ctx context.Context, cm kai.ClusterManager) (string,
 func (d *Deployment) List(ctx context.Context, cm kai.ClusterManager, allNamespaces bool, labelSelector string) (string, error) {
 	var result string
 
+	slog.Debug("deployment list requested",
+		slog.Bool("all_namespaces", allNamespaces),
+		slog.String("namespace", d.Namespace),
+		slog.String("label_selector", labelSelector),
+	)
+
 	client, err := cm.GetCurrentClient()
 	if err != nil {
+		slog.Warn("failed to get client for deployment list",
+			slog.Bool("all_namespaces", allNamespaces),
+			slog.String("namespace", d.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("error getting client: %w", err)
 	}
 
@@ -447,6 +535,10 @@ func (d *Deployment) List(ctx context.Context, cm kai.ClusterManager, allNamespa
 	if allNamespaces {
 		deployments, err := client.AppsV1().Deployments("").List(timeoutCtx, listOptions)
 		if err != nil {
+			slog.Warn("failed to list deployments across all namespaces",
+				slog.String("label_selector", labelSelector),
+				slog.String("error", err.Error()),
+			)
 			return result, fmt.Errorf("failed to list deployments: %w", err)
 		}
 
@@ -459,6 +551,11 @@ func (d *Deployment) List(ctx context.Context, cm kai.ClusterManager, allNamespa
 	} else {
 		deployments, err := client.AppsV1().Deployments(namespace).List(timeoutCtx, listOptions)
 		if err != nil {
+			slog.Warn("failed to list deployments in namespace",
+				slog.String("namespace", namespace),
+				slog.String("label_selector", labelSelector),
+				slog.String("error", err.Error()),
+			)
 			return result, fmt.Errorf("failed to list deployments: %w", err)
 		}
 
@@ -476,8 +573,17 @@ func (d *Deployment) List(ctx context.Context, cm kai.ClusterManager, allNamespa
 
 // Describe provides detailed information about a deployment
 func (d *Deployment) Describe(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	slog.Debug("deployment describe requested",
+		slog.String("name", d.Name),
+		slog.String("namespace", d.Namespace),
+	)
 	client, err := cm.GetCurrentClient()
 	if err != nil {
+		slog.Warn("failed to get client for deployment describe",
+			slog.String("name", d.Name),
+			slog.String("namespace", d.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return "", fmt.Errorf("error getting client: %w", err)
 	}
 
@@ -491,6 +597,11 @@ func (d *Deployment) Describe(ctx context.Context, cm kai.ClusterManager) (strin
 
 	deployment, err := client.AppsV1().Deployments(namespace).Get(timeoutCtx, d.Name, metav1.GetOptions{})
 	if err != nil {
+		slog.Warn("failed to describe deployment",
+			slog.String("name", d.Name),
+			slog.String("namespace", namespace),
+			slog.String("error", err.Error()),
+		)
 		return "", fmt.Errorf("failed to get deployment: %w", err)
 	}
 

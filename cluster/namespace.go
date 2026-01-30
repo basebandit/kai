@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 	"time"
 
@@ -28,11 +29,23 @@ func (n *Namespace) Create(ctx context.Context, cm kai.ClusterManager) (string, 
 	var result string
 
 	if err := n.validate(); err != nil {
+		slog.Warn("invalid namespace input",
+			slog.String("name", n.Name),
+			slog.String("error", err.Error()),
+		)
 		return result, err
 	}
 
+	slog.Debug("namespace create requested",
+		slog.String("name", n.Name),
+	)
+
 	client, err := cm.GetCurrentClient()
 	if err != nil {
+		slog.Warn("failed to get client for namespace create",
+			slog.String("name", n.Name),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("error getting client: %w", err)
 	}
 
@@ -61,8 +74,16 @@ func (n *Namespace) Create(ctx context.Context, cm kai.ClusterManager) (string, 
 
 	createdNamespace, err := client.CoreV1().Namespaces().Create(timeoutCtx, namespace, metav1.CreateOptions{})
 	if err != nil {
+		slog.Warn("failed to create namespace",
+			slog.String("name", n.Name),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("failed to create namespace: %w", err)
 	}
+
+	slog.Info("namespace created",
+		slog.String("name", createdNamespace.Name),
+	)
 
 	result = fmt.Sprintf("Namespace %q created successfully", createdNamespace.Name)
 	return result, nil
@@ -70,8 +91,16 @@ func (n *Namespace) Create(ctx context.Context, cm kai.ClusterManager) (string, 
 
 func (n *Namespace) Get(ctx context.Context, cm kai.ClusterManager) (string, error) {
 	var result string
+
+	slog.Debug("namespace get requested",
+		slog.String("name", n.Name),
+	)
 	client, err := cm.GetCurrentClient()
 	if err != nil {
+		slog.Warn("failed to get client for namespace get",
+			slog.String("name", n.Name),
+			slog.String("error", err.Error()),
+		)
 		return result, err
 	}
 
@@ -86,8 +115,16 @@ func (n *Namespace) Get(ctx context.Context, cm kai.ClusterManager) (string, err
 
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
+			slog.Warn("namespace not found",
+				slog.String("name", n.Name),
+				slog.String("error", err.Error()),
+			)
 			return result, fmt.Errorf("namespace '%s' not found", n.Name)
 		}
+		slog.Warn("failed to get namespace",
+			slog.String("name", n.Name),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("failed to get namespace '%s': %v", n.Name, err)
 	}
 
@@ -96,8 +133,16 @@ func (n *Namespace) Get(ctx context.Context, cm kai.ClusterManager) (string, err
 
 func (n *Namespace) List(ctx context.Context, cm kai.ClusterManager, labelSelector string) (string, error) {
 	var result string
+
+	slog.Debug("namespace list requested",
+		slog.String("label_selector", labelSelector),
+	)
 	client, err := cm.GetCurrentClient()
 	if err != nil {
+		slog.Warn("failed to get client for namespace list",
+			slog.String("label_selector", labelSelector),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("error getting client: %w", err)
 	}
 
@@ -110,6 +155,10 @@ func (n *Namespace) List(ctx context.Context, cm kai.ClusterManager, labelSelect
 
 	namespaces, err := client.CoreV1().Namespaces().List(timeoutCtx, listOptions)
 	if err != nil {
+		slog.Warn("failed to list namespaces",
+			slog.String("label_selector", labelSelector),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("failed to list namespaces: %w", err)
 	}
 
@@ -126,8 +175,16 @@ func (n *Namespace) List(ctx context.Context, cm kai.ClusterManager, labelSelect
 func (n *Namespace) Delete(ctx context.Context, cm kai.ClusterManager) (string, error) {
 	var result string
 
+	slog.Debug("namespace delete requested",
+		slog.String("name", n.Name),
+	)
+
 	client, err := cm.GetCurrentClient()
 	if err != nil {
+		slog.Warn("failed to get client for namespace delete",
+			slog.String("name", n.Name),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("error getting client: %w", err)
 	}
 
@@ -137,14 +194,26 @@ func (n *Namespace) Delete(ctx context.Context, cm kai.ClusterManager) (string, 
 	if n.Name != "" {
 		_, err = client.CoreV1().Namespaces().Get(timeoutCtx, n.Name, metav1.GetOptions{})
 		if err != nil {
+			slog.Warn("namespace not found for delete",
+				slog.String("name", n.Name),
+				slog.String("error", err.Error()),
+			)
 			return result, fmt.Errorf("failed to find namespace %q: %w", n.Name, err)
 		}
 
 		deleteOptions := metav1.DeleteOptions{}
 		err = client.CoreV1().Namespaces().Delete(timeoutCtx, n.Name, deleteOptions)
 		if err != nil {
+			slog.Warn("failed to delete namespace",
+				slog.String("name", n.Name),
+				slog.String("error", err.Error()),
+			)
 			return result, fmt.Errorf("failed to delete namespace %q: %w", n.Name, err)
 		}
+
+		slog.Info("namespace deleted",
+			slog.String("name", n.Name),
+		)
 
 		result = fmt.Sprintf("Namespace %q deleted successfully", n.Name)
 		return result, nil
@@ -170,6 +239,10 @@ func (n *Namespace) Delete(ctx context.Context, cm kai.ClusterManager) (string, 
 
 		namespaceList, err := client.CoreV1().Namespaces().List(timeoutCtx, listOptions)
 		if err != nil {
+			slog.Warn("failed to list namespaces for delete",
+				slog.String("label_selector", labelSelector),
+				slog.String("error", err.Error()),
+			)
 			return result, fmt.Errorf("failed to list namespaces with label selector %q: %w", labelSelector, err)
 		}
 
@@ -184,12 +257,21 @@ func (n *Namespace) Delete(ctx context.Context, cm kai.ClusterManager) (string, 
 		for _, namespace := range namespaceList.Items {
 			err = client.CoreV1().Namespaces().Delete(timeoutCtx, namespace.Name, deleteOptions)
 			if err != nil {
+				slog.Warn("failed to delete namespace",
+					slog.String("name", namespace.Name),
+					slog.String("error", err.Error()),
+				)
 				result += fmt.Sprintf("Failed to delete namespace %q: %v\n", namespace.Name, err)
 			} else {
 				deletedCount++
 				deletedNames = append(deletedNames, namespace.Name)
 			}
 		}
+
+		slog.Info("namespaces deleted",
+			slog.Int("count", deletedCount),
+			slog.String("label_selector", labelSelector),
+		)
 
 		if deletedCount == 0 {
 			return result, fmt.Errorf("failed to delete any namespaces with label selector %q", labelSelector)

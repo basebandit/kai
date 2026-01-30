@@ -4,10 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/basebandit/kai"
@@ -15,6 +19,8 @@ import (
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/tools/portforward"
+	"k8s.io/client-go/transport/spdy"
 	"k8s.io/client-go/util/homedir"
 )
 
@@ -107,6 +113,7 @@ func (cm *Manager) LoadKubeConfig(name, path string) error {
 // DeleteContext removes a context from the manager
 func (cm *Manager) DeleteContext(name string) error {
 	if _, exists := cm.contexts[name]; !exists {
+		slog.Debug("context not found for deletion", slog.String("context", name))
 		return fmt.Errorf("context %s not found", name)
 	}
 
@@ -122,6 +129,7 @@ func (cm *Manager) DeleteContext(name string) error {
 			cm.contexts[contextName].IsActive = true
 			break
 		}
+		slog.Info("context deleted", slog.String("context", name), slog.String("new_current", cm.currentContext))
 		return nil
 	}
 
@@ -130,6 +138,7 @@ func (cm *Manager) DeleteContext(name string) error {
 	delete(cm.dynamicClients, name)
 	delete(cm.kubeconfigs, name)
 
+	slog.Info("context deleted", slog.String("context", name))
 	return nil
 }
 
@@ -267,9 +276,11 @@ func (cm *Manager) ListClusters() []string {
 // SetCurrentContext sets the current context and updates the kubeconfig file
 func (cm *Manager) SetCurrentContext(contextName string) error {
 	if _, exists := cm.clients[contextName]; !exists {
+		slog.Debug("context not found", slog.String("context", contextName))
 		return fmt.Errorf("cluster %s not found", contextName)
 	}
 
+	previousContext := cm.currentContext
 	if cm.currentContext != "" {
 		if currentInfo, exists := cm.contexts[cm.currentContext]; exists {
 			currentInfo.IsActive = false
@@ -286,6 +297,10 @@ func (cm *Manager) SetCurrentContext(contextName string) error {
 		}
 	}
 
+	slog.Info("context switched",
+		slog.String("from", previousContext),
+		slog.String("to", contextName),
+	)
 	return nil
 }
 
@@ -441,4 +456,207 @@ func validateFile(path string) error {
 
 func ptr[T any](v T) *T {
 	return &v
+}
+
+// PortForwardSession represents an active port forwarding session
+type PortForwardSession struct {
+	ID         string
+	Namespace  string
+	Target     string
+	TargetType string
+	LocalPort  int
+	RemotePort int
+	PodName    string
+	stopChan   chan struct{}
+}
+
+// portForwardSessions tracks active port forward sessions
+var (
+	portForwardSessions = make(map[string]*PortForwardSession)
+	pfMutex             sync.RWMutex
+	pfCounter           int
+)
+
+// StartPortForward initiates a port forwarding session
+func (cm *Manager) StartPortForward(
+	ctx context.Context,
+	namespace string,
+	targetType string,
+	targetName string,
+	localPort int,
+	remotePort int,
+) (*PortForwardSession, error) {
+	currentContext := cm.GetCurrentContext()
+	kubeconfigPath, exists := cm.kubeconfigs[currentContext]
+	if !exists {
+		return nil, fmt.Errorf("kubeconfig path not found for context %s", currentContext)
+	}
+
+	config, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build config: %w", err)
+	}
+
+	client, err := cm.GetCurrentClient()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get client: %w", err)
+	}
+
+	if namespace == "" {
+		namespace = cm.GetCurrentNamespace()
+	}
+
+	podName := targetName
+	if targetType == "service" {
+		svc, err := client.CoreV1().Services(namespace).Get(ctx, targetName, metav1.GetOptions{})
+		if err != nil {
+			return nil, fmt.Errorf("service %q not found: %w", targetName, err)
+		}
+
+		if len(svc.Spec.Selector) == 0 {
+			return nil, fmt.Errorf("service %q has no selector", targetName)
+		}
+
+		var labelParts []string
+		for k, v := range svc.Spec.Selector {
+			labelParts = append(labelParts, fmt.Sprintf("%s=%s", k, v))
+		}
+
+		pods, err := client.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
+			LabelSelector: strings.Join(labelParts, ","),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("failed to list pods: %w", err)
+		}
+
+		if len(pods.Items) == 0 {
+			return nil, fmt.Errorf("no pods found for service %q", targetName)
+		}
+
+		found := false
+		for _, pod := range pods.Items {
+			if pod.Status.Phase == "Running" {
+				podName = pod.Name
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("no running pods found for service %q", targetName)
+		}
+	}
+
+	_, err = client.CoreV1().Pods(namespace).Get(ctx, podName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("pod %q not found in namespace %q: %w", podName, namespace, err)
+	}
+
+	reqURL, err := url.Parse(fmt.Sprintf("%s/api/v1/namespaces/%s/pods/%s/portforward",
+		config.Host, namespace, podName))
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse URL: %w", err)
+	}
+
+	transport, upgrader, err := spdy.RoundTripperFor(config)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create round tripper: %w", err)
+	}
+
+	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, http.MethodPost, reqURL)
+
+	pfMutex.Lock()
+	pfCounter++
+	sessionID := fmt.Sprintf("pf-%d", pfCounter)
+	pfMutex.Unlock()
+
+	stopChan := make(chan struct{}, 1)
+	readyChan := make(chan struct{})
+
+	ports := []string{fmt.Sprintf("%d:%d", localPort, remotePort)}
+
+	fw, err := portforward.New(dialer, ports, stopChan, readyChan, nil, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create port forwarder: %w", err)
+	}
+
+	session := &PortForwardSession{
+		ID:         sessionID,
+		Namespace:  namespace,
+		Target:     targetName,
+		TargetType: targetType,
+		LocalPort:  localPort,
+		RemotePort: remotePort,
+		PodName:    podName,
+		stopChan:   stopChan,
+	}
+
+	go func() {
+		if err := fw.ForwardPorts(); err != nil {
+			pfMutex.Lock()
+			delete(portForwardSessions, sessionID)
+			pfMutex.Unlock()
+		}
+	}()
+
+	select {
+	case <-readyChan:
+	case <-ctx.Done():
+		close(stopChan)
+		return nil, ctx.Err()
+	}
+
+	forwardedPorts, err := fw.GetPorts()
+	if err == nil && len(forwardedPorts) > 0 {
+		session.LocalPort = int(forwardedPorts[0].Local)
+	}
+
+	pfMutex.Lock()
+	portForwardSessions[sessionID] = session
+	pfMutex.Unlock()
+
+	slog.Info("port forward started",
+		slog.String("session_id", sessionID),
+		slog.String("namespace", namespace),
+		slog.String("target_type", targetType),
+		slog.String("target", targetName),
+		slog.String("pod", podName),
+		slog.Int("local_port", session.LocalPort),
+		slog.Int("remote_port", remotePort),
+	)
+
+	return session, nil
+}
+
+// StopPortForward stops a port forwarding session
+func (cm *Manager) StopPortForward(sessionID string) error {
+	pfMutex.Lock()
+	defer pfMutex.Unlock()
+
+	session, exists := portForwardSessions[sessionID]
+	if !exists {
+		slog.Debug("port forward session not found", slog.String("session_id", sessionID))
+		return fmt.Errorf("port forward session %q not found", sessionID)
+	}
+
+	close(session.stopChan)
+	delete(portForwardSessions, sessionID)
+
+	slog.Info("port forward stopped",
+		slog.String("session_id", sessionID),
+		slog.String("target", session.Target),
+	)
+
+	return nil
+}
+
+// ListPortForwards returns all active port forwarding sessions
+func (cm *Manager) ListPortForwards() []*PortForwardSession {
+	pfMutex.RLock()
+	defer pfMutex.RUnlock()
+
+	sessions := make([]*PortForwardSession, 0, len(portForwardSessions))
+	for _, session := range portForwardSessions {
+		sessions = append(sessions, session)
+	}
+	return sessions
 }

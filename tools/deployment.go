@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/basebandit/kai"
 	"github.com/basebandit/kai/cluster"
@@ -269,6 +270,8 @@ func RegisterDeploymentToolsWithFactory(s kai.ServerInterface, cm kai.ClusterMan
 // getDeploymentHandler handles the get_deployment tool
 func getDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "get_deployment"))
+
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
@@ -293,6 +296,11 @@ func getDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) func
 
 		resultText, err := deployment.Get(ctx, cm)
 		if err != nil {
+			slog.Warn("failed to get deployment",
+				slog.String("name", name),
+				slog.String("namespace", namespace),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(err.Error()), nil
 		}
 
@@ -303,6 +311,8 @@ func getDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) func
 // listDeploymentsHandler handles the list_deployments tool
 func listDeploymentsHandler(cm kai.ClusterManager, factory DeploymentFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "list_deployments"))
+
 		var allNamespaces bool
 
 		if allNamespacesArg, ok := request.Params.Arguments["all_namespaces"].(bool); ok {
@@ -330,6 +340,12 @@ func listDeploymentsHandler(cm kai.ClusterManager, factory DeploymentFactory) fu
 		deployment := factory.NewDeployment(params)
 		resultText, err := deployment.List(ctx, cm, allNamespaces, labelSelector)
 		if err != nil {
+			slog.Warn("failed to list deployments",
+				slog.Bool("all_namespaces", allNamespaces),
+				slog.String("namespace", namespace),
+				slog.String("label_selector", labelSelector),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(err.Error()), nil
 		}
 
@@ -340,6 +356,8 @@ func listDeploymentsHandler(cm kai.ClusterManager, factory DeploymentFactory) fu
 // describeDeploymentHandler handles the describe_deployment tool
 func describeDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "describe_deployment"))
+
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
@@ -365,6 +383,11 @@ func describeDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory)
 		// Use the Describe method instead of Get
 		resultText, err := deployment.Describe(ctx, cm)
 		if err != nil {
+			slog.Warn("failed to describe deployment",
+				slog.String("name", name),
+				slog.String("namespace", namespace),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(err.Error()), nil
 		}
 
@@ -375,6 +398,8 @@ func describeDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory)
 // createDeploymentHandler handles the create_deployment tool
 func createDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "create_deployment"))
+
 		params := kai.DeploymentParams{
 			Replicas: 1, // Set default replica count to 1
 		}
@@ -444,6 +469,11 @@ func createDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) f
 
 		resultText, err := deployment.Create(ctx, cm)
 		if err != nil {
+			slog.Warn("failed to create deployment",
+				slog.String("name", name),
+				slog.String("namespace", namespace),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(err.Error()), nil
 		}
 
@@ -454,6 +484,8 @@ func createDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) f
 // updateDeploymentHandler handles the update_deployment tool
 func updateDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "update_deployment"))
+
 		params := kai.DeploymentParams{}
 
 		nameArg, ok := request.Params.Arguments["name"]
@@ -526,6 +558,11 @@ func updateDeploymentHandler(cm kai.ClusterManager, factory DeploymentFactory) f
 		deployment := factory.NewDeployment(params)
 		resultText, err := deployment.Update(ctx, cm)
 		if err != nil {
+			slog.Warn("failed to update deployment",
+				slog.String("name", name),
+				slog.String("namespace", namespace),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(err.Error()), nil
 		}
 
