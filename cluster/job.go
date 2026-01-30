@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/basebandit/kai"
@@ -35,11 +36,26 @@ func (j *Job) Create(ctx context.Context, cm kai.ClusterManager) (string, error)
 	var result string
 
 	if err := j.validate(); err != nil {
+		slog.Warn("invalid Job input",
+			slog.String("name", j.Name),
+			slog.String("namespace", j.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, err
 	}
 
+	slog.Debug("Job create requested",
+		slog.String("name", j.Name),
+		slog.String("namespace", j.Namespace),
+	)
+
 	client, err := cm.GetCurrentClient()
 	if err != nil {
+		slog.Warn("failed to get client for Job create",
+			slog.String("name", j.Name),
+			slog.String("namespace", j.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("error getting client: %w", err)
 	}
 
@@ -48,6 +64,11 @@ func (j *Job) Create(ctx context.Context, cm kai.ClusterManager) (string, error)
 
 	_, err = client.CoreV1().Namespaces().Get(timeoutCtx, j.Namespace, metav1.GetOptions{})
 	if err != nil {
+		slog.Warn("namespace not found for Job create",
+			slog.String("name", j.Name),
+			slog.String("namespace", j.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("namespace %q not found: %w", j.Namespace, err)
 	}
 
@@ -120,8 +141,18 @@ func (j *Job) Create(ctx context.Context, cm kai.ClusterManager) (string, error)
 
 	createdJob, err := client.BatchV1().Jobs(j.Namespace).Create(timeoutCtx, job, metav1.CreateOptions{})
 	if err != nil {
+		slog.Warn("failed to create Job",
+			slog.String("name", j.Name),
+			slog.String("namespace", j.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("failed to create Job: %w", err)
 	}
+
+	slog.Info("Job created",
+		slog.String("name", createdJob.Name),
+		slog.String("namespace", createdJob.Namespace),
+	)
 
 	result = fmt.Sprintf("Job %q created successfully in namespace %q", createdJob.Name, createdJob.Namespace)
 	return result, nil
@@ -131,8 +162,18 @@ func (j *Job) Create(ctx context.Context, cm kai.ClusterManager) (string, error)
 func (j *Job) Get(ctx context.Context, cm kai.ClusterManager) (string, error) {
 	var result string
 
+	slog.Debug("Job get requested",
+		slog.String("name", j.Name),
+		slog.String("namespace", j.Namespace),
+	)
+
 	client, err := cm.GetCurrentClient()
 	if err != nil {
+		slog.Warn("failed to get client for Job get",
+			slog.String("name", j.Name),
+			slog.String("namespace", j.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("error getting client: %w", err)
 	}
 
@@ -147,8 +188,18 @@ func (j *Job) Get(ctx context.Context, cm kai.ClusterManager) (string, error) {
 
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
+			slog.Warn("Job not found",
+				slog.String("name", j.Name),
+				slog.String("namespace", j.Namespace),
+				slog.String("error", err.Error()),
+			)
 			return result, fmt.Errorf("Job %q not found in namespace %q", j.Name, j.Namespace)
 		}
+		slog.Warn("failed to get Job",
+			slog.String("name", j.Name),
+			slog.String("namespace", j.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("failed to get Job %q: %v", j.Name, err)
 	}
 
@@ -159,8 +210,19 @@ func (j *Job) Get(ctx context.Context, cm kai.ClusterManager) (string, error) {
 func (j *Job) List(ctx context.Context, cm kai.ClusterManager, allNamespaces bool, labelSelector string) (string, error) {
 	var result string
 
+	slog.Debug("Job list requested",
+		slog.Bool("all_namespaces", allNamespaces),
+		slog.String("namespace", j.Namespace),
+		slog.String("label_selector", labelSelector),
+	)
+
 	client, err := cm.GetCurrentClient()
 	if err != nil {
+		slog.Warn("failed to get client for Job list",
+			slog.Bool("all_namespaces", allNamespaces),
+			slog.String("namespace", j.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("error getting client: %w", err)
 	}
 
@@ -179,6 +241,12 @@ func (j *Job) List(ctx context.Context, cm kai.ClusterManager, allNamespaces boo
 	}
 
 	if err != nil {
+		slog.Warn("failed to list Jobs",
+			slog.Bool("all_namespaces", allNamespaces),
+			slog.String("namespace", j.Namespace),
+			slog.String("label_selector", labelSelector),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("failed to list Jobs: %w", err)
 	}
 
@@ -200,11 +268,24 @@ func (j *Job) Delete(ctx context.Context, cm kai.ClusterManager) (string, error)
 	var result string
 
 	if j.Name == "" {
+		slog.Warn("Job delete missing name",
+			slog.String("namespace", j.Namespace),
+		)
 		return result, errors.New("Job name is required for deletion")
 	}
 
+	slog.Debug("Job delete requested",
+		slog.String("name", j.Name),
+		slog.String("namespace", j.Namespace),
+	)
+
 	client, err := cm.GetCurrentClient()
 	if err != nil {
+		slog.Warn("failed to get client for Job delete",
+			slog.String("name", j.Name),
+			slog.String("namespace", j.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("error getting client: %w", err)
 	}
 
@@ -213,6 +294,11 @@ func (j *Job) Delete(ctx context.Context, cm kai.ClusterManager) (string, error)
 
 	_, err = client.BatchV1().Jobs(j.Namespace).Get(timeoutCtx, j.Name, metav1.GetOptions{})
 	if err != nil {
+		slog.Warn("Job not found for delete",
+			slog.String("name", j.Name),
+			slog.String("namespace", j.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("Job %q not found in namespace %q: %w", j.Name, j.Namespace, err)
 	}
 
@@ -223,8 +309,18 @@ func (j *Job) Delete(ctx context.Context, cm kai.ClusterManager) (string, error)
 
 	err = client.BatchV1().Jobs(j.Namespace).Delete(timeoutCtx, j.Name, deleteOptions)
 	if err != nil {
+		slog.Warn("failed to delete Job",
+			slog.String("name", j.Name),
+			slog.String("namespace", j.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("failed to delete Job %q: %w", j.Name, err)
 	}
+
+	slog.Info("Job deleted",
+		slog.String("name", j.Name),
+		slog.String("namespace", j.Namespace),
+	)
 
 	result = fmt.Sprintf("Job %q deleted successfully from namespace %q", j.Name, j.Namespace)
 	return result, nil
