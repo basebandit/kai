@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/basebandit/kai"
@@ -29,11 +30,26 @@ func (i *Ingress) Create(ctx context.Context, cm kai.ClusterManager) (string, er
 	var result string
 
 	if err := i.validate(); err != nil {
+		slog.Warn("invalid Ingress input",
+			slog.String("name", i.Name),
+			slog.String("namespace", i.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, err
 	}
 
+	slog.Debug("Ingress create requested",
+		slog.String("name", i.Name),
+		slog.String("namespace", i.Namespace),
+	)
+
 	client, err := cm.GetCurrentClient()
 	if err != nil {
+		slog.Warn("failed to get client for Ingress create",
+			slog.String("name", i.Name),
+			slog.String("namespace", i.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("error getting client: %w", err)
 	}
 
@@ -42,6 +58,11 @@ func (i *Ingress) Create(ctx context.Context, cm kai.ClusterManager) (string, er
 
 	_, err = client.CoreV1().Namespaces().Get(timeoutCtx, i.Namespace, metav1.GetOptions{})
 	if err != nil {
+		slog.Warn("namespace not found for Ingress create",
+			slog.String("name", i.Name),
+			slog.String("namespace", i.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("namespace %q not found: %w", i.Namespace, err)
 	}
 
@@ -139,8 +160,18 @@ func (i *Ingress) Create(ctx context.Context, cm kai.ClusterManager) (string, er
 
 	createdIngress, err := client.NetworkingV1().Ingresses(i.Namespace).Create(timeoutCtx, ingress, metav1.CreateOptions{})
 	if err != nil {
+		slog.Warn("failed to create Ingress",
+			slog.String("name", i.Name),
+			slog.String("namespace", i.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("failed to create Ingress: %w", err)
 	}
+
+	slog.Info("Ingress created",
+		slog.String("name", createdIngress.Name),
+		slog.String("namespace", createdIngress.Namespace),
+	)
 
 	result = fmt.Sprintf("Ingress %q created successfully in namespace %q", createdIngress.Name, createdIngress.Namespace)
 	if i.IngressClassName != "" {
