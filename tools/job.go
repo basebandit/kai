@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/basebandit/kai"
 	"github.com/basebandit/kai/cluster"
@@ -136,6 +137,8 @@ func RegisterJobToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, f
 
 func createJobHandler(cm kai.ClusterManager, factory JobFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "create_job"))
+
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
@@ -213,6 +216,11 @@ func createJobHandler(cm kai.ClusterManager, factory JobFactory) func(ctx contex
 		job := factory.NewJob(params)
 		result, err := job.Create(ctx, cm)
 		if err != nil {
+			slog.Warn("failed to create Job",
+				slog.String("name", name),
+				slog.String("namespace", namespace),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to create Job: %s", err.Error())), nil
 		}
 
@@ -222,6 +230,8 @@ func createJobHandler(cm kai.ClusterManager, factory JobFactory) func(ctx contex
 
 func getJobHandler(cm kai.ClusterManager, factory JobFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "get_job"))
+
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
@@ -245,6 +255,11 @@ func getJobHandler(cm kai.ClusterManager, factory JobFactory) func(ctx context.C
 		job := factory.NewJob(params)
 		result, err := job.Get(ctx, cm)
 		if err != nil {
+			slog.Warn("failed to get Job",
+				slog.String("name", name),
+				slog.String("namespace", namespace),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to get Job: %s", err.Error())), nil
 		}
 
@@ -254,6 +269,8 @@ func getJobHandler(cm kai.ClusterManager, factory JobFactory) func(ctx context.C
 
 func listJobsHandler(cm kai.ClusterManager, factory JobFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "list_jobs"))
+
 		var allNamespaces bool
 		if allNamespacesArg, ok := request.Params.Arguments["all_namespaces"].(bool); ok {
 			allNamespaces = allNamespacesArg
@@ -280,6 +297,12 @@ func listJobsHandler(cm kai.ClusterManager, factory JobFactory) func(ctx context
 		job := factory.NewJob(params)
 		result, err := job.List(ctx, cm, allNamespaces, labelSelector)
 		if err != nil {
+			slog.Warn("failed to list Jobs",
+				slog.Bool("all_namespaces", allNamespaces),
+				slog.String("namespace", namespace),
+				slog.String("label_selector", labelSelector),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to list Jobs: %s", err.Error())), nil
 		}
 
@@ -289,6 +312,8 @@ func listJobsHandler(cm kai.ClusterManager, factory JobFactory) func(ctx context
 
 func deleteJobHandler(cm kai.ClusterManager, factory JobFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "delete_job"))
+
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
@@ -312,6 +337,11 @@ func deleteJobHandler(cm kai.ClusterManager, factory JobFactory) func(ctx contex
 		job := factory.NewJob(params)
 		result, err := job.Delete(ctx, cm)
 		if err != nil {
+			slog.Warn("failed to delete Job",
+				slog.String("name", name),
+				slog.String("namespace", namespace),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to delete Job: %s", err.Error())), nil
 		}
 
