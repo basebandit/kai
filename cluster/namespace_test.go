@@ -17,6 +17,7 @@ func TestNamespaceOperations(t *testing.T) {
 	t.Run("GetNamespace", testGetNamespace)
 	t.Run("ListNamespaces", testListNamespaces)
 	t.Run("DeleteNamespace", testDeleteNamespace)
+	t.Run("UpdateNamespace", testUpdateNamespace)
 }
 
 func testCreateNamespaces(t *testing.T) {
@@ -422,6 +423,135 @@ func testDeleteNamespace(t *testing.T) {
 				if tc.validateDelete != nil {
 					client, _ := mockCM.GetCurrentClient()
 					tc.validateDelete(t, client)
+				}
+			}
+
+			mockCM.AssertExpectations(t)
+		})
+	}
+}
+
+func testUpdateNamespace(t *testing.T) {
+	ctx := context.Background()
+
+	existingNamespace := &corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "test-namespace",
+			Labels: map[string]string{
+				"env": "dev",
+			},
+			Annotations: map[string]string{
+				"description": "original",
+			},
+		},
+	}
+
+	testCases := []struct {
+		name           string
+		namespace      *Namespace
+		setupMock      func(*testmocks.MockClusterManager)
+		expectedResult string
+		expectedError  string
+		validateUpdate func(*testing.T, kubernetes.Interface)
+	}{
+		{
+			name: "Update namespace labels",
+			namespace: &Namespace{
+				Name: "test-namespace",
+				Labels: map[string]interface{}{
+					"env":     "prod",
+					"version": "v2",
+				},
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset(existingNamespace)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "updated successfully",
+			validateUpdate: func(t *testing.T, client kubernetes.Interface) {
+				ns, err := client.CoreV1().Namespaces().Get(ctx, "test-namespace", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, "prod", ns.Labels["env"])
+				assert.Equal(t, "v2", ns.Labels["version"])
+			},
+		},
+		{
+			name: "Update namespace annotations",
+			namespace: &Namespace{
+				Name: "test-namespace",
+				Annotations: map[string]interface{}{
+					"description": "updated",
+					"owner":       "team-a",
+				},
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset(existingNamespace)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "updated successfully",
+			validateUpdate: func(t *testing.T, client kubernetes.Interface) {
+				ns, err := client.CoreV1().Namespaces().Get(ctx, "test-namespace", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, "updated", ns.Annotations["description"])
+				assert.Equal(t, "team-a", ns.Annotations["owner"])
+			},
+		},
+		{
+			name: "Update both labels and annotations",
+			namespace: &Namespace{
+				Name: "test-namespace",
+				Labels: map[string]interface{}{
+					"tier": "frontend",
+				},
+				Annotations: map[string]interface{}{
+					"note": "critical",
+				},
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset(existingNamespace)
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedResult: "updated successfully",
+			validateUpdate: func(t *testing.T, client kubernetes.Interface) {
+				ns, err := client.CoreV1().Namespaces().Get(ctx, "test-namespace", metav1.GetOptions{})
+				assert.NoError(t, err)
+				assert.Equal(t, "frontend", ns.Labels["tier"])
+				assert.Equal(t, "critical", ns.Annotations["note"])
+			},
+		},
+		{
+			name: "Namespace not found",
+			namespace: &Namespace{
+				Name: "nonexistent-namespace",
+				Labels: map[string]interface{}{
+					"env": "test",
+				},
+			},
+			setupMock: func(mockCM *testmocks.MockClusterManager) {
+				fakeClient := fake.NewSimpleClientset()
+				mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+			},
+			expectedError: "failed to get namespace",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockCM := testmocks.NewMockClusterManager()
+			tc.setupMock(mockCM)
+
+			result, err := tc.namespace.Update(ctx, mockCM)
+
+			if tc.expectedError != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), tc.expectedError)
+			} else {
+				assert.NoError(t, err)
+				assert.Contains(t, result, tc.expectedResult)
+
+				if tc.validateUpdate != nil {
+					client, _ := mockCM.GetCurrentClient()
+					tc.validateUpdate(t, client)
 				}
 			}
 

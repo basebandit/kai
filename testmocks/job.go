@@ -59,3 +59,9 @@ func (m *MockJob) Delete(ctx context.Context, cm kai.ClusterManager) (string, er
 	args := m.Called(ctx, cm)
 	return args.String(0), args.Error(1)
 }
+
+// Update mocks the Update method.
+func (m *MockJob) Update(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	args := m.Called(ctx, cm)
+	return args.String(0), args.Error(1)
+}

@@ -802,3 +802,617 @@ func TestGetDeploymentHandler(t *testing.T) {
 		})
 	}
 }
+
+func TestDeleteDeploymentHandler(t *testing.T) {
+	testCases := []deploymentTestCase{
+		{
+			name: "Success",
+			args: map[string]interface{}{
+				"name": "test-deployment",
+			},
+			expectedParams: kai.DeploymentParams{
+				Name:      "test-deployment",
+				Namespace: defaultNamespace,
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockDeployment.On("Delete", mock.Anything, mockCM).
+					Return(fmt.Sprintf("Deployment %q deleted successfully from namespace %q", "test-deployment", defaultNamespace), nil)
+			},
+			expectedOutput:           fmt.Sprintf("Deployment %q deleted successfully", "test-deployment"),
+			expectDeploymentCreation: true,
+		},
+		{
+			name:           "MissingName",
+			args:           map[string]interface{}{},
+			expectedParams: kai.DeploymentParams{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+			},
+			expectedOutput:           errMissingName,
+			expectDeploymentCreation: false,
+		},
+		{
+			name: "EmptyName",
+			args: map[string]interface{}{
+				"name": "",
+			},
+			expectedParams: kai.DeploymentParams{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+			},
+			expectedOutput:           errEmptyName,
+			expectDeploymentCreation: false,
+		},
+		{
+			name: "WithNamespace",
+			args: map[string]interface{}{
+				"name":      "test-deployment",
+				"namespace": testNamespace,
+			},
+			expectedParams: kai.DeploymentParams{
+				Name:      "test-deployment",
+				Namespace: testNamespace,
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockDeployment.On("Delete", mock.Anything, mockCM).
+					Return(fmt.Sprintf("Deployment %q deleted successfully from namespace %q", "test-deployment", testNamespace), nil)
+			},
+			expectedOutput:           fmt.Sprintf("Deployment %q deleted successfully", "test-deployment"),
+			expectDeploymentCreation: true,
+		},
+		{
+			name: "Error",
+			args: map[string]interface{}{
+				"name": "test-deployment",
+			},
+			expectedParams: kai.DeploymentParams{
+				Name:      "test-deployment",
+				Namespace: defaultNamespace,
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockDeployment.On("Delete", mock.Anything, mockCM).
+					Return("", errors.New("deployment not found"))
+			},
+			expectedOutput:           "deployment not found",
+			expectDeploymentCreation: true,
+		},
+	}
+
+	runDeploymentTests(t, testCases, deleteDeploymentHandler)
+}
+
+func TestScaleDeploymentHandler(t *testing.T) {
+	testCases := []deploymentTestCase{
+		{
+			name: "Success",
+			args: map[string]interface{}{
+				"name":     "test-deployment",
+				"replicas": float64(3),
+			},
+			expectedParams: kai.DeploymentParams{
+				Name:      "test-deployment",
+				Namespace: defaultNamespace,
+				Replicas:  float64(3),
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockDeployment.On("Scale", mock.Anything, mockCM).
+					Return("Deployment \"test-deployment\" scaled to 3 replicas", nil)
+			},
+			expectedOutput:           "scaled to 3 replicas",
+			expectDeploymentCreation: true,
+		},
+		{
+			name:           "MissingName",
+			args:           map[string]interface{}{"replicas": float64(3)},
+			expectedParams: kai.DeploymentParams{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+			},
+			expectedOutput:           errMissingName,
+			expectDeploymentCreation: false,
+		},
+		{
+			name: "EmptyName",
+			args: map[string]interface{}{
+				"name":     "",
+				"replicas": float64(3),
+			},
+			expectedParams: kai.DeploymentParams{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+			},
+			expectedOutput:           errEmptyName,
+			expectDeploymentCreation: false,
+		},
+		{
+			name: "MissingReplicas",
+			args: map[string]interface{}{
+				"name": "test-deployment",
+			},
+			expectedParams: kai.DeploymentParams{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+			},
+			expectedOutput:           "missing required parameter: replicas",
+			expectDeploymentCreation: false,
+		},
+		{
+			name: "InvalidReplicas",
+			args: map[string]interface{}{
+				"name":     "test-deployment",
+				"replicas": "invalid",
+			},
+			expectedParams: kai.DeploymentParams{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+			},
+			expectedOutput:           "invalid replicas parameter: must be a number",
+			expectDeploymentCreation: false,
+		},
+		{
+			name: "WithNamespace",
+			args: map[string]interface{}{
+				"name":      "test-deployment",
+				"replicas":  float64(5),
+				"namespace": testNamespace,
+			},
+			expectedParams: kai.DeploymentParams{
+				Name:      "test-deployment",
+				Namespace: testNamespace,
+				Replicas:  float64(5),
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockDeployment.On("Scale", mock.Anything, mockCM).
+					Return("Deployment \"test-deployment\" scaled to 5 replicas", nil)
+			},
+			expectedOutput:           "scaled to 5 replicas",
+			expectDeploymentCreation: true,
+		},
+		{
+			name: "Error",
+			args: map[string]interface{}{
+				"name":     "test-deployment",
+				"replicas": float64(3),
+			},
+			expectedParams: kai.DeploymentParams{
+				Name:      "test-deployment",
+				Namespace: defaultNamespace,
+				Replicas:  float64(3),
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockDeployment.On("Scale", mock.Anything, mockCM).
+					Return("", errors.New("failed to scale deployment"))
+			},
+			expectedOutput:           "failed to scale deployment",
+			expectDeploymentCreation: true,
+		},
+	}
+
+	runDeploymentTests(t, testCases, scaleDeploymentHandler)
+}
+
+func TestRolloutStatusHandler(t *testing.T) {
+	testCases := []deploymentTestCase{
+		{
+			name: "Success",
+			args: map[string]interface{}{
+				"name": "test-deployment",
+			},
+			expectedParams: kai.DeploymentParams{
+				Name:      "test-deployment",
+				Namespace: defaultNamespace,
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockDeployment.On("RolloutStatus", mock.Anything, mockCM).
+					Return("deployment \"test-deployment\" successfully rolled out", nil)
+			},
+			expectedOutput:           "successfully rolled out",
+			expectDeploymentCreation: true,
+		},
+		{
+			name:           "MissingName",
+			args:           map[string]interface{}{},
+			expectedParams: kai.DeploymentParams{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+			},
+			expectedOutput:           errMissingName,
+			expectDeploymentCreation: false,
+		},
+		{
+			name: "EmptyName",
+			args: map[string]interface{}{
+				"name": "",
+			},
+			expectedParams: kai.DeploymentParams{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+			},
+			expectedOutput:           errEmptyName,
+			expectDeploymentCreation: false,
+		},
+		{
+			name: "Error",
+			args: map[string]interface{}{
+				"name": "test-deployment",
+			},
+			expectedParams: kai.DeploymentParams{
+				Name:      "test-deployment",
+				Namespace: defaultNamespace,
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockDeployment.On("RolloutStatus", mock.Anything, mockCM).
+					Return("", errors.New("deployment not found"))
+			},
+			expectedOutput:           "deployment not found",
+			expectDeploymentCreation: true,
+		},
+	}
+
+	runDeploymentTests(t, testCases, rolloutStatusHandler)
+}
+
+func TestRolloutHistoryHandler(t *testing.T) {
+	testCases := []deploymentTestCase{
+		{
+			name: "Success",
+			args: map[string]interface{}{
+				"name": "test-deployment",
+			},
+			expectedParams: kai.DeploymentParams{
+				Name:      "test-deployment",
+				Namespace: defaultNamespace,
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockDeployment.On("RolloutHistory", mock.Anything, mockCM).
+					Return("deployment.apps/test-deployment\nREVISION  CHANGE-CAUSE\n1         <none>\n2         <none>", nil)
+			},
+			expectedOutput:           "REVISION",
+			expectDeploymentCreation: true,
+		},
+		{
+			name:           "MissingName",
+			args:           map[string]interface{}{},
+			expectedParams: kai.DeploymentParams{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+			},
+			expectedOutput:           errMissingName,
+			expectDeploymentCreation: false,
+		},
+		{
+			name: "EmptyName",
+			args: map[string]interface{}{
+				"name": "",
+			},
+			expectedParams: kai.DeploymentParams{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+			},
+			expectedOutput:           errEmptyName,
+			expectDeploymentCreation: false,
+		},
+		{
+			name: "Error",
+			args: map[string]interface{}{
+				"name": "test-deployment",
+			},
+			expectedParams: kai.DeploymentParams{
+				Name:      "test-deployment",
+				Namespace: defaultNamespace,
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockDeployment.On("RolloutHistory", mock.Anything, mockCM).
+					Return("", errors.New("deployment not found"))
+			},
+			expectedOutput:           "deployment not found",
+			expectDeploymentCreation: true,
+		},
+	}
+
+	runDeploymentTests(t, testCases, rolloutHistoryHandler)
+}
+
+func TestRolloutUndoHandler(t *testing.T) {
+	testCases := []deploymentTestCase{
+		{
+			name: "UndoToPreviousRevision",
+			args: map[string]interface{}{
+				"name": "test-deployment",
+			},
+			expectedParams: kai.DeploymentParams{
+				Name:      "test-deployment",
+				Namespace: defaultNamespace,
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockDeployment.On("RolloutUndo", mock.Anything, mockCM, int64(0)).
+					Return("deployment.apps/test-deployment rolled back", nil)
+			},
+			expectedOutput:           "rolled back",
+			expectDeploymentCreation: true,
+		},
+		{
+			name: "UndoToSpecificRevision",
+			args: map[string]interface{}{
+				"name":     "test-deployment",
+				"revision": float64(2),
+			},
+			expectedParams: kai.DeploymentParams{
+				Name:      "test-deployment",
+				Namespace: defaultNamespace,
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockDeployment.On("RolloutUndo", mock.Anything, mockCM, int64(2)).
+					Return("deployment.apps/test-deployment rolled back to revision 2", nil)
+			},
+			expectedOutput:           "rolled back",
+			expectDeploymentCreation: true,
+		},
+		{
+			name:           "MissingName",
+			args:           map[string]interface{}{},
+			expectedParams: kai.DeploymentParams{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+			},
+			expectedOutput:           errMissingName,
+			expectDeploymentCreation: false,
+		},
+		{
+			name: "EmptyName",
+			args: map[string]interface{}{
+				"name": "",
+			},
+			expectedParams: kai.DeploymentParams{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+			},
+			expectedOutput:           errEmptyName,
+			expectDeploymentCreation: false,
+		},
+		{
+			name: "Error",
+			args: map[string]interface{}{
+				"name": "test-deployment",
+			},
+			expectedParams: kai.DeploymentParams{
+				Name:      "test-deployment",
+				Namespace: defaultNamespace,
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockDeployment.On("RolloutUndo", mock.Anything, mockCM, int64(0)).
+					Return("", errors.New("no rollout history found"))
+			},
+			expectedOutput:           "no rollout history found",
+			expectDeploymentCreation: true,
+		},
+	}
+
+	runDeploymentTests(t, testCases, rolloutUndoHandler)
+}
+
+func TestRolloutRestartHandler(t *testing.T) {
+	testCases := []deploymentTestCase{
+		{
+			name: "Success",
+			args: map[string]interface{}{
+				"name": "test-deployment",
+			},
+			expectedParams: kai.DeploymentParams{
+				Name:      "test-deployment",
+				Namespace: defaultNamespace,
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockDeployment.On("RolloutRestart", mock.Anything, mockCM).
+					Return("deployment.apps/test-deployment restarted", nil)
+			},
+			expectedOutput:           "restarted",
+			expectDeploymentCreation: true,
+		},
+		{
+			name:           "MissingName",
+			args:           map[string]interface{}{},
+			expectedParams: kai.DeploymentParams{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+			},
+			expectedOutput:           errMissingName,
+			expectDeploymentCreation: false,
+		},
+		{
+			name: "EmptyName",
+			args: map[string]interface{}{
+				"name": "",
+			},
+			expectedParams: kai.DeploymentParams{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+			},
+			expectedOutput:           errEmptyName,
+			expectDeploymentCreation: false,
+		},
+		{
+			name: "Error",
+			args: map[string]interface{}{
+				"name": "test-deployment",
+			},
+			expectedParams: kai.DeploymentParams{
+				Name:      "test-deployment",
+				Namespace: defaultNamespace,
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockDeployment.On("RolloutRestart", mock.Anything, mockCM).
+					Return("", errors.New("deployment not found"))
+			},
+			expectedOutput:           "deployment not found",
+			expectDeploymentCreation: true,
+		},
+	}
+
+	runDeploymentTests(t, testCases, rolloutRestartHandler)
+}
+
+func TestRolloutPauseHandler(t *testing.T) {
+	testCases := []deploymentTestCase{
+		{
+			name: "Success",
+			args: map[string]interface{}{
+				"name": "test-deployment",
+			},
+			expectedParams: kai.DeploymentParams{
+				Name:      "test-deployment",
+				Namespace: defaultNamespace,
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockDeployment.On("RolloutPause", mock.Anything, mockCM).
+					Return("deployment.apps/test-deployment paused", nil)
+			},
+			expectedOutput:           "paused",
+			expectDeploymentCreation: true,
+		},
+		{
+			name:           "MissingName",
+			args:           map[string]interface{}{},
+			expectedParams: kai.DeploymentParams{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+			},
+			expectedOutput:           errMissingName,
+			expectDeploymentCreation: false,
+		},
+		{
+			name: "EmptyName",
+			args: map[string]interface{}{
+				"name": "",
+			},
+			expectedParams: kai.DeploymentParams{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+			},
+			expectedOutput:           errEmptyName,
+			expectDeploymentCreation: false,
+		},
+		{
+			name: "Error",
+			args: map[string]interface{}{
+				"name": "test-deployment",
+			},
+			expectedParams: kai.DeploymentParams{
+				Name:      "test-deployment",
+				Namespace: defaultNamespace,
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockDeployment.On("RolloutPause", mock.Anything, mockCM).
+					Return("", errors.New("deployment not found"))
+			},
+			expectedOutput:           "deployment not found",
+			expectDeploymentCreation: true,
+		},
+	}
+
+	runDeploymentTests(t, testCases, rolloutPauseHandler)
+}
+
+func TestRolloutResumeHandler(t *testing.T) {
+	testCases := []deploymentTestCase{
+		{
+			name: "Success",
+			args: map[string]interface{}{
+				"name": "test-deployment",
+			},
+			expectedParams: kai.DeploymentParams{
+				Name:      "test-deployment",
+				Namespace: defaultNamespace,
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockDeployment.On("RolloutResume", mock.Anything, mockCM).
+					Return("deployment.apps/test-deployment resumed", nil)
+			},
+			expectedOutput:           "resumed",
+			expectDeploymentCreation: true,
+		},
+		{
+			name:           "MissingName",
+			args:           map[string]interface{}{},
+			expectedParams: kai.DeploymentParams{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+			},
+			expectedOutput:           errMissingName,
+			expectDeploymentCreation: false,
+		},
+		{
+			name: "EmptyName",
+			args: map[string]interface{}{
+				"name": "",
+			},
+			expectedParams: kai.DeploymentParams{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+			},
+			expectedOutput:           errEmptyName,
+			expectDeploymentCreation: false,
+		},
+		{
+			name: "Error",
+			args: map[string]interface{}{
+				"name": "test-deployment",
+			},
+			expectedParams: kai.DeploymentParams{
+				Name:      "test-deployment",
+				Namespace: defaultNamespace,
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockDeploymentFactory, mockDeployment *testmocks.MockDeployment) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockDeployment.On("RolloutResume", mock.Anything, mockCM).
+					Return("", errors.New("deployment not found"))
+			},
+			expectedOutput:           "deployment not found",
+			expectDeploymentCreation: true,
+		},
+	}
+
+	runDeploymentTests(t, testCases, rolloutResumeHandler)
+}
+
+// runDeploymentTests is a helper that runs a set of deployment test cases with a given handler constructor.
+func runDeploymentTests(t *testing.T, testCases []deploymentTestCase, handlerFn func(kai.ClusterManager, DeploymentFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error)) {
+	t.Helper()
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockCM := testmocks.NewMockClusterManager()
+			mockFactory := testmocks.NewMockDeploymentFactory()
+
+			var mockDeployment *testmocks.MockDeployment
+			if tc.expectDeploymentCreation {
+				mockDeployment = testmocks.NewMockDeployment(tc.expectedParams)
+				mockFactory.On("NewDeployment", tc.expectedParams).Return(mockDeployment)
+			}
+
+			tc.mockSetup(mockCM, mockFactory, mockDeployment)
+
+			handler := handlerFn(mockCM, mockFactory)
+
+			request := mcp.CallToolRequest{
+				Params: struct {
+					Name      string         `json:"name"`
+					Arguments map[string]any `json:"arguments,omitempty"`
+					Meta      *mcp.Meta      `json:"_meta,omitempty"`
+				}{
+					Arguments: tc.args,
+				},
+			}
+
+			result, err := handler(context.Background(), request)
+			assert.NoError(t, err)
+			assert.NotNil(t, result)
+			assert.Contains(t, result.Content[0].(mcp.TextContent).Text, tc.expectedOutput)
+
+			mockCM.AssertExpectations(t)
+			mockFactory.AssertExpectations(t)
+			if mockDeployment != nil {
+				mockDeployment.AssertExpectations(t)
+			}
+		})
+	}
+}

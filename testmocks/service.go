@@ -59,3 +59,15 @@ func (m *MockService) Delete(ctx context.Context, cm kai.ClusterManager) (string
 	args := m.Called(ctx, cm)
 	return args.String(0), args.Error(1)
 }
+
+// Update mocks the Update method
+func (m *MockService) Update(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	args := m.Called(ctx, cm)
+	return args.String(0), args.Error(1)
+}
+
+// Patch mocks the Patch method
+func (m *MockService) Patch(ctx context.Context, cm kai.ClusterManager, patchData map[string]interface{}) (string, error) {
+	args := m.Called(ctx, cm, patchData)
+	return args.String(0), args.Error(1)
+}

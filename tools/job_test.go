@@ -391,3 +391,137 @@ func TestDeleteJobHandler(t *testing.T) {
 		})
 	}
 }
+
+func TestUpdateJobHandler(t *testing.T) {
+	tests := []struct {
+		name           string
+		args           map[string]any
+		mockSetup      func(*testmocks.MockClusterManager, *testmocks.MockJobFactory, *testmocks.MockJob)
+		expectedOutput string
+		expectedError  bool
+	}{
+		{
+			name: "Update Job labels",
+			args: map[string]any{
+				"name": "test-job",
+				"labels": map[string]any{
+					"version": "v2",
+					"env":     "prod",
+				},
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockJobFactory, mockJob *testmocks.MockJob) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockFactory.On("NewJob", mock.MatchedBy(func(params kai.JobParams) bool {
+					return params.Name == "test-job" && params.Namespace == defaultNamespace
+				})).Return(mockJob)
+				mockJob.On("Update", mock.Anything, mockCM).Return("Job \"test-job\" updated successfully in namespace \"default\"", nil)
+			},
+			expectedOutput: "Job \"test-job\" updated successfully",
+			expectedError:  false,
+		},
+		{
+			name: "Update Job parallelism",
+			args: map[string]any{
+				"name":        "test-job",
+				"namespace":   testNamespace,
+				"parallelism": float64(5),
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockJobFactory, mockJob *testmocks.MockJob) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockFactory.On("NewJob", mock.MatchedBy(func(params kai.JobParams) bool {
+					return params.Name == "test-job" &&
+						params.Namespace == testNamespace &&
+						*params.Parallelism == int32(5)
+				})).Return(mockJob)
+				mockJob.On("Update", mock.Anything, mockCM).Return("Job \"test-job\" updated successfully in namespace \"test-namespace\"", nil)
+			},
+			expectedOutput: "Job \"test-job\" updated successfully",
+			expectedError:  false,
+		},
+		{
+			name: "Update Job with both labels and parallelism",
+			args: map[string]any{
+				"name":        "test-job",
+				"parallelism": float64(3),
+				"labels": map[string]any{
+					"updated": "true",
+				},
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockJobFactory, mockJob *testmocks.MockJob) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockFactory.On("NewJob", mock.MatchedBy(func(params kai.JobParams) bool {
+					return params.Name == "test-job" &&
+						*params.Parallelism == int32(3)
+				})).Return(mockJob)
+				mockJob.On("Update", mock.Anything, mockCM).Return("Job \"test-job\" updated successfully in namespace \"default\"", nil)
+			},
+			expectedOutput: "Job \"test-job\" updated successfully",
+			expectedError:  false,
+		},
+		{
+			name: "Missing Job name",
+			args: map[string]any{
+				"parallelism": float64(5),
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockJobFactory, mockJob *testmocks.MockJob) {
+			},
+			expectedOutput: errMissingName,
+			expectedError:  false,
+		},
+		{
+			name: "Empty Job name",
+			args: map[string]any{
+				"name":        "",
+				"parallelism": float64(5),
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockJobFactory, mockJob *testmocks.MockJob) {
+			},
+			expectedOutput: errEmptyName,
+			expectedError:  false,
+		},
+		{
+			name: "Update Job error",
+			args: map[string]any{
+				"name": "test-job",
+				"labels": map[string]any{
+					"test": "true",
+				},
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockJobFactory, mockJob *testmocks.MockJob) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockFactory.On("NewJob", mock.Anything).Return(mockJob)
+				mockJob.On("Update", mock.Anything, mockCM).Return("", assert.AnError)
+			},
+			expectedOutput: "Failed to update Job",
+			expectedError:  false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockCM := &testmocks.MockClusterManager{}
+			mockFactory := &testmocks.MockJobFactory{}
+			mockJob := &testmocks.MockJob{}
+			tt.mockSetup(mockCM, mockFactory, mockJob)
+
+			handler := updateJobHandler(mockCM, mockFactory)
+			request := mcp.CallToolRequest{
+				Params: struct {
+					Name      string         `json:"name"`
+					Arguments map[string]any `json:"arguments,omitempty"`
+					Meta      *mcp.Meta      `json:"_meta,omitempty"`
+				}{
+					Arguments: tt.args,
+				},
+			}
+
+			result, err := handler(context.Background(), request)
+			assert.NoError(t, err)
+			assert.Contains(t, result.Content[0].(mcp.TextContent).Text, tt.expectedOutput)
+
+			mockCM.AssertExpectations(t)
+			mockFactory.AssertExpectations(t)
+			mockJob.AssertExpectations(t)
+		})
+	}
+}

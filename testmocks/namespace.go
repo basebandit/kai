@@ -58,6 +58,12 @@ func (m *MockNamespace) Delete(ctx context.Context, cm kai.ClusterManager) (stri
 	return args.String(0), args.Error(1)
 }
 
+// Update mocks the Update method
+func (m *MockNamespace) Update(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	args := m.Called(ctx, cm)
+	return args.String(0), args.Error(1)
+}
+
 // NamespaceFactory interface for testing
 type NamespaceFactory interface {
 	NewNamespace(params kai.NamespaceParams) kai.NamespaceOperator

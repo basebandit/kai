@@ -230,6 +230,49 @@ func (j *Job) Delete(ctx context.Context, cm kai.ClusterManager) (string, error)
 	return result, nil
 }
 
+// Update updates mutable fields of an existing Job
+func (j *Job) Update(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	var result string
+
+	if j.Name == "" {
+		return result, errors.New("Job name is required")
+	}
+
+	client, err := cm.GetCurrentClient()
+	if err != nil {
+		return result, fmt.Errorf("error getting client: %w", err)
+	}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
+	defer cancel()
+
+	job, err := client.BatchV1().Jobs(j.Namespace).Get(timeoutCtx, j.Name, metav1.GetOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to get Job: %w", err)
+	}
+
+	if len(j.Labels) > 0 {
+		if job.Labels == nil {
+			job.Labels = make(map[string]string)
+		}
+		for k, v := range convertToStringMap(j.Labels) {
+			job.Labels[k] = v
+		}
+	}
+
+	if j.Parallelism != nil {
+		job.Spec.Parallelism = j.Parallelism
+	}
+
+	updatedJob, err := client.BatchV1().Jobs(j.Namespace).Update(timeoutCtx, job, metav1.UpdateOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to update Job: %w", err)
+	}
+
+	result = fmt.Sprintf("Job %q updated successfully in namespace %q", updatedJob.Name, updatedJob.Namespace)
+	return result, nil
+}
+
 func (j *Job) validate() error {
 	if j.Name == "" {
 		return errors.New("Job name is required")

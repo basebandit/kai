@@ -59,3 +59,15 @@ func (m *MockCronJob) Delete(ctx context.Context, cm kai.ClusterManager) (string
 	args := m.Called(ctx, cm)
 	return args.String(0), args.Error(1)
 }
+
+// Update mocks the Update method.
+func (m *MockCronJob) Update(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	args := m.Called(ctx, cm)
+	return args.String(0), args.Error(1)
+}
+
+// SetSuspended mocks the SetSuspended method.
+func (m *MockCronJob) SetSuspended(ctx context.Context, cm kai.ClusterManager, suspend bool) (string, error) {
+	args := m.Called(ctx, cm, suspend)
+	return args.String(0), args.Error(1)
+}

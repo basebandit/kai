@@ -43,6 +43,54 @@ func (m *MockDeployment) Update(ctx context.Context, cm kai.ClusterManager) (str
 	return args.String(0), args.Error(1)
 }
 
+// Delete mocks the Delete method
+func (m *MockDeployment) Delete(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	args := m.Called(ctx, cm)
+	return args.String(0), args.Error(1)
+}
+
+// Scale mocks the Scale method
+func (m *MockDeployment) Scale(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	args := m.Called(ctx, cm)
+	return args.String(0), args.Error(1)
+}
+
+// RolloutStatus mocks the RolloutStatus method
+func (m *MockDeployment) RolloutStatus(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	args := m.Called(ctx, cm)
+	return args.String(0), args.Error(1)
+}
+
+// RolloutHistory mocks the RolloutHistory method
+func (m *MockDeployment) RolloutHistory(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	args := m.Called(ctx, cm)
+	return args.String(0), args.Error(1)
+}
+
+// RolloutUndo mocks the RolloutUndo method
+func (m *MockDeployment) RolloutUndo(ctx context.Context, cm kai.ClusterManager, revision int64) (string, error) {
+	args := m.Called(ctx, cm, revision)
+	return args.String(0), args.Error(1)
+}
+
+// RolloutRestart mocks the RolloutRestart method
+func (m *MockDeployment) RolloutRestart(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	args := m.Called(ctx, cm)
+	return args.String(0), args.Error(1)
+}
+
+// RolloutPause mocks the RolloutPause method
+func (m *MockDeployment) RolloutPause(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	args := m.Called(ctx, cm)
+	return args.String(0), args.Error(1)
+}
+
+// RolloutResume mocks the RolloutResume method
+func (m *MockDeployment) RolloutResume(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	args := m.Called(ctx, cm)
+	return args.String(0), args.Error(1)
+}
+
 // NewMockDeployment creates a new MockDeployment
 func NewMockDeployment(params kai.DeploymentParams) *MockDeployment {
 	return &MockDeployment{
