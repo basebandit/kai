@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"os"
@@ -112,6 +113,7 @@ func (cm *Manager) LoadKubeConfig(name, path string) error {
 // DeleteContext removes a context from the manager
 func (cm *Manager) DeleteContext(name string) error {
 	if _, exists := cm.contexts[name]; !exists {
+		slog.Debug("context not found for deletion", slog.String("context", name))
 		return fmt.Errorf("context %s not found", name)
 	}
 
@@ -127,6 +129,7 @@ func (cm *Manager) DeleteContext(name string) error {
 			cm.contexts[contextName].IsActive = true
 			break
 		}
+		slog.Info("context deleted", slog.String("context", name), slog.String("new_current", cm.currentContext))
 		return nil
 	}
 
@@ -135,6 +138,7 @@ func (cm *Manager) DeleteContext(name string) error {
 	delete(cm.dynamicClients, name)
 	delete(cm.kubeconfigs, name)
 
+	slog.Info("context deleted", slog.String("context", name))
 	return nil
 }
 
@@ -272,9 +276,11 @@ func (cm *Manager) ListClusters() []string {
 // SetCurrentContext sets the current context and updates the kubeconfig file
 func (cm *Manager) SetCurrentContext(contextName string) error {
 	if _, exists := cm.clients[contextName]; !exists {
+		slog.Debug("context not found", slog.String("context", contextName))
 		return fmt.Errorf("cluster %s not found", contextName)
 	}
 
+	previousContext := cm.currentContext
 	if cm.currentContext != "" {
 		if currentInfo, exists := cm.contexts[cm.currentContext]; exists {
 			currentInfo.IsActive = false
@@ -291,6 +297,10 @@ func (cm *Manager) SetCurrentContext(contextName string) error {
 		}
 	}
 
+	slog.Info("context switched",
+		slog.String("from", previousContext),
+		slog.String("to", contextName),
+	)
 	return nil
 }
 
@@ -604,6 +614,16 @@ func (cm *Manager) StartPortForward(
 	portForwardSessions[sessionID] = session
 	pfMutex.Unlock()
 
+	slog.Info("port forward started",
+		slog.String("session_id", sessionID),
+		slog.String("namespace", namespace),
+		slog.String("target_type", targetType),
+		slog.String("target", targetName),
+		slog.String("pod", podName),
+		slog.Int("local_port", session.LocalPort),
+		slog.Int("remote_port", remotePort),
+	)
+
 	return session, nil
 }
 
@@ -614,11 +634,17 @@ func (cm *Manager) StopPortForward(sessionID string) error {
 
 	session, exists := portForwardSessions[sessionID]
 	if !exists {
+		slog.Debug("port forward session not found", slog.String("session_id", sessionID))
 		return fmt.Errorf("port forward session %q not found", sessionID)
 	}
 
 	close(session.stopChan)
 	delete(portForwardSessions, sessionID)
+
+	slog.Info("port forward stopped",
+		slog.String("session_id", sessionID),
+		slog.String("target", session.Target),
+	)
 
 	return nil
 }
