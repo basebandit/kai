@@ -9,11 +9,11 @@ import (
 
 func TestParseTarget(t *testing.T) {
 	tests := []struct {
-		name           string
-		input          string
-		expectedType   string
-		expectedName   string
-		expectedError  string
+		name          string
+		input         string
+		expectedType  string
+		expectedName  string
+		expectedError string
 	}{
 		{
 			name:          "valid pod target",
@@ -91,11 +91,11 @@ func TestParseTarget(t *testing.T) {
 
 func TestParsePortMapping(t *testing.T) {
 	tests := []struct {
-		name          string
-		input         string
-		expectedLocal int
+		name           string
+		input          string
+		expectedLocal  int
 		expectedRemote int
-		expectedError string
+		expectedError  string
 	}{
 		{
 			name:           "single port",
@@ -126,60 +126,60 @@ func TestParsePortMapping(t *testing.T) {
 			expectedError:  "",
 		},
 		{
-			name:          "invalid single port - not a number",
-			input:         "abc",
-			expectedLocal: 0,
+			name:           "invalid single port - not a number",
+			input:          "abc",
+			expectedLocal:  0,
 			expectedRemote: 0,
-			expectedError: "invalid port",
+			expectedError:  "invalid port",
 		},
 		{
-			name:          "invalid local port - not a number",
-			input:         "abc:80",
-			expectedLocal: 0,
+			name:           "invalid local port - not a number",
+			input:          "abc:80",
+			expectedLocal:  0,
 			expectedRemote: 0,
-			expectedError: "invalid local port",
+			expectedError:  "invalid local port",
 		},
 		{
-			name:          "invalid remote port - not a number",
-			input:         "8080:abc",
-			expectedLocal: 0,
+			name:           "invalid remote port - not a number",
+			input:          "8080:abc",
+			expectedLocal:  0,
 			expectedRemote: 0,
-			expectedError: "invalid remote port",
+			expectedError:  "invalid remote port",
 		},
 		{
-			name:          "port too low",
-			input:         "0",
-			expectedLocal: 0,
+			name:           "port too low",
+			input:          "0",
+			expectedLocal:  0,
 			expectedRemote: 0,
-			expectedError: "port must be between 1 and 65535",
+			expectedError:  "port must be between 1 and 65535",
 		},
 		{
-			name:          "port too high",
-			input:         "65536",
-			expectedLocal: 0,
+			name:           "port too high",
+			input:          "65536",
+			expectedLocal:  0,
 			expectedRemote: 0,
-			expectedError: "port must be between 1 and 65535",
+			expectedError:  "port must be between 1 and 65535",
 		},
 		{
-			name:          "local port too high",
-			input:         "65536:80",
-			expectedLocal: 0,
+			name:           "local port too high",
+			input:          "65536:80",
+			expectedLocal:  0,
 			expectedRemote: 0,
-			expectedError: "ports must be between 1 and 65535",
+			expectedError:  "ports must be between 1 and 65535",
 		},
 		{
-			name:          "remote port too high",
-			input:         "8080:65536",
-			expectedLocal: 0,
+			name:           "remote port too high",
+			input:          "8080:65536",
+			expectedLocal:  0,
 			expectedRemote: 0,
-			expectedError: "ports must be between 1 and 65535",
+			expectedError:  "ports must be between 1 and 65535",
 		},
 		{
-			name:          "too many colons",
-			input:         "8080:80:90",
-			expectedLocal: 0,
+			name:           "too many colons",
+			input:          "8080:80:90",
+			expectedLocal:  0,
 			expectedRemote: 0,
-			expectedError: "invalid port mapping format",
+			expectedError:  "invalid port mapping format",
 		},
 	}
 
