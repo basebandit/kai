@@ -3,6 +3,7 @@ package tools
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/basebandit/kai"
 	"github.com/basebandit/kai/cluster"
@@ -56,6 +57,8 @@ func RegisterNamespaceTools(s kai.ServerInterface, cm kai.ClusterManager) {
 
 func createNamespaceHandler(cm kai.ClusterManager) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "create_namespace"))
+
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
@@ -80,6 +83,10 @@ func createNamespaceHandler(cm kai.ClusterManager) func(ctx context.Context, req
 
 		result, err := namespace.Create(ctx, cm)
 		if err != nil {
+			slog.Warn("failed to create namespace",
+				slog.String("name", name),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to create namespace: %s", err.Error())), nil
 		}
 
@@ -89,6 +96,8 @@ func createNamespaceHandler(cm kai.ClusterManager) func(ctx context.Context, req
 
 func getNamespaceHandler(cm kai.ClusterManager) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "get_namespace"))
+
 		nameArg, ok := request.Params.Arguments["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
@@ -105,6 +114,10 @@ func getNamespaceHandler(cm kai.ClusterManager) func(ctx context.Context, reques
 
 		result, err := namespace.Get(ctx, cm)
 		if err != nil {
+			slog.Warn("failed to get namespace",
+				slog.String("name", name),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to get namespace: %s", err.Error())), nil
 		}
 
@@ -114,6 +127,8 @@ func getNamespaceHandler(cm kai.ClusterManager) func(ctx context.Context, reques
 
 func listNamespacesHandler(cm kai.ClusterManager) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "list_namespaces"))
+
 		labelSelector := ""
 		if selectorArg, ok := request.Params.Arguments["label_selector"].(string); ok {
 			labelSelector = selectorArg
@@ -123,6 +138,10 @@ func listNamespacesHandler(cm kai.ClusterManager) func(ctx context.Context, requ
 
 		result, err := namespace.List(ctx, cm, labelSelector)
 		if err != nil {
+			slog.Warn("failed to list namespaces",
+				slog.String("label_selector", labelSelector),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to list namespaces: %s", err.Error())), nil
 		}
 
@@ -132,6 +151,8 @@ func listNamespacesHandler(cm kai.ClusterManager) func(ctx context.Context, requ
 
 func deleteNamespaceHandler(cm kai.ClusterManager) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "delete_namespace"))
+
 		namespace := cluster.Namespace{}
 
 		if nameArg, ok := request.Params.Arguments["name"].(string); ok && nameArg != "" {
@@ -148,6 +169,10 @@ func deleteNamespaceHandler(cm kai.ClusterManager) func(ctx context.Context, req
 
 		result, err := namespace.Delete(ctx, cm)
 		if err != nil {
+			slog.Warn("failed to delete namespace",
+				slog.String("name", namespace.Name),
+				slog.String("error", err.Error()),
+			)
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to delete namespace: %s", err.Error())), nil
 		}
 
