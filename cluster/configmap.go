@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	"github.com/basebandit/kai"
@@ -27,11 +28,26 @@ func (c *ConfigMap) Create(ctx context.Context, cm kai.ClusterManager) (string, 
 	var result string
 
 	if err := c.validate(); err != nil {
+		slog.Warn("invalid ConfigMap input",
+			slog.String("name", c.Name),
+			slog.String("namespace", c.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, err
 	}
 
+	slog.Debug("ConfigMap create requested",
+		slog.String("name", c.Name),
+		slog.String("namespace", c.Namespace),
+	)
+
 	client, err := cm.GetCurrentClient()
 	if err != nil {
+		slog.Warn("failed to get client for ConfigMap create",
+			slog.String("name", c.Name),
+			slog.String("namespace", c.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("error getting client: %w", err)
 	}
 
@@ -40,6 +56,11 @@ func (c *ConfigMap) Create(ctx context.Context, cm kai.ClusterManager) (string, 
 
 	_, err = client.CoreV1().Namespaces().Get(timeoutCtx, c.Namespace, metav1.GetOptions{})
 	if err != nil {
+		slog.Warn("namespace not found for ConfigMap create",
+			slog.String("name", c.Name),
+			slog.String("namespace", c.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("namespace %q not found: %w", c.Namespace, err)
 	}
 
@@ -74,8 +95,18 @@ func (c *ConfigMap) Create(ctx context.Context, cm kai.ClusterManager) (string, 
 
 	createdConfigMap, err := client.CoreV1().ConfigMaps(c.Namespace).Create(timeoutCtx, configMap, metav1.CreateOptions{})
 	if err != nil {
+		slog.Warn("failed to create ConfigMap",
+			slog.String("name", c.Name),
+			slog.String("namespace", c.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("failed to create ConfigMap: %w", err)
 	}
+
+	slog.Info("ConfigMap created",
+		slog.String("name", createdConfigMap.Name),
+		slog.String("namespace", createdConfigMap.Namespace),
+	)
 
 	result = fmt.Sprintf("ConfigMap %q created successfully in namespace %q", createdConfigMap.Name, createdConfigMap.Namespace)
 	return result, nil
@@ -85,8 +116,18 @@ func (c *ConfigMap) Create(ctx context.Context, cm kai.ClusterManager) (string, 
 func (c *ConfigMap) Get(ctx context.Context, cm kai.ClusterManager) (string, error) {
 	var result string
 
+	slog.Debug("ConfigMap get requested",
+		slog.String("name", c.Name),
+		slog.String("namespace", c.Namespace),
+	)
+
 	client, err := cm.GetCurrentClient()
 	if err != nil {
+		slog.Warn("failed to get client for ConfigMap get",
+			slog.String("name", c.Name),
+			slog.String("namespace", c.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("error getting client: %w", err)
 	}
 
@@ -101,8 +142,18 @@ func (c *ConfigMap) Get(ctx context.Context, cm kai.ClusterManager) (string, err
 
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
+			slog.Warn("ConfigMap not found",
+				slog.String("name", c.Name),
+				slog.String("namespace", c.Namespace),
+				slog.String("error", err.Error()),
+			)
 			return result, fmt.Errorf("ConfigMap %q not found in namespace %q", c.Name, c.Namespace)
 		}
+		slog.Warn("failed to get ConfigMap",
+			slog.String("name", c.Name),
+			slog.String("namespace", c.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("failed to get ConfigMap %q: %v", c.Name, err)
 	}
 
@@ -113,8 +164,19 @@ func (c *ConfigMap) Get(ctx context.Context, cm kai.ClusterManager) (string, err
 func (c *ConfigMap) List(ctx context.Context, cm kai.ClusterManager, allNamespaces bool, labelSelector string) (string, error) {
 	var result string
 
+	slog.Debug("ConfigMap list requested",
+		slog.Bool("all_namespaces", allNamespaces),
+		slog.String("namespace", c.Namespace),
+		slog.String("label_selector", labelSelector),
+	)
+
 	client, err := cm.GetCurrentClient()
 	if err != nil {
+		slog.Warn("failed to get client for ConfigMap list",
+			slog.Bool("all_namespaces", allNamespaces),
+			slog.String("namespace", c.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("error getting client: %w", err)
 	}
 
@@ -133,6 +195,12 @@ func (c *ConfigMap) List(ctx context.Context, cm kai.ClusterManager, allNamespac
 	}
 
 	if err != nil {
+		slog.Warn("failed to list ConfigMaps",
+			slog.Bool("all_namespaces", allNamespaces),
+			slog.String("namespace", c.Namespace),
+			slog.String("label_selector", labelSelector),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("failed to list ConfigMaps: %w", err)
 	}
 
@@ -154,11 +222,24 @@ func (c *ConfigMap) Delete(ctx context.Context, cm kai.ClusterManager) (string, 
 	var result string
 
 	if c.Name == "" {
+		slog.Warn("ConfigMap delete missing name",
+			slog.String("namespace", c.Namespace),
+		)
 		return result, errors.New("ConfigMap name is required for deletion")
 	}
 
+	slog.Debug("ConfigMap delete requested",
+		slog.String("name", c.Name),
+		slog.String("namespace", c.Namespace),
+	)
+
 	client, err := cm.GetCurrentClient()
 	if err != nil {
+		slog.Warn("failed to get client for ConfigMap delete",
+			slog.String("name", c.Name),
+			slog.String("namespace", c.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("error getting client: %w", err)
 	}
 
@@ -167,14 +248,29 @@ func (c *ConfigMap) Delete(ctx context.Context, cm kai.ClusterManager) (string, 
 
 	_, err = client.CoreV1().ConfigMaps(c.Namespace).Get(timeoutCtx, c.Name, metav1.GetOptions{})
 	if err != nil {
+		slog.Warn("ConfigMap not found for delete",
+			slog.String("name", c.Name),
+			slog.String("namespace", c.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("ConfigMap %q not found in namespace %q: %w", c.Name, c.Namespace, err)
 	}
 
 	deleteOptions := metav1.DeleteOptions{}
 	err = client.CoreV1().ConfigMaps(c.Namespace).Delete(timeoutCtx, c.Name, deleteOptions)
 	if err != nil {
+		slog.Warn("failed to delete ConfigMap",
+			slog.String("name", c.Name),
+			slog.String("namespace", c.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("failed to delete ConfigMap %q: %w", c.Name, err)
 	}
+
+	slog.Info("ConfigMap deleted",
+		slog.String("name", c.Name),
+		slog.String("namespace", c.Namespace),
+	)
 
 	result = fmt.Sprintf("ConfigMap %q deleted successfully from namespace %q", c.Name, c.Namespace)
 	return result, nil
@@ -185,11 +281,24 @@ func (c *ConfigMap) Update(ctx context.Context, cm kai.ClusterManager) (string, 
 	var result string
 
 	if c.Name == "" {
+		slog.Warn("ConfigMap update missing name",
+			slog.String("namespace", c.Namespace),
+		)
 		return result, errors.New("ConfigMap name is required for update")
 	}
 
+	slog.Debug("ConfigMap update requested",
+		slog.String("name", c.Name),
+		slog.String("namespace", c.Namespace),
+	)
+
 	client, err := cm.GetCurrentClient()
 	if err != nil {
+		slog.Warn("failed to get client for ConfigMap update",
+			slog.String("name", c.Name),
+			slog.String("namespace", c.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("error getting client: %w", err)
 	}
 
@@ -198,6 +307,11 @@ func (c *ConfigMap) Update(ctx context.Context, cm kai.ClusterManager) (string, 
 
 	existingConfigMap, err := client.CoreV1().ConfigMaps(c.Namespace).Get(timeoutCtx, c.Name, metav1.GetOptions{})
 	if err != nil {
+		slog.Warn("ConfigMap not found for update",
+			slog.String("name", c.Name),
+			slog.String("namespace", c.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("ConfigMap %q not found in namespace %q: %w", c.Name, c.Namespace, err)
 	}
 
@@ -225,8 +339,18 @@ func (c *ConfigMap) Update(ctx context.Context, cm kai.ClusterManager) (string, 
 
 	updatedConfigMap, err := client.CoreV1().ConfigMaps(c.Namespace).Update(timeoutCtx, existingConfigMap, metav1.UpdateOptions{})
 	if err != nil {
+		slog.Warn("failed to update ConfigMap",
+			slog.String("name", c.Name),
+			slog.String("namespace", c.Namespace),
+			slog.String("error", err.Error()),
+		)
 		return result, fmt.Errorf("failed to update ConfigMap %q: %w", c.Name, err)
 	}
+
+	slog.Info("ConfigMap updated",
+		slog.String("name", updatedConfigMap.Name),
+		slog.String("namespace", updatedConfigMap.Namespace),
+	)
 
 	result = fmt.Sprintf("ConfigMap %q updated successfully in namespace %q", updatedConfigMap.Name, updatedConfigMap.Namespace)
 	return result, nil
