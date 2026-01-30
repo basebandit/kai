@@ -53,6 +53,21 @@ func RegisterNamespaceTools(s kai.ServerInterface, cm kai.ClusterManager) {
 		),
 	)
 	s.AddTool(deleteNamespaceTool, deleteNamespaceHandler(cm))
+
+	updateNamespaceTool := mcp.NewTool("update_namespace",
+		mcp.WithDescription("Update an existing namespace"),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Name of the namespace to update"),
+		),
+		mcp.WithObject("labels",
+			mcp.Description("Labels to add or update"),
+		),
+		mcp.WithObject("annotations",
+			mcp.Description("Annotations to add or update"),
+		),
+	)
+	s.AddTool(updateNamespaceTool, updateNamespaceHandler(cm))
 }
 
 func createNamespaceHandler(cm kai.ClusterManager) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -174,6 +189,39 @@ func deleteNamespaceHandler(cm kai.ClusterManager) func(ctx context.Context, req
 				slog.String("error", err.Error()),
 			)
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to delete namespace: %s", err.Error())), nil
+		}
+
+		return mcp.NewToolResultText(result), nil
+	}
+}
+
+func updateNamespaceHandler(cm kai.ClusterManager) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		nameArg, ok := request.Params.Arguments["name"]
+		if !ok || nameArg == nil {
+			return mcp.NewToolResultText(errMissingName), nil
+		}
+
+		name, ok := nameArg.(string)
+		if !ok || name == "" {
+			return mcp.NewToolResultText(errEmptyName), nil
+		}
+
+		namespace := cluster.Namespace{
+			Name: name,
+		}
+
+		if labelsArg, ok := request.Params.Arguments["labels"].(map[string]interface{}); ok {
+			namespace.Labels = labelsArg
+		}
+
+		if annotationsArg, ok := request.Params.Arguments["annotations"].(map[string]interface{}); ok {
+			namespace.Annotations = annotationsArg
+		}
+
+		result, err := namespace.Update(ctx, cm)
+		if err != nil {
+			return mcp.NewToolResultText(fmt.Sprintf("Failed to update namespace: %s", err.Error())), nil
 		}
 
 		return mcp.NewToolResultText(result), nil

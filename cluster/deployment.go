@@ -590,13 +590,11 @@ func (d *Deployment) Describe(ctx context.Context, cm kai.ClusterManager) (strin
 	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 
-	// If namespace is empty, use current namespace
 	namespace := d.Namespace
 	if namespace == "" {
 		namespace = cm.GetCurrentNamespace()
 	}
 
-	// Get the deployment
 	deployment, err := client.AppsV1().Deployments(namespace).Get(timeoutCtx, d.Name, metav1.GetOptions{})
 	if err != nil {
 		slog.Warn("failed to describe deployment",
@@ -607,7 +605,310 @@ func (d *Deployment) Describe(ctx context.Context, cm kai.ClusterManager) (strin
 		return "", fmt.Errorf("failed to get deployment: %w", err)
 	}
 
-	// Format detailed deployment information
 	result := formatDeploymentDetailed(deployment)
+	return result, nil
+}
+
+// Delete removes a deployment from the cluster
+func (d *Deployment) Delete(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	var result string
+
+	client, err := cm.GetCurrentClient()
+	if err != nil {
+		return result, fmt.Errorf("error getting client: %w", err)
+	}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	namespace := d.Namespace
+	if namespace == "" {
+		namespace = cm.GetCurrentNamespace()
+	}
+
+	err = client.AppsV1().Deployments(namespace).Delete(timeoutCtx, d.Name, metav1.DeleteOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to delete deployment: %w", err)
+	}
+
+	result = fmt.Sprintf("Deployment %q deleted successfully from namespace %q", d.Name, namespace)
+	return result, nil
+}
+
+// Scale adjusts the number of replicas for a deployment
+func (d *Deployment) Scale(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	var result string
+
+	client, err := cm.GetCurrentClient()
+	if err != nil {
+		return result, fmt.Errorf("error getting client: %w", err)
+	}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	namespace := d.Namespace
+	if namespace == "" {
+		namespace = cm.GetCurrentNamespace()
+	}
+
+	deployment, err := client.AppsV1().Deployments(namespace).Get(timeoutCtx, d.Name, metav1.GetOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to get deployment: %w", err)
+	}
+
+	replicas := int32(d.Replicas)
+	deployment.Spec.Replicas = &replicas
+
+	_, err = client.AppsV1().Deployments(namespace).Update(timeoutCtx, deployment, metav1.UpdateOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to scale deployment: %w", err)
+	}
+
+	result = fmt.Sprintf("Deployment %q scaled to %d replica(s) in namespace %q", d.Name, replicas, namespace)
+	return result, nil
+}
+
+// RolloutStatus checks the status of a deployment rollout
+func (d *Deployment) RolloutStatus(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	var result string
+
+	client, err := cm.GetCurrentClient()
+	if err != nil {
+		return result, fmt.Errorf("error getting client: %w", err)
+	}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+
+	namespace := d.Namespace
+	if namespace == "" {
+		namespace = cm.GetCurrentNamespace()
+	}
+
+	deployment, err := client.AppsV1().Deployments(namespace).Get(timeoutCtx, d.Name, metav1.GetOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to get deployment: %w", err)
+	}
+
+	result = fmt.Sprintf("Deployment %q rollout status:\n", d.Name)
+	result += fmt.Sprintf("  Replicas: %d desired | %d updated | %d total | %d available | %d unavailable\n",
+		*deployment.Spec.Replicas,
+		deployment.Status.UpdatedReplicas,
+		deployment.Status.Replicas,
+		deployment.Status.AvailableReplicas,
+		deployment.Status.UnavailableReplicas)
+
+	for _, condition := range deployment.Status.Conditions {
+		result += fmt.Sprintf("  %s: %s (Reason: %s) - %s\n",
+			condition.Type,
+			condition.Status,
+			condition.Reason,
+			condition.Message)
+	}
+
+	if deployment.Status.Replicas == deployment.Status.UpdatedReplicas &&
+		deployment.Status.UpdatedReplicas == deployment.Status.AvailableReplicas &&
+		deployment.Status.ObservedGeneration >= deployment.Generation {
+		result += "\nRollout complete!"
+	} else {
+		result += "\nRollout in progress..."
+	}
+
+	return result, nil
+}
+
+// RolloutHistory shows the revision history of a deployment
+func (d *Deployment) RolloutHistory(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	var result string
+
+	client, err := cm.GetCurrentClient()
+	if err != nil {
+		return result, fmt.Errorf("error getting client: %w", err)
+	}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+
+	namespace := d.Namespace
+	if namespace == "" {
+		namespace = cm.GetCurrentNamespace()
+	}
+
+	deployment, err := client.AppsV1().Deployments(namespace).Get(timeoutCtx, d.Name, metav1.GetOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to get deployment: %w", err)
+	}
+
+	replicaSets, err := client.AppsV1().ReplicaSets(namespace).List(timeoutCtx, metav1.ListOptions{
+		LabelSelector: metav1.FormatLabelSelector(deployment.Spec.Selector),
+	})
+	if err != nil {
+		return result, fmt.Errorf("failed to list replica sets: %w", err)
+	}
+
+	result = fmt.Sprintf("Rollout history for deployment %q:\n\n", d.Name)
+	result += "REVISION  CHANGE-CAUSE\n"
+
+	for _, rs := range replicaSets.Items {
+		if revision, ok := rs.Annotations["deployment.kubernetes.io/revision"]; ok {
+			changeCause := rs.Annotations["kubernetes.io/change-cause"]
+			if changeCause == "" {
+				changeCause = "<none>"
+			}
+			result += fmt.Sprintf("%s         %s\n", revision, changeCause)
+		}
+	}
+
+	return result, nil
+}
+
+// RolloutUndo rolls back a deployment to a previous revision
+func (d *Deployment) RolloutUndo(ctx context.Context, cm kai.ClusterManager, revision int64) (string, error) {
+	var result string
+
+	client, err := cm.GetCurrentClient()
+	if err != nil {
+		return result, fmt.Errorf("error getting client: %w", err)
+	}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	namespace := d.Namespace
+	if namespace == "" {
+		namespace = cm.GetCurrentNamespace()
+	}
+
+	deployment, err := client.AppsV1().Deployments(namespace).Get(timeoutCtx, d.Name, metav1.GetOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to get deployment: %w", err)
+	}
+
+	if revision > 0 {
+		if deployment.Annotations == nil {
+			deployment.Annotations = make(map[string]string)
+		}
+		deployment.Annotations["deployment.kubernetes.io/revision"] = fmt.Sprintf("%d", revision)
+	}
+
+	if deployment.Spec.Template.Annotations == nil {
+		deployment.Spec.Template.Annotations = make(map[string]string)
+	}
+	deployment.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
+
+	_, err = client.AppsV1().Deployments(namespace).Update(timeoutCtx, deployment, metav1.UpdateOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to rollback deployment: %w", err)
+	}
+
+	if revision > 0 {
+		result = fmt.Sprintf("Deployment %q rolled back to revision %d in namespace %q", d.Name, revision, namespace)
+	} else {
+		result = fmt.Sprintf("Deployment %q rolled back to previous revision in namespace %q", d.Name, namespace)
+	}
+
+	return result, nil
+}
+
+// RolloutRestart restarts a deployment
+func (d *Deployment) RolloutRestart(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	var result string
+
+	client, err := cm.GetCurrentClient()
+	if err != nil {
+		return result, fmt.Errorf("error getting client: %w", err)
+	}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
+	namespace := d.Namespace
+	if namespace == "" {
+		namespace = cm.GetCurrentNamespace()
+	}
+
+	deployment, err := client.AppsV1().Deployments(namespace).Get(timeoutCtx, d.Name, metav1.GetOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to get deployment: %w", err)
+	}
+
+	if deployment.Spec.Template.Annotations == nil {
+		deployment.Spec.Template.Annotations = make(map[string]string)
+	}
+	deployment.Spec.Template.Annotations["kubectl.kubernetes.io/restartedAt"] = time.Now().Format(time.RFC3339)
+
+	_, err = client.AppsV1().Deployments(namespace).Update(timeoutCtx, deployment, metav1.UpdateOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to restart deployment: %w", err)
+	}
+
+	result = fmt.Sprintf("Deployment %q restarted in namespace %q", d.Name, namespace)
+	return result, nil
+}
+
+// RolloutPause pauses a deployment rollout
+func (d *Deployment) RolloutPause(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	var result string
+
+	client, err := cm.GetCurrentClient()
+	if err != nil {
+		return result, fmt.Errorf("error getting client: %w", err)
+	}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+
+	namespace := d.Namespace
+	if namespace == "" {
+		namespace = cm.GetCurrentNamespace()
+	}
+
+	deployment, err := client.AppsV1().Deployments(namespace).Get(timeoutCtx, d.Name, metav1.GetOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to get deployment: %w", err)
+	}
+
+	deployment.Spec.Paused = true
+
+	_, err = client.AppsV1().Deployments(namespace).Update(timeoutCtx, deployment, metav1.UpdateOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to pause deployment: %w", err)
+	}
+
+	result = fmt.Sprintf("Deployment %q paused in namespace %q", d.Name, namespace)
+	return result, nil
+}
+
+// RolloutResume resumes a paused deployment rollout
+func (d *Deployment) RolloutResume(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	var result string
+
+	client, err := cm.GetCurrentClient()
+	if err != nil {
+		return result, fmt.Errorf("error getting client: %w", err)
+	}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+
+	namespace := d.Namespace
+	if namespace == "" {
+		namespace = cm.GetCurrentNamespace()
+	}
+
+	deployment, err := client.AppsV1().Deployments(namespace).Get(timeoutCtx, d.Name, metav1.GetOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to get deployment: %w", err)
+	}
+
+	deployment.Spec.Paused = false
+
+	_, err = client.AppsV1().Deployments(namespace).Update(timeoutCtx, deployment, metav1.UpdateOptions{})
+	if err != nil {
+		return result, fmt.Errorf("failed to resume deployment: %w", err)
+	}
+
+	result = fmt.Sprintf("Deployment %q resumed in namespace %q", d.Name, namespace)
 	return result, nil
 }

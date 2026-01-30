@@ -150,6 +150,57 @@ func RegisterCronJobToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 		),
 	)
 	s.AddTool(deleteCronJobTool, deleteCronJobHandler(cm, factory))
+
+	updateCronJobTool := mcp.NewTool("update_cronjob",
+		mcp.WithDescription("Update an existing CronJob"),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Name of the CronJob to update"),
+		),
+		mcp.WithString("namespace",
+			mcp.Description("Namespace of the CronJob (defaults to current namespace)"),
+		),
+		mcp.WithString("schedule",
+			mcp.Description("Cron schedule expression (e.g., '*/5 * * * *')"),
+		),
+		mcp.WithObject("labels",
+			mcp.Description("Labels to add or update"),
+		),
+		mcp.WithString("concurrency_policy",
+			mcp.Description("Concurrency policy (Allow, Forbid, Replace)"),
+		),
+		mcp.WithNumber("successful_jobs_history_limit",
+			mcp.Description("Number of successful jobs to retain"),
+		),
+		mcp.WithNumber("failed_jobs_history_limit",
+			mcp.Description("Number of failed jobs to retain"),
+		),
+	)
+	s.AddTool(updateCronJobTool, updateCronJobHandler(cm, factory))
+
+	suspendCronJobTool := mcp.NewTool("suspend_cronjob",
+		mcp.WithDescription("Suspend a CronJob to prevent it from creating new jobs"),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Name of the CronJob to suspend"),
+		),
+		mcp.WithString("namespace",
+			mcp.Description("Namespace of the CronJob (defaults to current namespace)"),
+		),
+	)
+	s.AddTool(suspendCronJobTool, suspendCronJobHandler(cm, factory))
+
+	resumeCronJobTool := mcp.NewTool("resume_cronjob",
+		mcp.WithDescription("Resume a suspended CronJob"),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Name of the CronJob to resume"),
+		),
+		mcp.WithString("namespace",
+			mcp.Description("Namespace of the CronJob (defaults to current namespace)"),
+		),
+	)
+	s.AddTool(resumeCronJobTool, resumeCronJobHandler(cm, factory))
 }
 
 func createCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
@@ -384,6 +435,124 @@ func deleteCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(ct
 				slog.String("error", err.Error()),
 			)
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to delete CronJob: %s", err.Error())), nil
+		}
+
+		return mcp.NewToolResultText(result), nil
+	}
+}
+
+func updateCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		nameArg, ok := request.Params.Arguments["name"]
+		if !ok || nameArg == nil {
+			return mcp.NewToolResultText(errMissingName), nil
+		}
+
+		name, ok := nameArg.(string)
+		if !ok || name == "" {
+			return mcp.NewToolResultText(errEmptyName), nil
+		}
+
+		namespace := cm.GetCurrentNamespace()
+		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+			namespace = namespaceArg
+		}
+
+		params := kai.CronJobParams{
+			Name:      name,
+			Namespace: namespace,
+		}
+
+		if scheduleArg, ok := request.Params.Arguments["schedule"].(string); ok && scheduleArg != "" {
+			params.Schedule = scheduleArg
+		}
+
+		if labelsArg, ok := request.Params.Arguments["labels"].(map[string]interface{}); ok {
+			params.Labels = labelsArg
+		}
+
+		if concurrencyPolicyArg, ok := request.Params.Arguments["concurrency_policy"].(string); ok && concurrencyPolicyArg != "" {
+			params.ConcurrencyPolicy = concurrencyPolicyArg
+		}
+
+		if successfulJobsHistoryLimitArg, ok := request.Params.Arguments["successful_jobs_history_limit"].(float64); ok {
+			limit := int32(successfulJobsHistoryLimitArg)
+			params.SuccessfulJobsHistoryLimit = &limit
+		}
+
+		if failedJobsHistoryLimitArg, ok := request.Params.Arguments["failed_jobs_history_limit"].(float64); ok {
+			limit := int32(failedJobsHistoryLimitArg)
+			params.FailedJobsHistoryLimit = &limit
+		}
+
+		cronJob := factory.NewCronJob(params)
+		result, err := cronJob.Update(ctx, cm)
+		if err != nil {
+			return mcp.NewToolResultText(fmt.Sprintf("Failed to update CronJob: %s", err.Error())), nil
+		}
+
+		return mcp.NewToolResultText(result), nil
+	}
+}
+
+func suspendCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		nameArg, ok := request.Params.Arguments["name"]
+		if !ok || nameArg == nil {
+			return mcp.NewToolResultText(errMissingName), nil
+		}
+
+		name, ok := nameArg.(string)
+		if !ok || name == "" {
+			return mcp.NewToolResultText(errEmptyName), nil
+		}
+
+		namespace := cm.GetCurrentNamespace()
+		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+			namespace = namespaceArg
+		}
+
+		params := kai.CronJobParams{
+			Name:      name,
+			Namespace: namespace,
+		}
+
+		cronJob := factory.NewCronJob(params)
+		result, err := cronJob.SetSuspended(ctx, cm, true)
+		if err != nil {
+			return mcp.NewToolResultText(fmt.Sprintf("Failed to suspend CronJob: %s", err.Error())), nil
+		}
+
+		return mcp.NewToolResultText(result), nil
+	}
+}
+
+func resumeCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		nameArg, ok := request.Params.Arguments["name"]
+		if !ok || nameArg == nil {
+			return mcp.NewToolResultText(errMissingName), nil
+		}
+
+		name, ok := nameArg.(string)
+		if !ok || name == "" {
+			return mcp.NewToolResultText(errEmptyName), nil
+		}
+
+		namespace := cm.GetCurrentNamespace()
+		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+			namespace = namespaceArg
+		}
+
+		params := kai.CronJobParams{
+			Name:      name,
+			Namespace: namespace,
+		}
+
+		cronJob := factory.NewCronJob(params)
+		result, err := cronJob.SetSuspended(ctx, cm, false)
+		if err != nil {
+			return mcp.NewToolResultText(fmt.Sprintf("Failed to resume CronJob: %s", err.Error())), nil
 		}
 
 		return mcp.NewToolResultText(result), nil

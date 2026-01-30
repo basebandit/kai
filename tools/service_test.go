@@ -53,7 +53,7 @@ func TestRegisterServiceTools(t *testing.T) {
 	mockClusterMgr := testmocks.NewMockClusterManager()
 
 	// Expect AddTool to be called once for each tool we register
-	mockServer.On("AddTool", mock.AnythingOfType("mcp.Tool"), mock.AnythingOfType("server.ToolHandlerFunc")).Return().Times(4)
+	mockServer.On("AddTool", mock.AnythingOfType("mcp.Tool"), mock.AnythingOfType("server.ToolHandlerFunc")).Return().Times(6)
 	RegisterServiceTools(mockServer, mockClusterMgr)
 	mockServer.AssertExpectations(t)
 }
@@ -64,7 +64,7 @@ func TestRegisterServiceToolsWithFactory(t *testing.T) {
 	mockFactory := testmocks.NewMockServiceFactory()
 
 	// Expect AddTool to be called once for each tool we register
-	mockServer.On("AddTool", mock.AnythingOfType("mcp.Tool"), mock.AnythingOfType("server.ToolHandlerFunc")).Return().Times(4)
+	mockServer.On("AddTool", mock.AnythingOfType("mcp.Tool"), mock.AnythingOfType("server.ToolHandlerFunc")).Return().Times(6)
 	RegisterServiceToolsWithFactory(mockServer, mockClusterMgr, mockFactory)
 	mockServer.AssertExpectations(t)
 }
@@ -822,6 +822,380 @@ func TestDeleteServiceHandler(t *testing.T) {
 			tc.mockSetup(mockCM, mockFactory, mockService)
 
 			handler := deleteServiceHandler(mockCM, mockFactory)
+
+			request := mcp.CallToolRequest{
+				Params: struct {
+					Name      string         `json:"name"`
+					Arguments map[string]any `json:"arguments,omitempty"`
+					Meta      *mcp.Meta      `json:"_meta,omitempty"`
+				}{
+					Arguments: tc.args,
+				},
+			}
+
+			result, err := handler(context.Background(), request)
+			assert.NoError(t, err)
+			assert.NotNil(t, result)
+			assert.Contains(t, result.Content[0].(mcp.TextContent).Text, tc.expectedOutput)
+
+			mockCM.AssertExpectations(t)
+			mockFactory.AssertExpectations(t)
+			if mockService != nil {
+				mockService.AssertExpectations(t)
+			}
+		})
+	}
+}
+
+func TestUpdateServiceHandler(t *testing.T) {
+	serviceName := "test-service"
+
+	testCases := []struct {
+		name                  string
+		args                  map[string]interface{}
+		expectedParams        kai.ServiceParams
+		mockSetup             func(*testmocks.MockClusterManager, *testmocks.MockServiceFactory, *testmocks.MockService)
+		expectedOutput        string
+		expectServiceCreation bool
+	}{
+		{
+			name: "Update service type",
+			args: map[string]interface{}{
+				"name": serviceName,
+				"type": "NodePort",
+			},
+			expectedParams: kai.ServiceParams{
+				Name:      serviceName,
+				Namespace: defaultNamespace,
+				Type:      "NodePort",
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockServiceFactory, mockService *testmocks.MockService) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockService.On("Update", mock.Anything, mockCM).
+					Return(fmt.Sprintf("Service %q updated successfully in namespace %q (Type: NodePort)", serviceName, defaultNamespace), nil)
+			},
+			expectedOutput:        "Service \"test-service\" updated successfully",
+			expectServiceCreation: true,
+		},
+		{
+			name: "Update service labels",
+			args: map[string]interface{}{
+				"name": serviceName,
+				"labels": map[string]interface{}{
+					"env": "prod",
+				},
+			},
+			expectedParams: kai.ServiceParams{
+				Name:      serviceName,
+				Namespace: defaultNamespace,
+				Labels: map[string]interface{}{
+					"env": "prod",
+				},
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockServiceFactory, mockService *testmocks.MockService) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockService.On("Update", mock.Anything, mockCM).
+					Return(fmt.Sprintf("Service %q updated successfully in namespace %q (Type: ClusterIP)", serviceName, defaultNamespace), nil)
+			},
+			expectedOutput:        "Service \"test-service\" updated successfully",
+			expectServiceCreation: true,
+		},
+		{
+			name: "Update service selector",
+			args: map[string]interface{}{
+				"name": serviceName,
+				"selector": map[string]interface{}{
+					"app": "new-backend",
+				},
+			},
+			expectedParams: kai.ServiceParams{
+				Name:      serviceName,
+				Namespace: defaultNamespace,
+				Selector: map[string]interface{}{
+					"app": "new-backend",
+				},
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockServiceFactory, mockService *testmocks.MockService) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockService.On("Update", mock.Anything, mockCM).
+					Return(fmt.Sprintf("Service %q updated successfully in namespace %q (Type: ClusterIP)", serviceName, defaultNamespace), nil)
+			},
+			expectedOutput:        "Service \"test-service\" updated successfully",
+			expectServiceCreation: true,
+		},
+		{
+			name: "Update service external IPs",
+			args: map[string]interface{}{
+				"name":         serviceName,
+				"external_ips": []interface{}{"1.2.3.4", "5.6.7.8"},
+			},
+			expectedParams: kai.ServiceParams{
+				Name:        serviceName,
+				Namespace:   defaultNamespace,
+				ExternalIPs: []string{"1.2.3.4", "5.6.7.8"},
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockServiceFactory, mockService *testmocks.MockService) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockService.On("Update", mock.Anything, mockCM).
+					Return(fmt.Sprintf("Service %q updated successfully in namespace %q (Type: ClusterIP)", serviceName, defaultNamespace), nil)
+			},
+			expectedOutput:        "Service \"test-service\" updated successfully",
+			expectServiceCreation: true,
+		},
+		{
+			name: "Update service session affinity",
+			args: map[string]interface{}{
+				"name":             serviceName,
+				"session_affinity": "ClientIP",
+			},
+			expectedParams: kai.ServiceParams{
+				Name:            serviceName,
+				Namespace:       defaultNamespace,
+				SessionAffinity: "ClientIP",
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockServiceFactory, mockService *testmocks.MockService) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockService.On("Update", mock.Anything, mockCM).
+					Return(fmt.Sprintf("Service %q updated successfully in namespace %q (Type: ClusterIP)", serviceName, defaultNamespace), nil)
+			},
+			expectedOutput:        "Service \"test-service\" updated successfully",
+			expectServiceCreation: true,
+		},
+		{
+			name:           "Missing service name",
+			args:           map[string]interface{}{},
+			expectedParams: kai.ServiceParams{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockServiceFactory, mockService *testmocks.MockService) {
+			},
+			expectedOutput:        errMissingName,
+			expectServiceCreation: false,
+		},
+		{
+			name: "Empty service name",
+			args: map[string]interface{}{
+				"name": "",
+			},
+			expectedParams: kai.ServiceParams{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockServiceFactory, mockService *testmocks.MockService) {
+			},
+			expectedOutput:        errEmptyName,
+			expectServiceCreation: false,
+		},
+		{
+			name: "Update error",
+			args: map[string]interface{}{
+				"name": serviceName,
+				"type": "NodePort",
+			},
+			expectedParams: kai.ServiceParams{
+				Name:      serviceName,
+				Namespace: defaultNamespace,
+				Type:      "NodePort",
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockServiceFactory, mockService *testmocks.MockService) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockService.On("Update", mock.Anything, mockCM).
+					Return("", errors.New("service not found"))
+			},
+			expectedOutput:        "service not found",
+			expectServiceCreation: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockCM := testmocks.NewMockClusterManager()
+			mockFactory := testmocks.NewMockServiceFactory()
+
+			var mockService *testmocks.MockService
+			if tc.expectServiceCreation {
+				mockService = testmocks.NewMockService(tc.expectedParams)
+				mockFactory.On("NewService", mock.Anything).Return(mockService)
+			}
+
+			tc.mockSetup(mockCM, mockFactory, mockService)
+
+			handler := updateServiceHandler(mockCM, mockFactory)
+
+			request := mcp.CallToolRequest{
+				Params: struct {
+					Name      string         `json:"name"`
+					Arguments map[string]any `json:"arguments,omitempty"`
+					Meta      *mcp.Meta      `json:"_meta,omitempty"`
+				}{
+					Arguments: tc.args,
+				},
+			}
+
+			result, err := handler(context.Background(), request)
+			assert.NoError(t, err)
+			assert.NotNil(t, result)
+			assert.Contains(t, result.Content[0].(mcp.TextContent).Text, tc.expectedOutput)
+
+			mockCM.AssertExpectations(t)
+			mockFactory.AssertExpectations(t)
+			if mockService != nil {
+				mockService.AssertExpectations(t)
+			}
+		})
+	}
+}
+
+func TestPatchServiceHandler(t *testing.T) {
+	serviceName := "test-service"
+
+	testCases := []struct {
+		name                  string
+		args                  map[string]interface{}
+		expectedParams        kai.ServiceParams
+		mockSetup             func(*testmocks.MockClusterManager, *testmocks.MockServiceFactory, *testmocks.MockService)
+		expectedOutput        string
+		expectServiceCreation bool
+	}{
+		{
+			name: "Patch service labels",
+			args: map[string]interface{}{
+				"name": serviceName,
+				"patch": map[string]interface{}{
+					"labels": map[string]interface{}{
+						"patched": "true",
+					},
+				},
+			},
+			expectedParams: kai.ServiceParams{
+				Name:      serviceName,
+				Namespace: defaultNamespace,
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockServiceFactory, mockService *testmocks.MockService) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockService.On("Patch", mock.Anything, mockCM, mock.MatchedBy(func(patchData map[string]interface{}) bool {
+					labels, ok := patchData["labels"].(map[string]interface{})
+					return ok && labels["patched"] == "true"
+				})).Return(fmt.Sprintf("Service %q patched successfully in namespace %q", serviceName, defaultNamespace), nil)
+			},
+			expectedOutput:        "Service \"test-service\" patched successfully",
+			expectServiceCreation: true,
+		},
+		{
+			name: "Patch service type",
+			args: map[string]interface{}{
+				"name": serviceName,
+				"patch": map[string]interface{}{
+					"type": "LoadBalancer",
+				},
+			},
+			expectedParams: kai.ServiceParams{
+				Name:      serviceName,
+				Namespace: defaultNamespace,
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockServiceFactory, mockService *testmocks.MockService) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockService.On("Patch", mock.Anything, mockCM, mock.MatchedBy(func(patchData map[string]interface{}) bool {
+					return patchData["type"] == "LoadBalancer"
+				})).Return(fmt.Sprintf("Service %q patched successfully in namespace %q", serviceName, defaultNamespace), nil)
+			},
+			expectedOutput:        "Service \"test-service\" patched successfully",
+			expectServiceCreation: true,
+		},
+		{
+			name: "Patch service external IPs",
+			args: map[string]interface{}{
+				"name": serviceName,
+				"patch": map[string]interface{}{
+					"externalIPs": []interface{}{"10.0.0.1", "10.0.0.2"},
+				},
+			},
+			expectedParams: kai.ServiceParams{
+				Name:      serviceName,
+				Namespace: defaultNamespace,
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockServiceFactory, mockService *testmocks.MockService) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockService.On("Patch", mock.Anything, mockCM, mock.Anything).
+					Return(fmt.Sprintf("Service %q patched successfully in namespace %q", serviceName, defaultNamespace), nil)
+			},
+			expectedOutput:        "Service \"test-service\" patched successfully",
+			expectServiceCreation: true,
+		},
+		{
+			name:           "Missing service name",
+			args:           map[string]interface{}{},
+			expectedParams: kai.ServiceParams{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockServiceFactory, mockService *testmocks.MockService) {
+			},
+			expectedOutput:        errMissingName,
+			expectServiceCreation: false,
+		},
+		{
+			name: "Empty service name",
+			args: map[string]interface{}{
+				"name": "",
+			},
+			expectedParams: kai.ServiceParams{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockServiceFactory, mockService *testmocks.MockService) {
+			},
+			expectedOutput:        errEmptyName,
+			expectServiceCreation: false,
+		},
+		{
+			name: "Missing patch parameter",
+			args: map[string]interface{}{
+				"name": serviceName,
+			},
+			expectedParams: kai.ServiceParams{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockServiceFactory, mockService *testmocks.MockService) {
+			},
+			expectedOutput:        "missing required parameter: patch",
+			expectServiceCreation: false,
+		},
+		{
+			name: "Invalid patch parameter type",
+			args: map[string]interface{}{
+				"name":  serviceName,
+				"patch": "invalid",
+			},
+			expectedParams: kai.ServiceParams{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockServiceFactory, mockService *testmocks.MockService) {
+			},
+			expectedOutput:        "patch parameter must be an object",
+			expectServiceCreation: false,
+		},
+		{
+			name: "Patch error",
+			args: map[string]interface{}{
+				"name": serviceName,
+				"patch": map[string]interface{}{
+					"type": "NodePort",
+				},
+			},
+			expectedParams: kai.ServiceParams{
+				Name:      serviceName,
+				Namespace: defaultNamespace,
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockServiceFactory, mockService *testmocks.MockService) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockService.On("Patch", mock.Anything, mockCM, mock.Anything).
+					Return("", errors.New("service not found"))
+			},
+			expectedOutput:        "service not found",
+			expectServiceCreation: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			mockCM := testmocks.NewMockClusterManager()
+			mockFactory := testmocks.NewMockServiceFactory()
+
+			var mockService *testmocks.MockService
+			if tc.expectServiceCreation {
+				mockService = testmocks.NewMockService(tc.expectedParams)
+				mockFactory.On("NewService", mock.Anything).Return(mockService)
+			}
+
+			tc.mockSetup(mockCM, mockFactory, mockService)
+
+			handler := patchServiceHandler(mockCM, mockFactory)
 
 			request := mcp.CallToolRequest{
 				Params: struct {

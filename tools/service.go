@@ -139,6 +139,60 @@ func RegisterServiceToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 	)
 
 	s.AddTool(deleteServiceTool, deleteServiceHandler(cm, factory))
+
+	updateServiceTool := mcp.NewTool("update_service",
+		mcp.WithDescription("Update an existing service"),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Name of the service to update"),
+		),
+		mcp.WithString("namespace",
+			mcp.Description("Namespace of the service (defaults to current namespace)"),
+		),
+		mcp.WithString("type",
+			mcp.Description("Service type (ClusterIP, NodePort, LoadBalancer, ExternalName)"),
+		),
+		mcp.WithObject("labels",
+			mcp.Description("Labels to add or update"),
+		),
+		mcp.WithObject("selector",
+			mcp.Description("Selector labels"),
+		),
+		mcp.WithArray("ports",
+			mcp.Description("Service ports configuration"),
+		),
+		mcp.WithString("cluster_ip",
+			mcp.Description("ClusterIP address"),
+		),
+		mcp.WithArray("external_ips",
+			mcp.Description("External IP addresses"),
+		),
+		mcp.WithString("external_name",
+			mcp.Description("External name for ExternalName service type"),
+		),
+		mcp.WithString("session_affinity",
+			mcp.Description("Session affinity (None or ClientIP)"),
+		),
+	)
+
+	s.AddTool(updateServiceTool, updateServiceHandler(cm, factory))
+
+	patchServiceTool := mcp.NewTool("patch_service",
+		mcp.WithDescription("Apply a partial update to an existing service"),
+		mcp.WithString("name",
+			mcp.Required(),
+			mcp.Description("Name of the service to patch"),
+		),
+		mcp.WithString("namespace",
+			mcp.Description("Namespace of the service (defaults to current namespace)"),
+		),
+		mcp.WithObject("patch",
+			mcp.Required(),
+			mcp.Description("Patch data as key-value pairs (e.g., labels, selector, type, externalIPs)"),
+		),
+	)
+
+	s.AddTool(patchServiceTool, patchServiceHandler(cm, factory))
 }
 
 // listServicesHandler handles the list_services tool
@@ -526,4 +580,120 @@ func processPortsArray(portsArray []interface{}) ([]kai.ServicePort, error) {
 	}
 
 	return ports, nil
+}
+
+func updateServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		nameArg, ok := request.Params.Arguments["name"]
+		if !ok || nameArg == nil {
+			return mcp.NewToolResultText(errMissingName), nil
+		}
+
+		name, ok := nameArg.(string)
+		if !ok || name == "" {
+			return mcp.NewToolResultText(errEmptyName), nil
+		}
+
+		namespace := cm.GetCurrentNamespace()
+		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+			namespace = namespaceArg
+		}
+
+		params := kai.ServiceParams{
+			Name:      name,
+			Namespace: namespace,
+		}
+
+		if serviceType, ok := request.Params.Arguments["type"].(string); ok && serviceType != "" {
+			params.Type = serviceType
+		}
+
+		if labels, ok := request.Params.Arguments["labels"].(map[string]interface{}); ok {
+			params.Labels = labels
+		}
+
+		if selector, ok := request.Params.Arguments["selector"].(map[string]interface{}); ok {
+			params.Selector = selector
+		}
+
+		if portsArg, ok := request.Params.Arguments["ports"].([]interface{}); ok && len(portsArg) > 0 {
+			ports, err := processPortsArray(portsArg)
+			if err != nil {
+				return mcp.NewToolResultText(err.Error()), nil
+			}
+			params.Ports = ports
+		}
+
+		if clusterIP, ok := request.Params.Arguments["cluster_ip"].(string); ok && clusterIP != "" {
+			params.ClusterIP = clusterIP
+		}
+
+		if externalIPsArg, ok := request.Params.Arguments["external_ips"].([]interface{}); ok {
+			externalIPs := make([]string, 0, len(externalIPsArg))
+			for _, ip := range externalIPsArg {
+				if ipStr, ok := ip.(string); ok {
+					externalIPs = append(externalIPs, ipStr)
+				}
+			}
+			params.ExternalIPs = externalIPs
+		}
+
+		if externalName, ok := request.Params.Arguments["external_name"].(string); ok && externalName != "" {
+			params.ExternalName = externalName
+		}
+
+		if sessionAffinity, ok := request.Params.Arguments["session_affinity"].(string); ok && sessionAffinity != "" {
+			params.SessionAffinity = sessionAffinity
+		}
+
+		service := factory.NewService(params)
+		resultText, err := service.Update(ctx, cm)
+		if err != nil {
+			return mcp.NewToolResultText(err.Error()), nil
+		}
+
+		return mcp.NewToolResultText(resultText), nil
+	}
+}
+
+func patchServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		nameArg, ok := request.Params.Arguments["name"]
+		if !ok || nameArg == nil {
+			return mcp.NewToolResultText(errMissingName), nil
+		}
+
+		name, ok := nameArg.(string)
+		if !ok || name == "" {
+			return mcp.NewToolResultText(errEmptyName), nil
+		}
+
+		patchArg, ok := request.Params.Arguments["patch"]
+		if !ok || patchArg == nil {
+			return mcp.NewToolResultText("missing required parameter: patch"), nil
+		}
+
+		patchData, ok := patchArg.(map[string]interface{})
+		if !ok {
+			return mcp.NewToolResultText("patch parameter must be an object"), nil
+		}
+
+		namespace := cm.GetCurrentNamespace()
+		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+			namespace = namespaceArg
+		}
+
+		params := kai.ServiceParams{
+			Name:      name,
+			Namespace: namespace,
+		}
+
+		service := factory.NewService(params)
+		resultText, err := service.Patch(ctx, cm, patchData)
+		if err != nil {
+			return mcp.NewToolResultText(err.Error()), nil
+		}
+
+		return mcp.NewToolResultText(resultText), nil
+	}
 }

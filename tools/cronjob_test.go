@@ -474,7 +474,7 @@ func TestRegisterCronJobTools(t *testing.T) {
 	mockServer := new(testmocks.MockServer)
 	mockCM := testmocks.NewMockClusterManager()
 
-	mockServer.On("AddTool", mock.AnythingOfType("mcp.Tool"), mock.AnythingOfType("server.ToolHandlerFunc")).Return().Times(4)
+	mockServer.On("AddTool", mock.AnythingOfType("mcp.Tool"), mock.AnythingOfType("server.ToolHandlerFunc")).Return().Times(7)
 
 	RegisterCronJobTools(mockServer, mockCM)
 
@@ -486,7 +486,7 @@ func TestRegisterCronJobToolsWithFactory(t *testing.T) {
 	mockCM := testmocks.NewMockClusterManager()
 	mockFactory := new(testmocks.MockCronJobFactory)
 
-	mockServer.On("AddTool", mock.AnythingOfType("mcp.Tool"), mock.AnythingOfType("server.ToolHandlerFunc")).Return().Times(4)
+	mockServer.On("AddTool", mock.AnythingOfType("mcp.Tool"), mock.AnythingOfType("server.ToolHandlerFunc")).Return().Times(7)
 
 	RegisterCronJobToolsWithFactory(mockServer, mockCM, mockFactory)
 
@@ -722,4 +722,304 @@ func TestDeleteCronJobHandlerDefaultNamespace(t *testing.T) {
 	mockCM.AssertExpectations(t)
 	mockFactory.AssertExpectations(t)
 	mockCronJob.AssertExpectations(t)
+}
+
+func TestUpdateCronJobHandler(t *testing.T) {
+	tests := []struct {
+		name           string
+		args           map[string]any
+		mockSetup      func(*testmocks.MockClusterManager, *testmocks.MockCronJobFactory, *testmocks.MockCronJob)
+		expectedOutput string
+	}{
+		{
+			name: "Update CronJob schedule",
+			args: map[string]any{
+				"name":     "test-cronjob",
+				"schedule": "0 0 * * *",
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockCronJobFactory, mockCronJob *testmocks.MockCronJob) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockFactory.On("NewCronJob", mock.MatchedBy(func(params kai.CronJobParams) bool {
+					return params.Name == "test-cronjob" && params.Schedule == "0 0 * * *"
+				})).Return(mockCronJob)
+				mockCronJob.On("Update", mock.Anything, mockCM).Return("CronJob \"test-cronjob\" updated successfully", nil)
+			},
+			expectedOutput: "CronJob \"test-cronjob\" updated successfully",
+		},
+		{
+			name: "Update CronJob with all parameters",
+			args: map[string]any{
+				"name":                          "test-cronjob",
+				"namespace":                     testNamespace,
+				"schedule":                      "*/10 * * * *",
+				"labels":                        map[string]any{"env": "prod"},
+				"concurrency_policy":            "Forbid",
+				"successful_jobs_history_limit": float64(5),
+				"failed_jobs_history_limit":     float64(3),
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockCronJobFactory, mockCronJob *testmocks.MockCronJob) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockFactory.On("NewCronJob", mock.MatchedBy(func(params kai.CronJobParams) bool {
+					return params.Name == "test-cronjob" &&
+						params.Namespace == testNamespace &&
+						params.Schedule == "*/10 * * * *" &&
+						params.ConcurrencyPolicy == "Forbid" &&
+						*params.SuccessfulJobsHistoryLimit == int32(5) &&
+						*params.FailedJobsHistoryLimit == int32(3)
+				})).Return(mockCronJob)
+				mockCronJob.On("Update", mock.Anything, mockCM).Return("CronJob \"test-cronjob\" updated successfully", nil)
+			},
+			expectedOutput: "CronJob \"test-cronjob\" updated successfully",
+		},
+		{
+			name: "Missing CronJob name",
+			args: map[string]any{
+				"schedule": "*/5 * * * *",
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockCronJobFactory, mockCronJob *testmocks.MockCronJob) {
+			},
+			expectedOutput: errMissingName,
+		},
+		{
+			name: "Empty CronJob name",
+			args: map[string]any{
+				"name":     "",
+				"schedule": "*/5 * * * *",
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockCronJobFactory, mockCronJob *testmocks.MockCronJob) {
+			},
+			expectedOutput: errEmptyName,
+		},
+		{
+			name: "Update error",
+			args: map[string]any{
+				"name":     "test-cronjob",
+				"schedule": "0 0 * * *",
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockCronJobFactory, mockCronJob *testmocks.MockCronJob) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockFactory.On("NewCronJob", mock.Anything).Return(mockCronJob)
+				mockCronJob.On("Update", mock.Anything, mockCM).Return("", assert.AnError)
+			},
+			expectedOutput: "Failed to update CronJob",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockCM := &testmocks.MockClusterManager{}
+			mockFactory := &testmocks.MockCronJobFactory{}
+			mockCronJob := &testmocks.MockCronJob{}
+			tt.mockSetup(mockCM, mockFactory, mockCronJob)
+
+			handler := updateCronJobHandler(mockCM, mockFactory)
+			request := mcp.CallToolRequest{
+				Params: struct {
+					Name      string         `json:"name"`
+					Arguments map[string]any `json:"arguments,omitempty"`
+					Meta      *mcp.Meta      `json:"_meta,omitempty"`
+				}{
+					Arguments: tt.args,
+				},
+			}
+
+			result, err := handler(context.Background(), request)
+			assert.NoError(t, err)
+			assert.Contains(t, result.Content[0].(mcp.TextContent).Text, tt.expectedOutput)
+
+			mockCM.AssertExpectations(t)
+			mockFactory.AssertExpectations(t)
+			mockCronJob.AssertExpectations(t)
+		})
+	}
+}
+
+func TestSuspendCronJobHandler(t *testing.T) {
+	tests := []struct {
+		name           string
+		args           map[string]any
+		mockSetup      func(*testmocks.MockClusterManager, *testmocks.MockCronJobFactory, *testmocks.MockCronJob)
+		expectedOutput string
+	}{
+		{
+			name: "Suspend CronJob",
+			args: map[string]any{
+				"name": "test-cronjob",
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockCronJobFactory, mockCronJob *testmocks.MockCronJob) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockFactory.On("NewCronJob", mock.MatchedBy(func(params kai.CronJobParams) bool {
+					return params.Name == "test-cronjob" && params.Namespace == defaultNamespace
+				})).Return(mockCronJob)
+				mockCronJob.On("SetSuspended", mock.Anything, mockCM, true).Return("CronJob \"test-cronjob\" suspended", nil)
+			},
+			expectedOutput: "CronJob \"test-cronjob\" suspended",
+		},
+		{
+			name: "Suspend CronJob in specific namespace",
+			args: map[string]any{
+				"name":      "test-cronjob",
+				"namespace": testNamespace,
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockCronJobFactory, mockCronJob *testmocks.MockCronJob) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockFactory.On("NewCronJob", mock.MatchedBy(func(params kai.CronJobParams) bool {
+					return params.Name == "test-cronjob" && params.Namespace == testNamespace
+				})).Return(mockCronJob)
+				mockCronJob.On("SetSuspended", mock.Anything, mockCM, true).Return("CronJob \"test-cronjob\" suspended", nil)
+			},
+			expectedOutput: "CronJob \"test-cronjob\" suspended",
+		},
+		{
+			name: "Missing CronJob name",
+			args: map[string]any{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockCronJobFactory, mockCronJob *testmocks.MockCronJob) {
+			},
+			expectedOutput: errMissingName,
+		},
+		{
+			name: "Empty CronJob name",
+			args: map[string]any{
+				"name": "",
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockCronJobFactory, mockCronJob *testmocks.MockCronJob) {
+			},
+			expectedOutput: errEmptyName,
+		},
+		{
+			name: "Suspend error",
+			args: map[string]any{
+				"name": "test-cronjob",
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockCronJobFactory, mockCronJob *testmocks.MockCronJob) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockFactory.On("NewCronJob", mock.Anything).Return(mockCronJob)
+				mockCronJob.On("SetSuspended", mock.Anything, mockCM, true).Return("", assert.AnError)
+			},
+			expectedOutput: "Failed to suspend CronJob",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockCM := &testmocks.MockClusterManager{}
+			mockFactory := &testmocks.MockCronJobFactory{}
+			mockCronJob := &testmocks.MockCronJob{}
+			tt.mockSetup(mockCM, mockFactory, mockCronJob)
+
+			handler := suspendCronJobHandler(mockCM, mockFactory)
+			request := mcp.CallToolRequest{
+				Params: struct {
+					Name      string         `json:"name"`
+					Arguments map[string]any `json:"arguments,omitempty"`
+					Meta      *mcp.Meta      `json:"_meta,omitempty"`
+				}{
+					Arguments: tt.args,
+				},
+			}
+
+			result, err := handler(context.Background(), request)
+			assert.NoError(t, err)
+			assert.Contains(t, result.Content[0].(mcp.TextContent).Text, tt.expectedOutput)
+
+			mockCM.AssertExpectations(t)
+			mockFactory.AssertExpectations(t)
+			mockCronJob.AssertExpectations(t)
+		})
+	}
+}
+
+func TestResumeCronJobHandler(t *testing.T) {
+	tests := []struct {
+		name           string
+		args           map[string]any
+		mockSetup      func(*testmocks.MockClusterManager, *testmocks.MockCronJobFactory, *testmocks.MockCronJob)
+		expectedOutput string
+	}{
+		{
+			name: "Resume CronJob",
+			args: map[string]any{
+				"name": "test-cronjob",
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockCronJobFactory, mockCronJob *testmocks.MockCronJob) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockFactory.On("NewCronJob", mock.MatchedBy(func(params kai.CronJobParams) bool {
+					return params.Name == "test-cronjob" && params.Namespace == defaultNamespace
+				})).Return(mockCronJob)
+				mockCronJob.On("SetSuspended", mock.Anything, mockCM, false).Return("CronJob \"test-cronjob\" resumed", nil)
+			},
+			expectedOutput: "CronJob \"test-cronjob\" resumed",
+		},
+		{
+			name: "Resume CronJob in specific namespace",
+			args: map[string]any{
+				"name":      "test-cronjob",
+				"namespace": testNamespace,
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockCronJobFactory, mockCronJob *testmocks.MockCronJob) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockFactory.On("NewCronJob", mock.MatchedBy(func(params kai.CronJobParams) bool {
+					return params.Name == "test-cronjob" && params.Namespace == testNamespace
+				})).Return(mockCronJob)
+				mockCronJob.On("SetSuspended", mock.Anything, mockCM, false).Return("CronJob \"test-cronjob\" resumed", nil)
+			},
+			expectedOutput: "CronJob \"test-cronjob\" resumed",
+		},
+		{
+			name: "Missing CronJob name",
+			args: map[string]any{},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockCronJobFactory, mockCronJob *testmocks.MockCronJob) {
+			},
+			expectedOutput: errMissingName,
+		},
+		{
+			name: "Empty CronJob name",
+			args: map[string]any{
+				"name": "",
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockCronJobFactory, mockCronJob *testmocks.MockCronJob) {
+			},
+			expectedOutput: errEmptyName,
+		},
+		{
+			name: "Resume error",
+			args: map[string]any{
+				"name": "test-cronjob",
+			},
+			mockSetup: func(mockCM *testmocks.MockClusterManager, mockFactory *testmocks.MockCronJobFactory, mockCronJob *testmocks.MockCronJob) {
+				mockCM.On("GetCurrentNamespace").Return(defaultNamespace)
+				mockFactory.On("NewCronJob", mock.Anything).Return(mockCronJob)
+				mockCronJob.On("SetSuspended", mock.Anything, mockCM, false).Return("", assert.AnError)
+			},
+			expectedOutput: "Failed to resume CronJob",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockCM := &testmocks.MockClusterManager{}
+			mockFactory := &testmocks.MockCronJobFactory{}
+			mockCronJob := &testmocks.MockCronJob{}
+			tt.mockSetup(mockCM, mockFactory, mockCronJob)
+
+			handler := resumeCronJobHandler(mockCM, mockFactory)
+			request := mcp.CallToolRequest{
+				Params: struct {
+					Name      string         `json:"name"`
+					Arguments map[string]any `json:"arguments,omitempty"`
+					Meta      *mcp.Meta      `json:"_meta,omitempty"`
+				}{
+					Arguments: tt.args,
+				},
+			}
+
+			result, err := handler(context.Background(), request)
+			assert.NoError(t, err)
+			assert.Contains(t, result.Content[0].(mcp.TextContent).Text, tt.expectedOutput)
+
+			mockCM.AssertExpectations(t)
+			mockFactory.AssertExpectations(t)
+			mockCronJob.AssertExpectations(t)
+		})
+	}
 }

@@ -41,6 +41,7 @@ type NamespaceOperator interface {
 	Get(ctx context.Context, cm ClusterManager) (string, error)
 	List(ctx context.Context, cm ClusterManager, labelSelector string) (string, error)
 	Delete(ctx context.Context, cm ClusterManager) (string, error)
+	Update(ctx context.Context, cm ClusterManager) (string, error)
 }
 
 // PodOperator defines the operations needed for pod management
@@ -59,6 +60,14 @@ type DeploymentOperator interface {
 	Update(ctx context.Context, cm ClusterManager) (string, error)
 	Describe(ctx context.Context, cm ClusterManager) (string, error)
 	List(ctx context.Context, cm ClusterManager, allNamespaces bool, labelSelector string) (string, error)
+	Delete(ctx context.Context, cm ClusterManager) (string, error)
+	Scale(ctx context.Context, cm ClusterManager) (string, error)
+	RolloutStatus(ctx context.Context, cm ClusterManager) (string, error)
+	RolloutHistory(ctx context.Context, cm ClusterManager) (string, error)
+	RolloutUndo(ctx context.Context, cm ClusterManager, revision int64) (string, error)
+	RolloutRestart(ctx context.Context, cm ClusterManager) (string, error)
+	RolloutPause(ctx context.Context, cm ClusterManager) (string, error)
+	RolloutResume(ctx context.Context, cm ClusterManager) (string, error)
 }
 
 // ServiceOperator defines the operations needed for service management
@@ -67,6 +76,8 @@ type ServiceOperator interface {
 	Get(ctx context.Context, cm ClusterManager) (string, error)
 	Delete(ctx context.Context, cm ClusterManager) (string, error)
 	List(ctx context.Context, cm ClusterManager, allNamespaces bool, labelSelector string) (string, error)
+	Update(ctx context.Context, cm ClusterManager) (string, error)
+	Patch(ctx context.Context, cm ClusterManager, patchData map[string]interface{}) (string, error)
 }
 
 // ConfigMapOperator defines the operations needed for ConfigMap management
@@ -93,6 +104,7 @@ type JobOperator interface {
 	Get(ctx context.Context, cm ClusterManager) (string, error)
 	List(ctx context.Context, cm ClusterManager, allNamespaces bool, labelSelector string) (string, error)
 	Delete(ctx context.Context, cm ClusterManager) (string, error)
+	Update(ctx context.Context, cm ClusterManager) (string, error)
 }
 
 // CronJobOperator defines the operations needed for CronJob management
@@ -101,6 +113,8 @@ type CronJobOperator interface {
 	Get(ctx context.Context, cm ClusterManager) (string, error)
 	List(ctx context.Context, cm ClusterManager, allNamespaces bool, labelSelector string) (string, error)
 	Delete(ctx context.Context, cm ClusterManager) (string, error)
+	Update(ctx context.Context, cm ClusterManager) (string, error)
+	SetSuspended(ctx context.Context, cm ClusterManager, suspend bool) (string, error)
 }
 
 // IngressOperator defines the operations needed for Ingress management
