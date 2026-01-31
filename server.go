@@ -227,7 +227,9 @@ func (s *Server) Shutdown(ctx context.Context) error {
 func (s *Server) healthzHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"healthy"}`))
+	if _, err := w.Write([]byte(`{"status":"healthy"}`)); err != nil {
+		slog.Warn("failed to write healthz response", slog.String("error", err.Error()))
+	}
 }
 
 // readyzHandler handles readiness probes
@@ -235,10 +237,14 @@ func (s *Server) readyzHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if s.ready.Load() {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte(`{"status":"ready"}`))
+		if _, err := w.Write([]byte(`{"status":"ready"}`)); err != nil {
+			slog.Warn("failed to write readyz response", slog.String("error", err.Error()))
+		}
 	} else {
 		w.WriteHeader(http.StatusServiceUnavailable)
-		w.Write([]byte(`{"status":"not ready"}`))
+		if _, err := w.Write([]byte(`{"status":"not ready"}`)); err != nil {
+			slog.Warn("failed to write readyz response", slog.String("error", err.Error()))
+		}
 	}
 }
 
