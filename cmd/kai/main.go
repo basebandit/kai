@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log/slog"
@@ -8,6 +9,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"syscall"
+	"time"
 
 	"github.com/basebandit/kai"
 	"github.com/basebandit/kai/cluster"
@@ -23,13 +25,17 @@ var (
 func main() {
 	// CLI flags
 	var (
-		kubeconfig  string
-		contextName string
-		transport   string
-		sseAddr     string
-		logFormat   string
-		logLevel    string
-		showVersion bool
+		kubeconfig     string
+		contextName    string
+		transport      string
+		sseAddr        string
+		logFormat      string
+		logLevel       string
+		tlsCert        string
+		tlsKey         string
+		requestTimeout time.Duration
+		metricsEnabled bool
+		showVersion    bool
 	)
 
 	defaultKubeconfig := filepath.Join(os.Getenv("HOME"), ".kube", "config")
@@ -40,6 +46,10 @@ func main() {
 	flag.StringVar(&sseAddr, "sse-addr", ":8080", "Address for SSE server (only used with -transport=sse)")
 	flag.StringVar(&logFormat, "log-format", "json", "Log format: json (default) or text")
 	flag.StringVar(&logLevel, "log-level", "info", "Log level: debug, info, warn, error")
+	flag.StringVar(&tlsCert, "tls-cert", "", "Path to TLS certificate file (enables HTTPS for SSE)")
+	flag.StringVar(&tlsKey, "tls-key", "", "Path to TLS private key file (enables HTTPS for SSE)")
+	flag.DurationVar(&requestTimeout, "request-timeout", 30*time.Second, "Timeout for Kubernetes API requests")
+	flag.BoolVar(&metricsEnabled, "metrics", true, "Enable Prometheus metrics endpoint at /metrics")
 	flag.BoolVar(&showVersion, "version", false, "Show version information")
 	flag.Parse()
 
@@ -69,9 +79,21 @@ func main() {
 	)
 
 	// Create and configure server
-	s := kai.NewServer(
+	serverOpts := []kai.ServerOption{
 		kai.WithVersion(version),
-	)
+		kai.WithRequestTimeout(requestTimeout),
+		kai.WithMetrics(metricsEnabled),
+	}
+
+	if tlsCert != "" && tlsKey != "" {
+		serverOpts = append(serverOpts, kai.WithTLS(tlsCert, tlsKey))
+		logger.Info("TLS enabled",
+			slog.String("cert", tlsCert),
+			slog.String("key", tlsKey),
+		)
+	}
+
+	s := kai.NewServer(serverOpts...)
 
 	registerAllTools(s, cm)
 
@@ -105,6 +127,14 @@ func main() {
 		}
 	case sig := <-sigChan:
 		logger.Info("shutdown initiated", slog.String("signal", sig.String()))
+
+		// Graceful shutdown with timeout
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		if err := s.Shutdown(shutdownCtx); err != nil {
+			logger.Error("shutdown error", slog.String("error", err.Error()))
+		}
 	}
 
 	logger.Info("server stopped")
