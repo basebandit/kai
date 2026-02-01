@@ -3,7 +3,6 @@ package cluster
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/basebandit/kai"
@@ -57,7 +56,7 @@ func TestInClusterConfig(t *testing.T) {
 func testDetectInClusterNamespace(t *testing.T) {
 	t.Run("NamespaceFileDoesNotExist", func(t *testing.T) {
 		// When the namespace file doesn't exist, should return "default"
-		namespace := detectInClusterNamespace()
+		namespace := detectInClusterNamespace("/nonexistent/path/namespace")
 		assert.Equal(t, "default", namespace)
 	})
 	
@@ -67,16 +66,13 @@ func testDetectInClusterNamespace(t *testing.T) {
 		namespaceFile := filepath.Join(tmpDir, "namespace")
 		
 		// Write a test namespace to the file
-		testNamespace := "my-custom-namespace"
-		err := os.WriteFile(namespaceFile, []byte(testNamespace), 0600)
+		testNs := "my-custom-namespace"
+		err := os.WriteFile(namespaceFile, []byte(testNs), 0600)
 		require.NoError(t, err)
 		
-		// Temporarily replace the constant path (we'll need to refactor detectInClusterNamespace to accept a path parameter for testing)
-		// For now, we'll test the logic by reading directly
-		data, err := os.ReadFile(namespaceFile)
-		require.NoError(t, err)
-		namespace := strings.TrimSpace(string(data))
-		assert.Equal(t, testNamespace, namespace)
+		// Test the actual function
+		namespace := detectInClusterNamespace(namespaceFile)
+		assert.Equal(t, testNs, namespace)
 	})
 	
 	t.Run("NamespaceFileIsEmpty", func(t *testing.T) {
@@ -87,13 +83,8 @@ func testDetectInClusterNamespace(t *testing.T) {
 		err := os.WriteFile(namespaceFile, []byte(""), 0600)
 		require.NoError(t, err)
 		
-		// Read and verify empty file returns default
-		data, err := os.ReadFile(namespaceFile)
-		require.NoError(t, err)
-		namespace := strings.TrimSpace(string(data))
-		if namespace == "" {
-			namespace = "default"
-		}
+		// Test that empty file returns "default"
+		namespace := detectInClusterNamespace(namespaceFile)
 		assert.Equal(t, "default", namespace)
 	})
 	
@@ -102,15 +93,20 @@ func testDetectInClusterNamespace(t *testing.T) {
 		tmpDir := t.TempDir()
 		namespaceFile := filepath.Join(tmpDir, "namespace")
 		
-		testNamespace := "my-namespace"
-		err := os.WriteFile(namespaceFile, []byte("  "+testNamespace+"  \n"), 0600)
+		testNs := "my-namespace"
+		err := os.WriteFile(namespaceFile, []byte("  "+testNs+"  \n"), 0600)
 		require.NoError(t, err)
 		
-		// Read and verify whitespace is trimmed
-		data, err := os.ReadFile(namespaceFile)
-		require.NoError(t, err)
-		namespace := strings.TrimSpace(string(data))
-		assert.Equal(t, testNamespace, namespace)
+		// Test that whitespace is trimmed
+		namespace := detectInClusterNamespace(namespaceFile)
+		assert.Equal(t, testNs, namespace)
+	})
+	
+	t.Run("DefaultPath", func(t *testing.T) {
+		// When no custom path is provided, should use default path
+		// Since the default path won't exist in test environment, it should return "default"
+		namespace := detectInClusterNamespace("")
+		assert.Equal(t, "default", namespace)
 	})
 }
 

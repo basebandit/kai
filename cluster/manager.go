@@ -79,7 +79,7 @@ func (cm *Manager) LoadInClusterConfig(name string) error {
 	}
 
 	// Detect the namespace from the service account namespace file
-	namespace := detectInClusterNamespace()
+	namespace := detectInClusterNamespace("")
 
 	contextInfo := &kai.ContextInfo{
 		Name:       name,
@@ -517,8 +517,12 @@ func validateFile(path string) error {
 
 // detectInClusterNamespace reads the namespace from the service account namespace file
 // when running inside a Kubernetes pod. Falls back to "default" if the file cannot be read.
-func detectInClusterNamespace() string {
-	const namespaceFile = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+// If customPath is provided and not empty, it will be used instead of the default Kubernetes path.
+func detectInClusterNamespace(customPath string) string {
+	namespaceFile := "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+	if customPath != "" {
+		namespaceFile = customPath
+	}
 	
 	// #nosec G304 - This is a well-known Kubernetes service account file path
 	data, err := os.ReadFile(namespaceFile)
