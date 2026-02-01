@@ -122,25 +122,32 @@ func NewServer(opts ...ServerOption) *Server {
 
 // AddTool adds a tool to the MCP server
 func (s *Server) AddTool(tool mcp.Tool, handler server.ToolHandlerFunc) {
-	// Wrap handler with metrics if enabled
-	if s.cfg.metricsEnabled {
-		originalHandler := handler
-		handler = func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-			start := time.Now()
-			result, err := originalHandler(ctx, request)
-			duration := time.Since(start).Seconds()
+	originalHandler := handler
+	handler = func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		toolName := request.Params.Name
+		slog.Info("tool request received", slog.String("tool", toolName))
 
-			toolName := request.Params.Name
-			status := "success"
-			if err != nil || (result != nil && result.IsError) {
-				status = "error"
-			}
+		start := time.Now()
+		result, err := originalHandler(ctx, request)
+		duration := time.Since(start).Seconds()
 
+		status := "success"
+		if err != nil || (result != nil && result.IsError) {
+			status = "error"
+		}
+
+		slog.Info("tool request completed",
+			slog.String("tool", toolName),
+			slog.String("status", status),
+			slog.Float64("duration_seconds", duration),
+		)
+
+		if s.cfg.metricsEnabled {
 			requestsTotal.WithLabelValues(toolName, status).Inc()
 			requestDuration.WithLabelValues(toolName).Observe(duration)
-
-			return result, err
 		}
+
+		return result, err
 	}
 	s.mcpServer.AddTool(tool, handler)
 }
