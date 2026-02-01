@@ -119,7 +119,7 @@ func testSetCurrentContextWithInClusterConfig(t *testing.T) {
 
 		// Create two fake contexts, one with ConfigPath and one without
 		fakeClient := fake.NewSimpleClientset()
-		
+
 		inClusterContext := &kai.ContextInfo{
 			Name:       "in-cluster",
 			Cluster:    "in-cluster",
@@ -129,7 +129,7 @@ func testSetCurrentContextWithInClusterConfig(t *testing.T) {
 			ConfigPath: "", // Empty ConfigPath
 			IsActive:   true,
 		}
-		
+
 		fileBasedContext := &kai.ContextInfo{
 			Name:       "file-based",
 			Cluster:    "cluster1",
