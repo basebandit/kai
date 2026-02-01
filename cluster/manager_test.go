@@ -50,6 +50,7 @@ func TestExtendedClusterManager(t *testing.T) {
 
 func TestInClusterConfig(t *testing.T) {
 	t.Run("LoadInClusterConfig", testLoadInClusterConfig)
+	t.Run("SetCurrentContextWithInClusterConfig", testSetCurrentContextWithInClusterConfig)
 }
 
 func testLoadInClusterConfig(t *testing.T) {
@@ -83,6 +84,81 @@ func testLoadInClusterConfig(t *testing.T) {
 		err := cm.LoadInClusterConfig("existing-context")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "context existing-context already exists")
+	})
+}
+
+func testSetCurrentContextWithInClusterConfig(t *testing.T) {
+	t.Run("SetCurrentContextWithEmptyConfigPath", func(t *testing.T) {
+		// Test that SetCurrentContext doesn't fail when ConfigPath is empty (in-cluster config)
+		cm := New()
+
+		// Create a fake in-cluster context with empty ConfigPath
+		fakeClient := fake.NewSimpleClientset()
+		inClusterContext := &kai.ContextInfo{
+			Name:       "in-cluster",
+			Cluster:    "in-cluster",
+			User:       "service-account",
+			Namespace:  "default",
+			ServerURL:  "https://kubernetes.default.svc",
+			ConfigPath: "", // Empty ConfigPath simulates in-cluster config
+			IsActive:   false,
+		}
+		cm.clients["in-cluster"] = fakeClient
+		cm.contexts["in-cluster"] = inClusterContext
+
+		// This should not fail even though ConfigPath is empty
+		err := cm.SetCurrentContext("in-cluster")
+		assert.NoError(t, err)
+		assert.Equal(t, "in-cluster", cm.GetCurrentContext())
+		assert.True(t, inClusterContext.IsActive)
+	})
+
+	t.Run("SetCurrentContextWithValidConfigPath", func(t *testing.T) {
+		// Test that SetCurrentContext still calls updateKubeconfigCurrentContext with a valid ConfigPath
+		cm := New()
+
+		// Create two fake contexts, one with ConfigPath and one without
+		fakeClient := fake.NewSimpleClientset()
+		
+		inClusterContext := &kai.ContextInfo{
+			Name:       "in-cluster",
+			Cluster:    "in-cluster",
+			User:       "service-account",
+			Namespace:  "default",
+			ServerURL:  "https://kubernetes.default.svc",
+			ConfigPath: "", // Empty ConfigPath
+			IsActive:   true,
+		}
+		
+		fileBasedContext := &kai.ContextInfo{
+			Name:       "file-based",
+			Cluster:    "cluster1",
+			User:       "user1",
+			Namespace:  "default",
+			ServerURL:  "https://example.com",
+			ConfigPath: "/path/to/kubeconfig", // Non-empty ConfigPath
+			IsActive:   false,
+		}
+
+		cm.clients["in-cluster"] = fakeClient
+		cm.contexts["in-cluster"] = inClusterContext
+		cm.clients["file-based"] = fakeClient
+		cm.contexts["file-based"] = fileBasedContext
+		cm.currentContext = "in-cluster"
+
+		// Switch to file-based context - this would normally update the kubeconfig file
+		// but will fail here because the file doesn't exist - that's expected
+		err := cm.SetCurrentContext("file-based")
+		// We expect an error because the kubeconfig file doesn't exist
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to update kubeconfig file")
+
+		// Switch to in-cluster context - should succeed without trying to update kubeconfig
+		err = cm.SetCurrentContext("in-cluster")
+		assert.NoError(t, err)
+		assert.Equal(t, "in-cluster", cm.GetCurrentContext())
+		assert.True(t, inClusterContext.IsActive)
+		assert.False(t, fileBasedContext.IsActive)
 	})
 }
 
