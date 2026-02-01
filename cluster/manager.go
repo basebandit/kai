@@ -78,11 +78,14 @@ func (cm *Manager) LoadInClusterConfig(name string) error {
 		return fmt.Errorf("failed to connect to cluster: %w", err)
 	}
 
+	// Detect the namespace from the service account namespace file
+	namespace := detectInClusterNamespace("")
+
 	contextInfo := &kai.ContextInfo{
 		Name:       name,
 		Cluster:    "in-cluster",
 		User:       "service-account",
-		Namespace:  "default",
+		Namespace:  namespace,
 		ServerURL:  config.Host,
 		ConfigPath: "",
 		IsActive:   true,
@@ -509,6 +512,36 @@ func validateFile(path string) error {
 		return errors.New("the provided path is a directory, not a file")
 	}
 	return nil
+}
+
+// detectInClusterNamespace reads the namespace from the service account namespace file
+// when running inside a Kubernetes pod. Falls back to "default" if the file cannot be read.
+// If customPath is provided and not empty, it will be used instead of the default Kubernetes path.
+func detectInClusterNamespace(customPath string) string {
+	namespaceFile := "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+	if customPath != "" {
+		namespaceFile = customPath
+	}
+
+	// #nosec G304 - This is a well-known Kubernetes service account file path
+	data, err := os.ReadFile(namespaceFile)
+	if err != nil {
+		slog.Debug("failed to read namespace from service account file, using default",
+			slog.String("file", namespaceFile),
+			slog.String("error", err.Error()),
+		)
+		return "default"
+	}
+
+	namespace := strings.TrimSpace(string(data))
+	if namespace == "" {
+		slog.Debug("namespace file is empty, using default",
+			slog.String("file", namespaceFile),
+		)
+		return "default"
+	}
+
+	return namespace
 }
 
 func ptr[T any](v T) *T {
