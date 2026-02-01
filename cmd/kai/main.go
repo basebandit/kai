@@ -27,6 +27,7 @@ func main() {
 	var (
 		kubeconfig     string
 		contextName    string
+		inCluster      bool
 		transport      string
 		sseAddr        string
 		logFormat      string
@@ -42,6 +43,7 @@ func main() {
 
 	flag.StringVar(&kubeconfig, "kubeconfig", defaultKubeconfig, "Path to kubeconfig file")
 	flag.StringVar(&contextName, "context", "local", "Name for the loaded context")
+	flag.BoolVar(&inCluster, "in-cluster", false, "Use in-cluster Kubernetes configuration (for running inside a pod)")
 	flag.StringVar(&transport, "transport", "stdio", "Transport mode: stdio (default) or sse")
 	flag.StringVar(&sseAddr, "sse-addr", ":8080", "Address for SSE server (only used with -transport=sse)")
 	flag.StringVar(&logFormat, "log-format", "json", "Log format: json (default) or text")
@@ -65,18 +67,29 @@ func main() {
 	// Initialize cluster manager
 	cm := cluster.New()
 
-	if err := cm.LoadKubeConfig(contextName, kubeconfig); err != nil {
-		logger.Error("failed to load kubeconfig",
-			slog.String("path", kubeconfig),
-			slog.String("error", err.Error()),
+	if inCluster {
+		if err := cm.LoadInClusterConfig(contextName); err != nil {
+			logger.Error("failed to load in-cluster config",
+				slog.String("error", err.Error()),
+			)
+			os.Exit(1)
+		}
+		logger.Info("in-cluster config loaded",
+			slog.String("context", contextName),
 		)
-		os.Exit(1)
+	} else {
+		if err := cm.LoadKubeConfig(contextName, kubeconfig); err != nil {
+			logger.Error("failed to load kubeconfig",
+				slog.String("path", kubeconfig),
+				slog.String("error", err.Error()),
+			)
+			os.Exit(1)
+		}
+		logger.Info("kubeconfig loaded",
+			slog.String("path", kubeconfig),
+			slog.String("context", contextName),
+		)
 	}
-
-	logger.Info("kubeconfig loaded",
-		slog.String("path", kubeconfig),
-		slog.String("context", contextName),
-	)
 
 	// Create and configure server
 	serverOpts := []kai.ServerOption{

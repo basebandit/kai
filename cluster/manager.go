@@ -18,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/portforward"
 	"k8s.io/client-go/transport/spdy"
@@ -43,6 +44,62 @@ func New() *Manager {
 		contexts:         make(map[string]*kai.ContextInfo),
 		currentNamespace: "default",
 	}
+}
+
+// LoadInClusterConfig loads the in-cluster Kubernetes configuration
+// This is used when kai is running inside a Kubernetes pod
+func (cm *Manager) LoadInClusterConfig(name string) error {
+	if name == "" {
+		name = "in-cluster"
+	}
+
+	if _, exists := cm.contexts[name]; exists {
+		return fmt.Errorf("context %s already exists", name)
+	}
+
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load in-cluster config: %w", err)
+	}
+
+	config.Timeout = 30 * time.Second
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return fmt.Errorf("error creating client: %w", err)
+	}
+
+	dynamicClient, err := dynamic.NewForConfig(config)
+	if err != nil {
+		return fmt.Errorf("error creating dynamic client: %w", err)
+	}
+
+	if err := testConnection(clientset); err != nil {
+		return fmt.Errorf("failed to connect to cluster: %w", err)
+	}
+
+	contextInfo := &kai.ContextInfo{
+		Name:       name,
+		Cluster:    "in-cluster",
+		User:       "service-account",
+		Namespace:  "default",
+		ServerURL:  config.Host,
+		ConfigPath: "",
+		IsActive:   true,
+	}
+
+	cm.kubeconfigs[name] = ""
+	cm.clients[name] = clientset
+	cm.dynamicClients[name] = dynamicClient
+	cm.contexts[name] = contextInfo
+	cm.currentContext = name
+
+	slog.Info("in-cluster config loaded",
+		slog.String("context", name),
+		slog.String("server", config.Host),
+	)
+
+	return nil
 }
 
 // LoadKubeConfig loads a kubeconfig file into the manager
