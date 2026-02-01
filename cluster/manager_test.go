@@ -50,6 +50,7 @@ func TestExtendedClusterManager(t *testing.T) {
 
 func TestInClusterConfig(t *testing.T) {
 	t.Run("LoadInClusterConfig", testLoadInClusterConfig)
+	t.Run("DetectInClusterNamespace", testDetectInClusterNamespace)
 }
 
 func testLoadInClusterConfig(t *testing.T) {
@@ -83,6 +84,54 @@ func testLoadInClusterConfig(t *testing.T) {
 		err := cm.LoadInClusterConfig("existing-context")
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "context existing-context already exists")
+	})
+}
+
+func testDetectInClusterNamespace(t *testing.T) {
+	t.Run("FileDoesNotExist", func(t *testing.T) {
+		// When the file doesn't exist (normal case outside cluster), should return "default"
+		namespace := readNamespaceFromFile("/nonexistent/path/namespace")
+		assert.Equal(t, "default", namespace)
+	})
+
+	t.Run("FileExistsWithNamespace", func(t *testing.T) {
+		// Create a temporary file that simulates the service account namespace file
+		tmpDir := t.TempDir()
+		namespaceFile := filepath.Join(tmpDir, "namespace")
+		err := os.WriteFile(namespaceFile, []byte("my-custom-namespace\n"), 0644)
+		require.NoError(t, err)
+
+		namespace := readNamespaceFromFile(namespaceFile)
+		assert.Equal(t, "my-custom-namespace", namespace)
+	})
+
+	t.Run("FileIsEmpty", func(t *testing.T) {
+		// Create a temporary empty file
+		tmpDir := t.TempDir()
+		namespaceFile := filepath.Join(tmpDir, "namespace")
+		err := os.WriteFile(namespaceFile, []byte(""), 0644)
+		require.NoError(t, err)
+
+		namespace := readNamespaceFromFile(namespaceFile)
+		assert.Equal(t, "default", namespace)
+	})
+
+	t.Run("FileWithWhitespace", func(t *testing.T) {
+		// Create a file with leading/trailing whitespace
+		tmpDir := t.TempDir()
+		namespaceFile := filepath.Join(tmpDir, "namespace")
+		err := os.WriteFile(namespaceFile, []byte("  production  \n"), 0644)
+		require.NoError(t, err)
+
+		namespace := readNamespaceFromFile(namespaceFile)
+		assert.Equal(t, "production", namespace)
+	})
+
+	t.Run("DefaultFunctionBehavior", func(t *testing.T) {
+		// Test that detectInClusterNamespace calls readNamespaceFromFile with correct path
+		// Since the actual file won't exist in test environment, it should return "default"
+		namespace := detectInClusterNamespace()
+		assert.Equal(t, "default", namespace)
 	})
 }
 
