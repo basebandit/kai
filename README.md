@@ -1,140 +1,248 @@
 <p align="center">
-  <img src="./kai.jpg" alt="Kai Logo">
+  <img src="./kai.jpg" alt="Kai Logo" width="200">
 </p>
 
-# Kai - Kubernetes MCP Server
+<h1 align="center">Kai</h1>
 
-A Model Context Protocol (MCP) server for managing Kubernetes clusters through LLM clients like Claude and Ollama.
+<p align="center">
+  <strong>Talk to your Kubernetes cluster using natural language</strong>
+</p>
 
-## Overview
+<p align="center">
+  <a href="https://github.com/basebandit/kai/actions"><img src="https://github.com/basebandit/kai/workflows/CI/badge.svg" alt="CI Status"></a>
+  <a href="https://goreportcard.com/report/github.com/basebandit/kai"><img src="https://goreportcard.com/badge/github.com/basebandit/kai" alt="Go Report Card"></a>
+  <a href="https://github.com/basebandit/kai/releases"><img src="https://img.shields.io/github/v/release/basebandit/kai" alt="Release"></a>
+  <a href="https://github.com/basebandit/kai/blob/main/LICENSE"><img src="https://img.shields.io/github/license/basebandit/kai" alt="License"></a>
+</p>
 
-Kai provides a bridge between large language models (LLMs) and your Kubernetes clusters, enabling natural language interaction with Kubernetes resources. The server exposes a comprehensive set of tools for managing clusters, namespaces, pods, deployments, services, and other Kubernetes resources.
+<p align="center">
+  <a href="#quick-start">Quick Start</a> •
+  <a href="#installation">Installation</a> •
+  <a href="#what-can-i-do">What Can I Do?</a> •
+  <a href="#configuration">Configuration</a> •
+  <a href="#production-deployment">Production</a>
+</p>
 
-## Features
+---
 
-### Core Workloads
-- [x] **Pods** - Create, list, get, delete, and stream logs
-- [x] **Deployments** - Create, list, describe, and update
-- [x] **Jobs** - Batch workload management (create, get, list, delete)
-- [x] **CronJobs** - Scheduled batch workloads (create, get, list, delete)
+Kai is a [Model Context Protocol (MCP)](https://modelcontextprotocol.io) server that lets you manage Kubernetes clusters through AI assistants like Claude, Cursor, and VS Code Copilot.
 
-### Networking
-- [x] **Services** - Create, get, list, and delete
-- [x] **Ingress** - HTTP/HTTPS routing, TLS configuration (create, get, list, update, delete)
+Instead of memorizing kubectl commands, just ask:
 
-### Configuration
-- [x] **ConfigMaps** - Configuration management (create, get, list, update, delete)
-- [x] **Secrets** - Secret management (create, get, list, update, delete)
-- [x] **Namespaces** - Namespace management (create, get, list, delete)
+> "List all pods in the production namespace"
+> "Scale the api deployment to 5 replicas"
+> "Show me the logs for the failing pod"
 
-### Cluster Operations
-- [x] **Context Management** - Switch contexts, list contexts, rename, delete
-- [ ] **Nodes** - Node monitoring, cordoning, and draining
-- [ ] **Cluster Health** - Cluster status and resource metrics
+---
 
-### Storage
-- [ ] **Persistent Volumes** - PV and PVC management
-- [ ] **Storage Classes** - Storage class operations
+## Quick Start
 
-### Security
-- [ ] **RBAC** - Roles, RoleBindings, and ServiceAccounts
+### 1. Install Kai
 
-### Utilities
-- [x] **Port Forwarding** - Forward ports to pods and services (start, stop, list sessions)
-
-### Advanced
-- [ ] **Custom Resources** - CRD and custom resource operations
-- [ ] **Events** - Event streaming and filtering
-- [ ] **API Discovery** - API resource exploration
-
-## Requirements
-
-The server connects to your current kubectl context by default. Ensure you have access to a Kubernetes cluster configured for kubectl (e.g., minikube, Rancher Desktop, kind, EKS, GKE, AKS).
-
-## Installation
-
-```sh
+```bash
 go install github.com/basebandit/kai/cmd/kai@latest
 ```
 
-## CLI Options
+### 2. Add to Claude Desktop
 
-```
-kai [options]
+Edit your config file:
 
-Options:
-  -kubeconfig string   Path to kubeconfig file (default "~/.kube/config")
-  -context string      Name for the loaded context (default "local")
-  -transport string    Transport mode: stdio (default) or sse
-  -sse-addr string     Address for SSE server (default ":8080")
-  -log-format string   Log format: json (default) or text
-  -log-level string    Log level: debug, info, warn, error (default "info")
-  -version             Show version information
-```
-
-Logs are written to stderr in structured JSON format by default, making them easy to parse:
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Linux**: `~/.config/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
-{"time":"2024-01-15T10:30:00Z","level":"INFO","msg":"kubeconfig loaded","path":"/home/user/.kube/config","context":"local"}
-{"time":"2024-01-15T10:30:00Z","level":"INFO","msg":"starting server","transport":"stdio"}
+{
+  "mcpServers": {
+    "kubernetes": {
+      "command": "kai"
+    }
+  }
+}
 ```
+
+### 3. Restart Claude Desktop
+
+That's it! Start asking questions about your cluster.
+
+---
+
+## Installation
+
+### Using Go (Recommended)
+
+```bash
+go install github.com/basebandit/kai/cmd/kai@latest
+```
+
+### Download Binary
+
+Download from the [releases page](https://github.com/basebandit/kai/releases):
+
+**macOS (Apple Silicon)**
+```bash
+curl -LO https://github.com/basebandit/kai/releases/latest/download/kai_Darwin_arm64.tar.gz
+tar -xzf kai_Darwin_arm64.tar.gz
+sudo mv kai /usr/local/bin/
+```
+
+**macOS (Intel)**
+```bash
+curl -LO https://github.com/basebandit/kai/releases/latest/download/kai_Darwin_x86_64.tar.gz
+tar -xzf kai_Darwin_x86_64.tar.gz
+sudo mv kai /usr/local/bin/
+```
+
+**Linux**
+```bash
+curl -LO https://github.com/basebandit/kai/releases/latest/download/kai_Linux_x86_64.tar.gz
+tar -xzf kai_Linux_x86_64.tar.gz
+sudo mv kai /usr/local/bin/
+```
+
+**Windows (PowerShell)**
+```powershell
+Invoke-WebRequest -Uri https://github.com/basebandit/kai/releases/latest/download/kai_Windows_x86_64.zip -OutFile kai.zip
+Expand-Archive kai.zip -DestinationPath .
+Move-Item kai.exe C:\Windows\System32\
+```
+
+### Build from Source
+
+```bash
+git clone https://github.com/basebandit/kai.git
+cd kai
+go build -o kai ./cmd/kai
+sudo mv kai /usr/local/bin/
+```
+
+### Verify Installation
+
+```bash
+kai -version
+```
+
+---
+
+## What Can I Do?
+
+Here are some things you can ask your AI assistant once Kai is configured:
+
+### Managing Pods
+- "List all pods in the default namespace"
+- "Show me pods that aren't running"
+- "Get the logs from pod nginx-abc123"
+- "Delete the crashed pod in staging"
+
+### Working with Deployments
+- "Create a deployment named api with 3 replicas using nginx:latest"
+- "Scale the frontend deployment to 10 replicas"
+- "Roll back the api deployment"
+- "What's the status of all deployments?"
+
+### Services & Networking
+- "Create a service for the nginx deployment"
+- "List all services in the production namespace"
+- "Set up an ingress for api.example.com"
+
+### Configuration
+- "Create a configmap from these key-value pairs"
+- "Show me all secrets in the default namespace"
+- "Update the database configmap"
+
+### Jobs & Scheduled Tasks
+- "Create a job that runs the backup script"
+- "Show me all cronjobs"
+- "Suspend the nightly-cleanup cronjob"
+
+### Debugging
+- "Port forward the postgres service to localhost:5432"
+- "Stream logs from all api pods"
+- "Why is my pod failing?"
+
+---
 
 ## Configuration
 
-### Claude Desktop
+### Supported MCP Clients
 
-Edit your Claude Desktop configuration:
+<details>
+<summary><strong>Claude Desktop</strong></summary>
 
-```sh
-# macOS
-code ~/Library/Application\ Support/Claude/claude_desktop_config.json
-
-# Linux
-code ~/.config/Claude/claude_desktop_config.json
-```
-
-Add the server configuration:
+Edit your config file:
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Linux**: `~/.config/Claude/claude_desktop_config.json`
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
 {
   "mcpServers": {
     "kubernetes": {
-      "command": "/path/to/kai"
+      "command": "kai"
     }
   }
 }
 ```
+</details>
 
-With custom kubeconfig:
+<details>
+<summary><strong>Claude Code (VS Code Extension)</strong></summary>
+
+Run in terminal:
+```bash
+claude mcp add kubernetes -- kai
+```
+
+Or edit `~/.claude/settings.json`:
+```json
+{
+  "mcpServers": {
+    "kubernetes": {
+      "command": "kai"
+    }
+  }
+}
+```
+</details>
+
+<details>
+<summary><strong>Cursor</strong></summary>
+
+Add to Cursor's MCP settings (Settings → MCP):
 
 ```json
 {
   "mcpServers": {
     "kubernetes": {
-      "command": "/path/to/kai",
-      "args": ["-kubeconfig", "/path/to/custom/kubeconfig"]
+      "command": "kai"
     }
   }
 }
 ```
+</details>
 
-### Cursor
+<details>
+<summary><strong>VS Code (GitHub Copilot)</strong></summary>
 
-Add to your Cursor MCP settings:
+Add to your VS Code `settings.json`:
 
 ```json
 {
-  "mcpServers": {
-    "kubernetes": {
-      "command": "/path/to/kai"
+  "mcp": {
+    "servers": {
+      "kubernetes": {
+        "command": "kai"
+      }
     }
   }
 }
 ```
+</details>
 
-### Continue
+<details>
+<summary><strong>Continue</strong></summary>
 
-Add to your Continue configuration (`~/.continue/config.json`):
+Add to `~/.continue/config.json`:
 
 ```json
 {
@@ -143,52 +251,256 @@ Add to your Continue configuration (`~/.continue/config.json`):
       {
         "transport": {
           "type": "stdio",
-          "command": "/path/to/kai"
+          "command": "kai"
         }
       }
     ]
   }
 }
 ```
-
-### SSE Mode (Web Clients)
-
-For web-based clients or custom integrations, run in SSE mode:
-
-```sh
-kai -transport=sse -sse-addr=:8080
-```
-
-Then connect to `http://localhost:8080/sse`.
+</details>
 
 ### Custom Kubeconfig
 
-By default, Kai uses `~/.kube/config`. You can specify a different kubeconfig:
+By default, Kai uses `~/.kube/config`. To use a different config:
 
-```sh
-kai -kubeconfig=/path/to/custom/kubeconfig -context=my-cluster
+```json
+{
+  "mcpServers": {
+    "kubernetes": {
+      "command": "kai",
+      "args": ["-kubeconfig", "/path/to/kubeconfig"]
+    }
+  }
+}
 ```
 
-## Usage Examples
+### Multiple Clusters
 
-Once configured, you can interact with your cluster using natural language:
+Set up different kai instances for each cluster in Claude Desktop:
 
-- "List all pods in the default namespace"
-- "Create a deployment named nginx with 3 replicas using the nginx:latest image"
-- "Show me the logs for pod my-app"
-- "Delete the service named backend"
-- "Create a cronjob that runs every 5 minutes"
-- "Create an ingress for my-app with TLS enabled"
-- "Port forward service nginx on port 8080:80"
+```json
+{
+  "mcpServers": {
+    "k8s-prod": {
+      "command": "kai",
+      "args": ["-kubeconfig", "/Users/you/.kube/prod-config", "-context", "production"]
+    },
+    "k8s-staging": {
+      "command": "kai",
+      "args": ["-kubeconfig", "/Users/you/.kube/staging-config", "-context", "staging"]
+    }
+  }
+}
+```
 
-## Contributing
-
-Contributions are welcome! Please see our contributing guidelines for more information.
-
-## License
-
-This project is licensed under the MIT License.
+> **Note**: Use absolute paths (not `~`) for kubeconfig files in MCP configurations.
 
 ---
 
-![Kubernetes MCP Server](./claude_desktop.png)
+## CLI Options
+
+```
+kai [options]
+
+Options:
+  -kubeconfig string      Path to kubeconfig file (default "~/.kube/config")
+  -context string         Context name (default "local")
+  -transport string       Transport mode: stdio or sse (default "stdio")
+  -sse-addr string        SSE server address (default ":8080")
+  -tls-cert string        TLS certificate file (for HTTPS)
+  -tls-key string         TLS private key file (for HTTPS)
+  -request-timeout        API request timeout (default 30s)
+  -metrics                Enable Prometheus metrics (default true)
+  -log-format string      Log format: json or text (default "json")
+  -log-level string       Log level: debug, info, warn, error (default "info")
+  -version                Show version
+```
+
+---
+
+## Supported Resources
+
+| Category | Resources | Operations |
+|----------|-----------|------------|
+| **Workloads** | Pods, Deployments, Jobs, CronJobs | Create, Read, Update, Delete, Scale, Logs |
+| **Networking** | Services, Ingress | Create, Read, Update, Delete |
+| **Config** | ConfigMaps, Secrets, Namespaces | Create, Read, Update, Delete |
+| **Operations** | Contexts, Port Forwarding | Switch, List, Forward |
+
+---
+
+## Production Deployment
+
+For production use cases, Kai supports SSE transport with TLS, health endpoints, and Prometheus metrics.
+
+### SSE Mode (for web clients)
+
+```bash
+kai -transport=sse -sse-addr=:8080
+```
+
+With TLS:
+```bash
+kai -transport=sse -sse-addr=:8443 -tls-cert=cert.pem -tls-key=key.pem
+```
+
+### Health Endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /healthz` | Liveness probe |
+| `GET /readyz` | Readiness probe |
+| `GET /metrics` | Prometheus metrics |
+
+### Prometheus Metrics
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `kai_requests_total` | Counter | Total requests by tool and status |
+| `kai_request_duration_seconds` | Histogram | Request latency |
+| `kai_active_connections` | Gauge | Active SSE connections |
+
+### Kubernetes Deployment
+
+<details>
+<summary>Click to expand Kubernetes manifests</summary>
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kai
+  template:
+    metadata:
+      labels:
+        app: kai
+    spec:
+      serviceAccountName: kai
+      containers:
+        - name: kai
+          image: ghcr.io/basebandit/kai:latest
+          args: ["-transport=sse", "-sse-addr=:8080"]
+          ports:
+            - containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kai
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kai
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin  # Scope down for production!
+subjects:
+  - kind: ServiceAccount
+    name: kai
+    namespace: default
+```
+</details>
+
+### Docker
+
+```bash
+docker run -v ~/.kube/config:/root/.kube/config:ro \
+  ghcr.io/basebandit/kai:latest -transport=sse
+```
+
+---
+
+## Viewing Logs
+
+Kai outputs structured JSON logs to stderr.
+
+**Claude Desktop logs location:**
+- macOS: `~/Library/Logs/Claude/mcp-server-kubernetes.log`
+- Linux: `~/.config/Claude/logs/mcp-server-kubernetes.log`
+
+```bash
+# Watch logs in real-time
+tail -f ~/Library/Logs/Claude/mcp-server-kubernetes.log
+```
+
+---
+
+## Troubleshooting
+
+**Kai command not found**
+```bash
+# Check if kai is in your PATH
+which kai
+
+# If using go install, ensure GOPATH/bin is in PATH
+export PATH=$PATH:$(go env GOPATH)/bin
+```
+
+**Can't connect to cluster**
+```bash
+# Verify kubectl works
+kubectl cluster-info
+kubectl get nodes
+```
+
+**MCP client not seeing Kai**
+1. Restart the MCP client after config changes
+2. Check the config file syntax (valid JSON)
+3. Verify the kai path is correct
+
+**Enable debug logging**
+```json
+{
+  "mcpServers": {
+    "kubernetes": {
+      "command": "kai",
+      "args": ["-log-level", "debug"]
+    }
+  }
+}
+```
+
+---
+
+## Contributing
+
+Contributions are welcome! See our [contributing guidelines](CONTRIBUTING.md).
+
+```bash
+git clone https://github.com/basebandit/kai.git
+cd kai
+go test ./...
+go build -o kai ./cmd/kai
+```
+
+---
+
+## License
+
+MIT License - see [LICENSE](LICENSE) for details.
+
+---
+
+<p align="center">
+  <img src="./claude_desktop.png" alt="Kai in Claude Desktop" width="800">
+</p>
+
+<p align="center">
+  <a href="https://mcpservers.org">Listed on MCP Servers</a>
+</p>
