@@ -65,7 +65,7 @@ func readNamespaceFromFile(namespaceFile string) string {
 		)
 		return "default"
 	}
-	
+
 	namespace := strings.TrimSpace(string(data))
 	if namespace == "" {
 		slog.Debug("namespace file was empty, using default",
@@ -73,7 +73,7 @@ func readNamespaceFromFile(namespaceFile string) string {
 		)
 		return "default"
 	}
-	
+
 	return namespace
 }
 
