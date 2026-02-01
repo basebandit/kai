@@ -349,8 +349,11 @@ func (cm *Manager) SetCurrentContext(contextName string) error {
 		contextInfo.IsActive = true
 
 		// Update the kubeconfig file to reflect the context switch
-		if err := cm.updateKubeconfigCurrentContext(contextName, contextInfo.ConfigPath); err != nil {
-			return fmt.Errorf("failed to update kubeconfig file: %w", err)
+		// Skip the update for in-cluster configurations (empty ConfigPath)
+		if contextInfo.ConfigPath != "" {
+			if err := cm.updateKubeconfigCurrentContext(contextName, contextInfo.ConfigPath); err != nil {
+				return fmt.Errorf("failed to update kubeconfig file: %w", err)
+			}
 		}
 	}
 
