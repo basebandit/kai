@@ -46,6 +46,33 @@ func New() *Manager {
 	}
 }
 
+// detectInClusterNamespace reads the namespace from the service account file
+// that Kubernetes mounts into pods. Returns "default" if the file cannot be read.
+func detectInClusterNamespace() string {
+	const namespaceFile = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+	
+	// #nosec G304 - This is a well-known Kubernetes file path that is safe to read
+	data, err := os.ReadFile(namespaceFile)
+	if err != nil {
+		// If we can't read the file, fall back to "default"
+		slog.Debug("failed to read namespace from service account file, using default",
+			slog.String("file", namespaceFile),
+			slog.String("error", err.Error()),
+		)
+		return "default"
+	}
+	
+	namespace := strings.TrimSpace(string(data))
+	if namespace == "" {
+		slog.Debug("namespace file was empty, using default",
+			slog.String("file", namespaceFile),
+		)
+		return "default"
+	}
+	
+	return namespace
+}
+
 // LoadInClusterConfig loads the in-cluster Kubernetes configuration
 // This is used when kai is running inside a Kubernetes pod
 func (cm *Manager) LoadInClusterConfig(name string) error {
@@ -78,11 +105,14 @@ func (cm *Manager) LoadInClusterConfig(name string) error {
 		return fmt.Errorf("failed to connect to cluster: %w", err)
 	}
 
+	// Detect the actual namespace from the service account file
+	namespace := detectInClusterNamespace()
+
 	contextInfo := &kai.ContextInfo{
 		Name:       name,
 		Cluster:    "in-cluster",
 		User:       "service-account",
-		Namespace:  "default",
+		Namespace:  namespace,
 		ServerURL:  config.Host,
 		ConfigPath: "",
 		IsActive:   true,
@@ -97,6 +127,7 @@ func (cm *Manager) LoadInClusterConfig(name string) error {
 	slog.Info("in-cluster config loaded",
 		slog.String("context", name),
 		slog.String("server", config.Host),
+		slog.String("namespace", namespace),
 	)
 
 	return nil
