@@ -45,6 +45,7 @@ func TestExtendedClusterManager(t *testing.T) {
 	t.Run("ListContexts", testListContexts)
 	t.Run("LoadKubeConfigDuplicateName", testLoadKubeConfigDuplicateName)
 	t.Run("SetCurrentContextUpdatesActiveStatus", testSetCurrentContextUpdatesActiveStatus)
+	t.Run("SetCurrentContextWithEmptyConfigPath", testSetCurrentContextWithEmptyConfigPath)
 	t.Run("UpdateKubeconfigCurrentContext", testUpdateKubeconfigCurrentContext)
 }
 
@@ -599,6 +600,41 @@ users:
 	config, err := clientcmd.Load(updatedBytes)
 	assert.NoError(t, err)
 	assert.Equal(t, testContext2, config.CurrentContext)
+}
+
+func testSetCurrentContextWithEmptyConfigPath(t *testing.T) {
+	cm := New()
+
+	fakeClient1 := fake.NewSimpleClientset()
+	fakeClient2 := fake.NewSimpleClientset()
+
+	// Create a regular context with a config path
+	contextInfo1 := &kai.ContextInfo{
+		Name:       testContext1,
+		ConfigPath: "/some/path/to/config",
+		IsActive:   true,
+	}
+
+	// Create an in-cluster context with empty ConfigPath (simulating in-cluster config)
+	contextInfo2 := &kai.ContextInfo{
+		Name:       "in-cluster",
+		ConfigPath: "", // Empty config path for in-cluster
+		IsActive:   false,
+	}
+
+	cm.clients[testContext1] = fakeClient1
+	cm.clients["in-cluster"] = fakeClient2
+	cm.contexts[testContext1] = contextInfo1
+	cm.contexts["in-cluster"] = contextInfo2
+	cm.currentContext = testContext1
+
+	// Switch to in-cluster context - should succeed without trying to update kubeconfig
+	err := cm.SetCurrentContext("in-cluster")
+	assert.NoError(t, err)
+
+	assert.Equal(t, "in-cluster", cm.currentContext)
+	assert.False(t, cm.contexts[testContext1].IsActive)
+	assert.True(t, cm.contexts["in-cluster"].IsActive)
 }
 
 func testUpdateKubeconfigCurrentContext(t *testing.T) {
