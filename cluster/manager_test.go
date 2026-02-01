@@ -3,7 +3,6 @@ package cluster
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/basebandit/kai"
@@ -91,7 +90,7 @@ func testLoadInClusterConfig(t *testing.T) {
 func testDetectInClusterNamespace(t *testing.T) {
 	t.Run("FileDoesNotExist", func(t *testing.T) {
 		// When the file doesn't exist (normal case outside cluster), should return "default"
-		namespace := detectInClusterNamespace()
+		namespace := readNamespaceFromFile("/nonexistent/path/namespace")
 		assert.Equal(t, "default", namespace)
 	})
 
@@ -102,14 +101,8 @@ func testDetectInClusterNamespace(t *testing.T) {
 		err := os.WriteFile(namespaceFile, []byte("my-custom-namespace\n"), 0644)
 		require.NoError(t, err)
 
-		// Temporarily replace the namespace file path for testing
-		// Since the function uses a const, we'll test the logic by reading the temp file directly
-		data, err := os.ReadFile(namespaceFile)
-		require.NoError(t, err)
-		namespace := strings.TrimSpace(string(data))
-		
+		namespace := readNamespaceFromFile(namespaceFile)
 		assert.Equal(t, "my-custom-namespace", namespace)
-		assert.NotEqual(t, "default", namespace)
 	})
 
 	t.Run("FileIsEmpty", func(t *testing.T) {
@@ -119,15 +112,7 @@ func testDetectInClusterNamespace(t *testing.T) {
 		err := os.WriteFile(namespaceFile, []byte(""), 0644)
 		require.NoError(t, err)
 
-		// Read and test the logic
-		data, err := os.ReadFile(namespaceFile)
-		require.NoError(t, err)
-		namespace := strings.TrimSpace(string(data))
-		
-		if namespace == "" {
-			namespace = "default"
-		}
-		
+		namespace := readNamespaceFromFile(namespaceFile)
 		assert.Equal(t, "default", namespace)
 	})
 
@@ -138,12 +123,15 @@ func testDetectInClusterNamespace(t *testing.T) {
 		err := os.WriteFile(namespaceFile, []byte("  production  \n"), 0644)
 		require.NoError(t, err)
 
-		// Read and test the logic
-		data, err := os.ReadFile(namespaceFile)
-		require.NoError(t, err)
-		namespace := strings.TrimSpace(string(data))
-		
+		namespace := readNamespaceFromFile(namespaceFile)
 		assert.Equal(t, "production", namespace)
+	})
+
+	t.Run("DefaultFunctionBehavior", func(t *testing.T) {
+		// Test that detectInClusterNamespace calls readNamespaceFromFile with correct path
+		// Since the actual file won't exist in test environment, it should return "default"
+		namespace := detectInClusterNamespace()
+		assert.Equal(t, "default", namespace)
 	})
 }
 

@@ -49,8 +49,12 @@ func New() *Manager {
 // detectInClusterNamespace reads the namespace from the service account file
 // that Kubernetes mounts into pods. Returns "default" if the file cannot be read.
 func detectInClusterNamespace() string {
-	const namespaceFile = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
-	
+	return readNamespaceFromFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+}
+
+// readNamespaceFromFile reads the namespace from a file, with fallback to "default"
+// This function is extracted to enable testing without filesystem dependencies
+func readNamespaceFromFile(namespaceFile string) string {
 	// #nosec G304 - This is a well-known Kubernetes file path that is safe to read
 	data, err := os.ReadFile(namespaceFile)
 	if err != nil {
