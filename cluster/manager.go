@@ -523,7 +523,7 @@ func detectInClusterNamespace(customPath string) string {
 	if customPath != "" {
 		namespaceFile = customPath
 	}
-	
+
 	// #nosec G304 - This is a well-known Kubernetes service account file path
 	data, err := os.ReadFile(namespaceFile)
 	if err != nil {
@@ -533,7 +533,7 @@ func detectInClusterNamespace(customPath string) string {
 		)
 		return "default"
 	}
-	
+
 	namespace := strings.TrimSpace(string(data))
 	if namespace == "" {
 		slog.Debug("namespace file is empty, using default",
@@ -541,7 +541,7 @@ func detectInClusterNamespace(customPath string) string {
 		)
 		return "default"
 	}
-	
+
 	return namespace
 }
 
