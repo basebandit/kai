@@ -18,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/portforward"
 	"k8s.io/client-go/transport/spdy"
@@ -27,6 +28,7 @@ import (
 // Manager maintains connections to Kubernetes clusters
 type Manager struct {
 	kubeconfigs      map[string]string
+	restConfigs      map[string]*rest.Config
 	clients          map[string]kubernetes.Interface
 	dynamicClients   map[string]dynamic.Interface
 	contexts         map[string]*kai.ContextInfo
@@ -38,11 +40,72 @@ type Manager struct {
 func New() *Manager {
 	return &Manager{
 		kubeconfigs:      make(map[string]string),
+		restConfigs:      make(map[string]*rest.Config),
 		clients:          make(map[string]kubernetes.Interface),
 		dynamicClients:   make(map[string]dynamic.Interface),
 		contexts:         make(map[string]*kai.ContextInfo),
 		currentNamespace: "default",
 	}
+}
+
+// LoadInClusterConfig loads the in-cluster Kubernetes configuration
+// This is used when kai is running inside a Kubernetes pod
+func (cm *Manager) LoadInClusterConfig(name string) error {
+	if name == "" {
+		name = "in-cluster"
+	}
+
+	if _, exists := cm.contexts[name]; exists {
+		return fmt.Errorf("context %s already exists", name)
+	}
+
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return fmt.Errorf("failed to load in-cluster config: %w", err)
+	}
+
+	config.Timeout = 30 * time.Second
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return fmt.Errorf("error creating client: %w", err)
+	}
+
+	dynamicClient, err := dynamic.NewForConfig(config)
+	if err != nil {
+		return fmt.Errorf("error creating dynamic client: %w", err)
+	}
+
+	if err := testConnection(clientset); err != nil {
+		return fmt.Errorf("failed to connect to cluster: %w", err)
+	}
+
+	// Detect the namespace from the service account namespace file
+	namespace := detectInClusterNamespace("")
+
+	contextInfo := &kai.ContextInfo{
+		Name:       name,
+		Cluster:    "in-cluster",
+		User:       "service-account",
+		Namespace:  namespace,
+		ServerURL:  config.Host,
+		ConfigPath: "",
+		IsActive:   true,
+	}
+
+	cm.kubeconfigs[name] = ""
+	cm.restConfigs[name] = config
+	cm.clients[name] = clientset
+	cm.dynamicClients[name] = dynamicClient
+	cm.contexts[name] = contextInfo
+	cm.currentContext = name
+
+	slog.Info("in-cluster config loaded",
+		slog.String("context", name),
+		slog.String("server", config.Host),
+	)
+
+	return nil
 }
 
 // LoadKubeConfig loads a kubeconfig file into the manager
@@ -69,7 +132,7 @@ func (cm *Manager) LoadKubeConfig(name, path string) error {
 		return err
 	}
 
-	clientset, dynamicClient, err := createClients(resolvedPath)
+	restConfig, clientset, dynamicClient, err := createClients(resolvedPath)
 	if err != nil {
 		return err
 	}
@@ -87,6 +150,7 @@ func (cm *Manager) LoadKubeConfig(name, path string) error {
 
 		if _, exists := cm.contexts[uniqueName]; !exists {
 			cm.kubeconfigs[uniqueName] = resolvedPath
+			cm.restConfigs[uniqueName] = restConfig
 			cm.clients[uniqueName] = clientset
 			cm.dynamicClients[uniqueName] = dynamicClient
 			cm.contexts[uniqueName] = contextInfo
@@ -122,6 +186,7 @@ func (cm *Manager) DeleteContext(name string) error {
 		delete(cm.clients, name)
 		delete(cm.dynamicClients, name)
 		delete(cm.kubeconfigs, name)
+		delete(cm.restConfigs, name)
 
 		cm.currentContext = ""
 		for contextName := range cm.contexts {
@@ -137,6 +202,7 @@ func (cm *Manager) DeleteContext(name string) error {
 	delete(cm.clients, name)
 	delete(cm.dynamicClients, name)
 	delete(cm.kubeconfigs, name)
+	delete(cm.restConfigs, name)
 
 	slog.Info("context deleted", slog.String("context", name))
 	return nil
@@ -173,11 +239,13 @@ func (cm *Manager) RenameContext(oldName, newName string) error {
 	cm.clients[newName] = cm.clients[oldName]
 	cm.dynamicClients[newName] = cm.dynamicClients[oldName]
 	cm.kubeconfigs[newName] = cm.kubeconfigs[oldName]
+	cm.restConfigs[newName] = cm.restConfigs[oldName]
 
 	delete(cm.contexts, oldName)
 	delete(cm.clients, oldName)
 	delete(cm.dynamicClients, oldName)
 	delete(cm.kubeconfigs, oldName)
+	delete(cm.restConfigs, oldName)
 
 	if cm.currentContext == oldName {
 		cm.currentContext = newName
@@ -407,25 +475,25 @@ func (cm *Manager) updateKubeconfigCurrentContext(contextName, configPath string
 }
 
 // createClients creates Kubernetes clients from the kubeconfig file
-func createClients(path string) (kubernetes.Interface, dynamic.Interface, error) {
+func createClients(path string) (*rest.Config, kubernetes.Interface, dynamic.Interface, error) {
 	config, err := clientcmd.BuildConfigFromFlags("", path)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error building config from flags: %w", err)
+		return nil, nil, nil, fmt.Errorf("error building config from flags: %w", err)
 	}
 
 	config.Timeout = 30 * time.Second
 
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error creating client: %w", err)
+		return nil, nil, nil, fmt.Errorf("error creating client: %w", err)
 	}
 
 	dynamicClient, err := dynamic.NewForConfig(config)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error creating dynamic client: %w", err)
+		return nil, nil, nil, fmt.Errorf("error creating dynamic client: %w", err)
 	}
 
-	return clientset, dynamicClient, nil
+	return config, clientset, dynamicClient, nil
 }
 
 // testConnection tests the connection to the Kubernetes cluster
@@ -452,6 +520,36 @@ func validateFile(path string) error {
 		return errors.New("the provided path is a directory, not a file")
 	}
 	return nil
+}
+
+// detectInClusterNamespace reads the namespace from the service account namespace file
+// when running inside a Kubernetes pod. Falls back to "default" if the file cannot be read.
+// If customPath is provided and not empty, it will be used instead of the default Kubernetes path.
+func detectInClusterNamespace(customPath string) string {
+	namespaceFile := "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+	if customPath != "" {
+		namespaceFile = customPath
+	}
+
+	// #nosec G304 - This is a well-known Kubernetes service account file path
+	data, err := os.ReadFile(namespaceFile)
+	if err != nil {
+		slog.Debug("failed to read namespace from service account file, using default",
+			slog.String("file", namespaceFile),
+			slog.String("error", err.Error()),
+		)
+		return "default"
+	}
+
+	namespace := strings.TrimSpace(string(data))
+	if namespace == "" {
+		slog.Debug("namespace file is empty, using default",
+			slog.String("file", namespaceFile),
+		)
+		return "default"
+	}
+
+	return namespace
 }
 
 func ptr[T any](v T) *T {
@@ -487,14 +585,9 @@ func (cm *Manager) StartPortForward(
 	remotePort int,
 ) (*PortForwardSession, error) {
 	currentContext := cm.GetCurrentContext()
-	kubeconfigPath, exists := cm.kubeconfigs[currentContext]
+	config, exists := cm.restConfigs[currentContext]
 	if !exists {
-		return nil, fmt.Errorf("kubeconfig path not found for context %s", currentContext)
-	}
-
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build config: %w", err)
+		return nil, fmt.Errorf("config not found for context %s", currentContext)
 	}
 
 	client, err := cm.GetCurrentClient()
