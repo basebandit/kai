@@ -12,6 +12,7 @@ import (
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -873,8 +874,8 @@ func testStartPortForwardErrors(t *testing.T) {
 	portForwardSessions = make(map[string]*PortForwardSession)
 	pfMutex.Unlock()
 
-	t.Run("NoKubeconfigPath", func(t *testing.T) {
-		// Manager without kubeconfig path should fail
+	t.Run("NoConfig", func(t *testing.T) {
+		// Manager without rest config should fail
 		_, err := cm.StartPortForward(
 			t.Context(),
 			"default",
@@ -884,14 +885,35 @@ func testStartPortForwardErrors(t *testing.T) {
 			80,
 		)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "kubeconfig path not found")
+		assert.Contains(t, err.Error(), "config not found")
 	})
 
-	t.Run("InvalidKubeconfigPath", func(t *testing.T) {
-		// Set invalid kubeconfig path
-		cm.kubeconfigs["test-context"] = "/nonexistent/path/config"
-		cm.currentContext = "test-context"
+	t.Run("InClusterConfigPortForward", func(t *testing.T) {
+		// Simulate an in-cluster context with a stored rest.Config
+		// This tests that port forwarding works with in-cluster config
+		// where kubeconfig path is empty but rest.Config is stored
+		cm := New()
 
+		fakeClient := fake.NewSimpleClientset()
+		contextInfo := &kai.ContextInfo{
+			Name:       "in-cluster",
+			Cluster:    "in-cluster",
+			User:       "service-account",
+			Namespace:  "default",
+			ConfigPath: "", // Empty for in-cluster
+			IsActive:   true,
+		}
+
+		// Simulate what LoadInClusterConfig does
+		cm.kubeconfigs["in-cluster"] = "" // Empty path for in-cluster
+		cm.restConfigs["in-cluster"] = &rest.Config{
+			Host: "https://kubernetes.default.svc",
+		}
+		cm.clients["in-cluster"] = fakeClient
+		cm.contexts["in-cluster"] = contextInfo
+		cm.currentContext = "in-cluster"
+
+		// Now try port forwarding - it should find the config from restConfigs
 		_, err := cm.StartPortForward(
 			t.Context(),
 			"default",
@@ -900,9 +922,12 @@ func testStartPortForwardErrors(t *testing.T) {
 			8080,
 			80,
 		)
+		// Will fail because we don't have a real cluster, but should NOT fail
+		// with "config not found" error - it should fail later in the process
 		assert.Error(t, err)
-		// Should fail when building config
-		assert.Contains(t, err.Error(), "failed to build config")
+		assert.NotContains(t, err.Error(), "config not found")
+		// Should fail when trying to get the client or pod
+		assert.Contains(t, err.Error(), "not found")
 	})
 
 	// Cleanup

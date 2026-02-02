@@ -28,6 +28,7 @@ import (
 // Manager maintains connections to Kubernetes clusters
 type Manager struct {
 	kubeconfigs      map[string]string
+	restConfigs      map[string]*rest.Config
 	clients          map[string]kubernetes.Interface
 	dynamicClients   map[string]dynamic.Interface
 	contexts         map[string]*kai.ContextInfo
@@ -39,6 +40,7 @@ type Manager struct {
 func New() *Manager {
 	return &Manager{
 		kubeconfigs:      make(map[string]string),
+		restConfigs:      make(map[string]*rest.Config),
 		clients:          make(map[string]kubernetes.Interface),
 		dynamicClients:   make(map[string]dynamic.Interface),
 		contexts:         make(map[string]*kai.ContextInfo),
@@ -92,6 +94,7 @@ func (cm *Manager) LoadInClusterConfig(name string) error {
 	}
 
 	cm.kubeconfigs[name] = ""
+	cm.restConfigs[name] = config
 	cm.clients[name] = clientset
 	cm.dynamicClients[name] = dynamicClient
 	cm.contexts[name] = contextInfo
@@ -129,7 +132,7 @@ func (cm *Manager) LoadKubeConfig(name, path string) error {
 		return err
 	}
 
-	clientset, dynamicClient, err := createClients(resolvedPath)
+	restConfig, clientset, dynamicClient, err := createClients(resolvedPath)
 	if err != nil {
 		return err
 	}
@@ -147,6 +150,7 @@ func (cm *Manager) LoadKubeConfig(name, path string) error {
 
 		if _, exists := cm.contexts[uniqueName]; !exists {
 			cm.kubeconfigs[uniqueName] = resolvedPath
+			cm.restConfigs[uniqueName] = restConfig
 			cm.clients[uniqueName] = clientset
 			cm.dynamicClients[uniqueName] = dynamicClient
 			cm.contexts[uniqueName] = contextInfo
@@ -182,6 +186,7 @@ func (cm *Manager) DeleteContext(name string) error {
 		delete(cm.clients, name)
 		delete(cm.dynamicClients, name)
 		delete(cm.kubeconfigs, name)
+		delete(cm.restConfigs, name)
 
 		cm.currentContext = ""
 		for contextName := range cm.contexts {
@@ -197,6 +202,7 @@ func (cm *Manager) DeleteContext(name string) error {
 	delete(cm.clients, name)
 	delete(cm.dynamicClients, name)
 	delete(cm.kubeconfigs, name)
+	delete(cm.restConfigs, name)
 
 	slog.Info("context deleted", slog.String("context", name))
 	return nil
@@ -233,11 +239,13 @@ func (cm *Manager) RenameContext(oldName, newName string) error {
 	cm.clients[newName] = cm.clients[oldName]
 	cm.dynamicClients[newName] = cm.dynamicClients[oldName]
 	cm.kubeconfigs[newName] = cm.kubeconfigs[oldName]
+	cm.restConfigs[newName] = cm.restConfigs[oldName]
 
 	delete(cm.contexts, oldName)
 	delete(cm.clients, oldName)
 	delete(cm.dynamicClients, oldName)
 	delete(cm.kubeconfigs, oldName)
+	delete(cm.restConfigs, oldName)
 
 	if cm.currentContext == oldName {
 		cm.currentContext = newName
@@ -467,25 +475,25 @@ func (cm *Manager) updateKubeconfigCurrentContext(contextName, configPath string
 }
 
 // createClients creates Kubernetes clients from the kubeconfig file
-func createClients(path string) (kubernetes.Interface, dynamic.Interface, error) {
+func createClients(path string) (*rest.Config, kubernetes.Interface, dynamic.Interface, error) {
 	config, err := clientcmd.BuildConfigFromFlags("", path)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error building config from flags: %w", err)
+		return nil, nil, nil, fmt.Errorf("error building config from flags: %w", err)
 	}
 
 	config.Timeout = 30 * time.Second
 
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error creating client: %w", err)
+		return nil, nil, nil, fmt.Errorf("error creating client: %w", err)
 	}
 
 	dynamicClient, err := dynamic.NewForConfig(config)
 	if err != nil {
-		return nil, nil, fmt.Errorf("error creating dynamic client: %w", err)
+		return nil, nil, nil, fmt.Errorf("error creating dynamic client: %w", err)
 	}
 
-	return clientset, dynamicClient, nil
+	return config, clientset, dynamicClient, nil
 }
 
 // testConnection tests the connection to the Kubernetes cluster
@@ -577,14 +585,9 @@ func (cm *Manager) StartPortForward(
 	remotePort int,
 ) (*PortForwardSession, error) {
 	currentContext := cm.GetCurrentContext()
-	kubeconfigPath, exists := cm.kubeconfigs[currentContext]
+	config, exists := cm.restConfigs[currentContext]
 	if !exists {
-		return nil, fmt.Errorf("kubeconfig path not found for context %s", currentContext)
-	}
-
-	config, err := clientcmd.BuildConfigFromFlags("", kubeconfigPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build config: %w", err)
+		return nil, fmt.Errorf("config not found for context %s", currentContext)
 	}
 
 	client, err := cm.GetCurrentClient()
