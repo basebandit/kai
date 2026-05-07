@@ -232,11 +232,7 @@ func TestCreatePodHandler(t *testing.T) {
 			handler := createPodHandler(mockCM, mockFactory)
 
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tc.args,
 				},
 			}
@@ -341,11 +337,7 @@ func TestListPodsHandler(t *testing.T) {
 			handler := listPodsHandler(mockCM, mockFactory)
 
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tc.args,
 				},
 			}
@@ -438,11 +430,7 @@ func TestGetPodHandler(t *testing.T) {
 			handler := getPodHandler(mockCM, mockFactory)
 
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tc.args,
 				},
 			}
@@ -543,11 +531,7 @@ func TestDeletePodHandler(t *testing.T) {
 			handler := deletePodHandler(mockCM, mockFactory)
 
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tc.args,
 				},
 			}
@@ -645,11 +629,7 @@ func TestStreamLogsHandler(t *testing.T) {
 			handler := streamLogsHandler(mockCM, mockFactory)
 
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tc.args,
 				},
 			}

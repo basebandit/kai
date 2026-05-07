@@ -202,13 +202,13 @@ func listServicesHandler(cm kai.ClusterManager, factory ServiceFactory) func(ctx
 
 		var allNamespaces bool
 
-		if allNamespacesArg, ok := request.Params.Arguments["all_namespaces"].(bool); ok {
+		if allNamespacesArg, ok := request.GetArguments()["all_namespaces"].(bool); ok {
 			allNamespaces = allNamespacesArg
 		}
 
 		var namespace string
 		if !allNamespaces {
-			if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+			if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 				namespace = namespaceArg
 			} else {
 				namespace = cm.GetCurrentNamespace()
@@ -216,7 +216,7 @@ func listServicesHandler(cm kai.ClusterManager, factory ServiceFactory) func(ctx
 		}
 
 		var labelSelector string
-		if labelSelectorArg, ok := request.Params.Arguments["label_selector"].(string); ok {
+		if labelSelectorArg, ok := request.GetArguments()["label_selector"].(string); ok {
 			labelSelector = labelSelectorArg
 		}
 
@@ -245,7 +245,7 @@ func getServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ctx c
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "get_service"))
 
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -256,7 +256,7 @@ func getServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ctx c
 		}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 
@@ -288,7 +288,7 @@ func createServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ct
 
 		params := kai.ServiceParams{}
 
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -298,7 +298,7 @@ func createServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ct
 			return mcp.NewToolResultText(errEmptyName), nil
 		}
 
-		portsArg, ok := request.Params.Arguments["ports"]
+		portsArg, ok := request.GetArguments()["ports"]
 		if !ok || portsArg == nil {
 			return mcp.NewToolResultText(errMissingPorts), nil
 		}
@@ -314,12 +314,12 @@ func createServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ct
 		}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 
 		var serviceType string
-		if typeArg, ok := request.Params.Arguments["type"].(string); ok && typeArg != "" {
+		if typeArg, ok := request.GetArguments()["type"].(string); ok && typeArg != "" {
 			validTypes := map[string]bool{
 				"ClusterIP":    true,
 				"NodePort":     true,
@@ -335,22 +335,22 @@ func createServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ct
 		}
 
 		var selector map[string]interface{}
-		if selectorArg, ok := request.Params.Arguments["selector"].(map[string]interface{}); ok && len(selectorArg) > 0 {
+		if selectorArg, ok := request.GetArguments()["selector"].(map[string]interface{}); ok && len(selectorArg) > 0 {
 			selector = selectorArg
 		}
 
 		var labels map[string]interface{}
-		if labelsArg, ok := request.Params.Arguments["labels"].(map[string]interface{}); ok && len(labelsArg) > 0 {
+		if labelsArg, ok := request.GetArguments()["labels"].(map[string]interface{}); ok && len(labelsArg) > 0 {
 			labels = labelsArg
 		}
 
 		var clusterIP string
-		if clusterIPArg, ok := request.Params.Arguments["cluster_ip"].(string); ok && clusterIPArg != "" {
+		if clusterIPArg, ok := request.GetArguments()["cluster_ip"].(string); ok && clusterIPArg != "" {
 			clusterIP = clusterIPArg
 		}
 
 		var externalIPs []string
-		if externalIPsArg, ok := request.Params.Arguments["external_ips"].([]interface{}); ok && len(externalIPsArg) > 0 {
+		if externalIPsArg, ok := request.GetArguments()["external_ips"].([]interface{}); ok && len(externalIPsArg) > 0 {
 			for _, ip := range externalIPsArg {
 				if ipStr, ok := ip.(string); ok && ipStr != "" {
 					externalIPs = append(externalIPs, ipStr)
@@ -359,12 +359,12 @@ func createServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ct
 		}
 
 		var externalName string
-		if externalNameArg, ok := request.Params.Arguments["external_name"].(string); ok && externalNameArg != "" {
+		if externalNameArg, ok := request.GetArguments()["external_name"].(string); ok && externalNameArg != "" {
 			externalName = externalNameArg
 		}
 
 		var sessionAffinity string
-		if sessionAffinityArg, ok := request.Params.Arguments["session_affinity"].(string); ok && sessionAffinityArg != "" {
+		if sessionAffinityArg, ok := request.GetArguments()["session_affinity"].(string); ok && sessionAffinityArg != "" {
 			validAffinities := map[string]bool{
 				"None":     true,
 				"ClientIP": true,
@@ -413,12 +413,12 @@ func deleteServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ct
 		params := kai.ServiceParams{}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 		params.Namespace = namespace
 
-		nameArg, nameOk := request.Params.Arguments["name"]
+		nameArg, nameOk := request.GetArguments()["name"]
 		if nameOk && nameArg != nil {
 			name, ok := nameArg.(string)
 			if !ok || name == "" {
@@ -427,7 +427,7 @@ func deleteServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ct
 			params.Name = name
 		}
 
-		labelsArg, labelsOk := request.Params.Arguments["labels"]
+		labelsArg, labelsOk := request.GetArguments()["labels"]
 		if labelsOk && labelsArg != nil {
 			labels, ok := labelsArg.(map[string]interface{})
 			if !ok {
@@ -584,7 +584,7 @@ func processPortsArray(portsArray []interface{}) ([]kai.ServicePort, error) {
 
 func updateServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -595,7 +595,7 @@ func updateServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ct
 		}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 
@@ -604,19 +604,19 @@ func updateServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ct
 			Namespace: namespace,
 		}
 
-		if serviceType, ok := request.Params.Arguments["type"].(string); ok && serviceType != "" {
+		if serviceType, ok := request.GetArguments()["type"].(string); ok && serviceType != "" {
 			params.Type = serviceType
 		}
 
-		if labels, ok := request.Params.Arguments["labels"].(map[string]interface{}); ok {
+		if labels, ok := request.GetArguments()["labels"].(map[string]interface{}); ok {
 			params.Labels = labels
 		}
 
-		if selector, ok := request.Params.Arguments["selector"].(map[string]interface{}); ok {
+		if selector, ok := request.GetArguments()["selector"].(map[string]interface{}); ok {
 			params.Selector = selector
 		}
 
-		if portsArg, ok := request.Params.Arguments["ports"].([]interface{}); ok && len(portsArg) > 0 {
+		if portsArg, ok := request.GetArguments()["ports"].([]interface{}); ok && len(portsArg) > 0 {
 			ports, err := processPortsArray(portsArg)
 			if err != nil {
 				return mcp.NewToolResultText(err.Error()), nil
@@ -624,11 +624,11 @@ func updateServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ct
 			params.Ports = ports
 		}
 
-		if clusterIP, ok := request.Params.Arguments["cluster_ip"].(string); ok && clusterIP != "" {
+		if clusterIP, ok := request.GetArguments()["cluster_ip"].(string); ok && clusterIP != "" {
 			params.ClusterIP = clusterIP
 		}
 
-		if externalIPsArg, ok := request.Params.Arguments["external_ips"].([]interface{}); ok {
+		if externalIPsArg, ok := request.GetArguments()["external_ips"].([]interface{}); ok {
 			externalIPs := make([]string, 0, len(externalIPsArg))
 			for _, ip := range externalIPsArg {
 				if ipStr, ok := ip.(string); ok {
@@ -638,11 +638,11 @@ func updateServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ct
 			params.ExternalIPs = externalIPs
 		}
 
-		if externalName, ok := request.Params.Arguments["external_name"].(string); ok && externalName != "" {
+		if externalName, ok := request.GetArguments()["external_name"].(string); ok && externalName != "" {
 			params.ExternalName = externalName
 		}
 
-		if sessionAffinity, ok := request.Params.Arguments["session_affinity"].(string); ok && sessionAffinity != "" {
+		if sessionAffinity, ok := request.GetArguments()["session_affinity"].(string); ok && sessionAffinity != "" {
 			params.SessionAffinity = sessionAffinity
 		}
 
@@ -658,7 +658,7 @@ func updateServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ct
 
 func patchServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -668,7 +668,7 @@ func patchServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ctx
 			return mcp.NewToolResultText(errEmptyName), nil
 		}
 
-		patchArg, ok := request.Params.Arguments["patch"]
+		patchArg, ok := request.GetArguments()["patch"]
 		if !ok || patchArg == nil {
 			return mcp.NewToolResultText("missing required parameter: patch"), nil
 		}
@@ -679,7 +679,7 @@ func patchServiceHandler(cm kai.ClusterManager, factory ServiceFactory) func(ctx
 		}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 

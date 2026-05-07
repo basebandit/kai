@@ -63,18 +63,18 @@ func startPortForwardHandler(manager *cluster.Manager) func(ctx context.Context,
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "start_port_forward"))
 
-		target, ok := request.Params.Arguments["target"].(string)
+		target, ok := request.GetArguments()["target"].(string)
 		if !ok || target == "" {
 			return mcp.NewToolResultError("target is required"), nil
 		}
 
-		portsStr, ok := request.Params.Arguments["ports"].(string)
+		portsStr, ok := request.GetArguments()["ports"].(string)
 		if !ok || portsStr == "" {
 			return mcp.NewToolResultError("ports is required"), nil
 		}
 
 		namespace := ""
-		if ns, ok := request.Params.Arguments["namespace"].(string); ok {
+		if ns, ok := request.GetArguments()["namespace"].(string); ok {
 			namespace = ns
 		}
 
@@ -109,7 +109,7 @@ func stopPortForwardHandler(manager *cluster.Manager) func(ctx context.Context, 
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "stop_port_forward"))
 
-		sessionID, ok := request.Params.Arguments["session_id"].(string)
+		sessionID, ok := request.GetArguments()["session_id"].(string)
 		if !ok || sessionID == "" {
 			return mcp.NewToolResultError("session_id is required"), nil
 		}

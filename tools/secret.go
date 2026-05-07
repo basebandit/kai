@@ -141,7 +141,7 @@ func createSecretHandler(cm kai.ClusterManager, factory SecretFactory) func(ctx 
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "create_secret"))
 
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -152,7 +152,7 @@ func createSecretHandler(cm kai.ClusterManager, factory SecretFactory) func(ctx 
 		}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 
@@ -161,26 +161,26 @@ func createSecretHandler(cm kai.ClusterManager, factory SecretFactory) func(ctx 
 			Namespace: namespace,
 		}
 
-		if typeArg, ok := request.Params.Arguments["type"].(string); ok && typeArg != "" {
+		if typeArg, ok := request.GetArguments()["type"].(string); ok && typeArg != "" {
 			if err := validateSecretType(typeArg); err != nil {
 				return mcp.NewToolResultText(err.Error()), nil
 			}
 			params.Type = typeArg
 		}
 
-		if dataArg, ok := request.Params.Arguments["data"].(map[string]interface{}); ok {
+		if dataArg, ok := request.GetArguments()["data"].(map[string]interface{}); ok {
 			params.Data = dataArg
 		}
 
-		if stringDataArg, ok := request.Params.Arguments["string_data"].(map[string]interface{}); ok {
+		if stringDataArg, ok := request.GetArguments()["string_data"].(map[string]interface{}); ok {
 			params.StringData = stringDataArg
 		}
 
-		if labelsArg, ok := request.Params.Arguments["labels"].(map[string]interface{}); ok {
+		if labelsArg, ok := request.GetArguments()["labels"].(map[string]interface{}); ok {
 			params.Labels = labelsArg
 		}
 
-		if annotationsArg, ok := request.Params.Arguments["annotations"].(map[string]interface{}); ok {
+		if annotationsArg, ok := request.GetArguments()["annotations"].(map[string]interface{}); ok {
 			params.Annotations = annotationsArg
 		}
 
@@ -203,7 +203,7 @@ func getSecretHandler(cm kai.ClusterManager, factory SecretFactory) func(ctx con
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "get_secret"))
 
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -214,7 +214,7 @@ func getSecretHandler(cm kai.ClusterManager, factory SecretFactory) func(ctx con
 		}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 
@@ -243,13 +243,13 @@ func listSecretsHandler(cm kai.ClusterManager, factory SecretFactory) func(ctx c
 		slog.Debug("tool invoked", slog.String("tool", "list_secrets"))
 
 		var allNamespaces bool
-		if allNamespacesArg, ok := request.Params.Arguments["all_namespaces"].(bool); ok {
+		if allNamespacesArg, ok := request.GetArguments()["all_namespaces"].(bool); ok {
 			allNamespaces = allNamespacesArg
 		}
 
 		var namespace string
 		if !allNamespaces {
-			if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+			if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 				namespace = namespaceArg
 			} else {
 				namespace = cm.GetCurrentNamespace()
@@ -257,7 +257,7 @@ func listSecretsHandler(cm kai.ClusterManager, factory SecretFactory) func(ctx c
 		}
 
 		var labelSelector string
-		if labelSelectorArg, ok := request.Params.Arguments["label_selector"].(string); ok {
+		if labelSelectorArg, ok := request.GetArguments()["label_selector"].(string); ok {
 			labelSelector = labelSelectorArg
 		}
 
@@ -285,7 +285,7 @@ func deleteSecretHandler(cm kai.ClusterManager, factory SecretFactory) func(ctx 
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "delete_secret"))
 
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -296,7 +296,7 @@ func deleteSecretHandler(cm kai.ClusterManager, factory SecretFactory) func(ctx 
 		}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 
@@ -324,7 +324,7 @@ func updateSecretHandler(cm kai.ClusterManager, factory SecretFactory) func(ctx 
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "update_secret"))
 
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -335,7 +335,7 @@ func updateSecretHandler(cm kai.ClusterManager, factory SecretFactory) func(ctx 
 		}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 
@@ -344,26 +344,26 @@ func updateSecretHandler(cm kai.ClusterManager, factory SecretFactory) func(ctx 
 			Namespace: namespace,
 		}
 
-		if typeArg, ok := request.Params.Arguments["type"].(string); ok && typeArg != "" {
+		if typeArg, ok := request.GetArguments()["type"].(string); ok && typeArg != "" {
 			if err := validateSecretType(typeArg); err != nil {
 				return mcp.NewToolResultText(err.Error()), nil
 			}
 			params.Type = typeArg
 		}
 
-		if dataArg, ok := request.Params.Arguments["data"].(map[string]interface{}); ok {
+		if dataArg, ok := request.GetArguments()["data"].(map[string]interface{}); ok {
 			params.Data = dataArg
 		}
 
-		if stringDataArg, ok := request.Params.Arguments["string_data"].(map[string]interface{}); ok {
+		if stringDataArg, ok := request.GetArguments()["string_data"].(map[string]interface{}); ok {
 			params.StringData = stringDataArg
 		}
 
-		if labelsArg, ok := request.Params.Arguments["labels"].(map[string]interface{}); ok {
+		if labelsArg, ok := request.GetArguments()["labels"].(map[string]interface{}); ok {
 			params.Labels = labelsArg
 		}
 
-		if annotationsArg, ok := request.Params.Arguments["annotations"].(map[string]interface{}); ok {
+		if annotationsArg, ok := request.GetArguments()["annotations"].(map[string]interface{}); ok {
 			params.Annotations = annotationsArg
 		}
 

@@ -74,7 +74,7 @@ func createNamespaceHandler(cm kai.ClusterManager) func(ctx context.Context, req
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "create_namespace"))
 
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -88,11 +88,11 @@ func createNamespaceHandler(cm kai.ClusterManager) func(ctx context.Context, req
 			Name: name,
 		}
 
-		if labelsArg, ok := request.Params.Arguments["labels"].(map[string]interface{}); ok {
+		if labelsArg, ok := request.GetArguments()["labels"].(map[string]interface{}); ok {
 			namespace.Labels = labelsArg
 		}
 
-		if annotationsArg, ok := request.Params.Arguments["annotations"].(map[string]interface{}); ok {
+		if annotationsArg, ok := request.GetArguments()["annotations"].(map[string]interface{}); ok {
 			namespace.Annotations = annotationsArg
 		}
 
@@ -113,7 +113,7 @@ func getNamespaceHandler(cm kai.ClusterManager) func(ctx context.Context, reques
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "get_namespace"))
 
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -145,7 +145,7 @@ func listNamespacesHandler(cm kai.ClusterManager) func(ctx context.Context, requ
 		slog.Debug("tool invoked", slog.String("tool", "list_namespaces"))
 
 		labelSelector := ""
-		if selectorArg, ok := request.Params.Arguments["label_selector"].(string); ok {
+		if selectorArg, ok := request.GetArguments()["label_selector"].(string); ok {
 			labelSelector = selectorArg
 		}
 
@@ -170,11 +170,11 @@ func deleteNamespaceHandler(cm kai.ClusterManager) func(ctx context.Context, req
 
 		namespace := cluster.Namespace{}
 
-		if nameArg, ok := request.Params.Arguments["name"].(string); ok && nameArg != "" {
+		if nameArg, ok := request.GetArguments()["name"].(string); ok && nameArg != "" {
 			namespace.Name = nameArg
 		}
 
-		if labelsArg, ok := request.Params.Arguments["labels"].(map[string]interface{}); ok {
+		if labelsArg, ok := request.GetArguments()["labels"].(map[string]interface{}); ok {
 			namespace.Labels = labelsArg
 		}
 
@@ -197,7 +197,7 @@ func deleteNamespaceHandler(cm kai.ClusterManager) func(ctx context.Context, req
 
 func updateNamespaceHandler(cm kai.ClusterManager) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -211,11 +211,11 @@ func updateNamespaceHandler(cm kai.ClusterManager) func(ctx context.Context, req
 			Name: name,
 		}
 
-		if labelsArg, ok := request.Params.Arguments["labels"].(map[string]interface{}); ok {
+		if labelsArg, ok := request.GetArguments()["labels"].(map[string]interface{}); ok {
 			namespace.Labels = labelsArg
 		}
 
-		if annotationsArg, ok := request.Params.Arguments["annotations"].(map[string]interface{}); ok {
+		if annotationsArg, ok := request.GetArguments()["annotations"].(map[string]interface{}); ok {
 			namespace.Annotations = annotationsArg
 		}
 

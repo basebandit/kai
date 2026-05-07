@@ -134,7 +134,7 @@ func createConfigMapHandler(cm kai.ClusterManager, factory ConfigMapFactory) fun
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "create_configmap"))
 
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -145,7 +145,7 @@ func createConfigMapHandler(cm kai.ClusterManager, factory ConfigMapFactory) fun
 		}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 
@@ -154,19 +154,19 @@ func createConfigMapHandler(cm kai.ClusterManager, factory ConfigMapFactory) fun
 			Namespace: namespace,
 		}
 
-		if dataArg, ok := request.Params.Arguments["data"].(map[string]interface{}); ok {
+		if dataArg, ok := request.GetArguments()["data"].(map[string]interface{}); ok {
 			params.Data = dataArg
 		}
 
-		if binaryDataArg, ok := request.Params.Arguments["binary_data"].(map[string]interface{}); ok {
+		if binaryDataArg, ok := request.GetArguments()["binary_data"].(map[string]interface{}); ok {
 			params.BinaryData = binaryDataArg
 		}
 
-		if labelsArg, ok := request.Params.Arguments["labels"].(map[string]interface{}); ok {
+		if labelsArg, ok := request.GetArguments()["labels"].(map[string]interface{}); ok {
 			params.Labels = labelsArg
 		}
 
-		if annotationsArg, ok := request.Params.Arguments["annotations"].(map[string]interface{}); ok {
+		if annotationsArg, ok := request.GetArguments()["annotations"].(map[string]interface{}); ok {
 			params.Annotations = annotationsArg
 		}
 
@@ -189,7 +189,7 @@ func getConfigMapHandler(cm kai.ClusterManager, factory ConfigMapFactory) func(c
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "get_configmap"))
 
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -200,7 +200,7 @@ func getConfigMapHandler(cm kai.ClusterManager, factory ConfigMapFactory) func(c
 		}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 
@@ -229,13 +229,13 @@ func listConfigMapsHandler(cm kai.ClusterManager, factory ConfigMapFactory) func
 		slog.Debug("tool invoked", slog.String("tool", "list_configmaps"))
 
 		var allNamespaces bool
-		if allNamespacesArg, ok := request.Params.Arguments["all_namespaces"].(bool); ok {
+		if allNamespacesArg, ok := request.GetArguments()["all_namespaces"].(bool); ok {
 			allNamespaces = allNamespacesArg
 		}
 
 		var namespace string
 		if !allNamespaces {
-			if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+			if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 				namespace = namespaceArg
 			} else {
 				namespace = cm.GetCurrentNamespace()
@@ -243,7 +243,7 @@ func listConfigMapsHandler(cm kai.ClusterManager, factory ConfigMapFactory) func
 		}
 
 		var labelSelector string
-		if labelSelectorArg, ok := request.Params.Arguments["label_selector"].(string); ok {
+		if labelSelectorArg, ok := request.GetArguments()["label_selector"].(string); ok {
 			labelSelector = labelSelectorArg
 		}
 
@@ -271,7 +271,7 @@ func deleteConfigMapHandler(cm kai.ClusterManager, factory ConfigMapFactory) fun
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "delete_configmap"))
 
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -282,7 +282,7 @@ func deleteConfigMapHandler(cm kai.ClusterManager, factory ConfigMapFactory) fun
 		}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 
@@ -310,7 +310,7 @@ func updateConfigMapHandler(cm kai.ClusterManager, factory ConfigMapFactory) fun
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "update_configmap"))
 
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -321,7 +321,7 @@ func updateConfigMapHandler(cm kai.ClusterManager, factory ConfigMapFactory) fun
 		}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 
@@ -330,19 +330,19 @@ func updateConfigMapHandler(cm kai.ClusterManager, factory ConfigMapFactory) fun
 			Namespace: namespace,
 		}
 
-		if dataArg, ok := request.Params.Arguments["data"].(map[string]interface{}); ok {
+		if dataArg, ok := request.GetArguments()["data"].(map[string]interface{}); ok {
 			params.Data = dataArg
 		}
 
-		if binaryDataArg, ok := request.Params.Arguments["binary_data"].(map[string]interface{}); ok {
+		if binaryDataArg, ok := request.GetArguments()["binary_data"].(map[string]interface{}); ok {
 			params.BinaryData = binaryDataArg
 		}
 
-		if labelsArg, ok := request.Params.Arguments["labels"].(map[string]interface{}); ok {
+		if labelsArg, ok := request.GetArguments()["labels"].(map[string]interface{}); ok {
 			params.Labels = labelsArg
 		}
 
-		if annotationsArg, ok := request.Params.Arguments["annotations"].(map[string]interface{}); ok {
+		if annotationsArg, ok := request.GetArguments()["annotations"].(map[string]interface{}); ok {
 			params.Annotations = annotationsArg
 		}
 

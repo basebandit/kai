@@ -125,11 +125,7 @@ func TestCreateJobHandler(t *testing.T) {
 
 			handler := createJobHandler(mockCM, mockFactory)
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tt.args,
 				},
 			}
@@ -200,11 +196,7 @@ func TestGetJobHandler(t *testing.T) {
 
 			handler := getJobHandler(mockCM, mockFactory)
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tt.args,
 				},
 			}
@@ -297,11 +289,7 @@ func TestListJobsHandler(t *testing.T) {
 
 			handler := listJobsHandler(mockCM, mockFactory)
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tt.args,
 				},
 			}
@@ -372,11 +360,7 @@ func TestDeleteJobHandler(t *testing.T) {
 
 			handler := deleteJobHandler(mockCM, mockFactory)
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tt.args,
 				},
 			}
@@ -506,11 +490,7 @@ func TestUpdateJobHandler(t *testing.T) {
 
 			handler := updateJobHandler(mockCM, mockFactory)
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tt.args,
 				},
 			}

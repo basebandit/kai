@@ -133,7 +133,7 @@ func getCurrentContextHandler(cm kai.ClusterManager) func(ctx context.Context, r
 func switchContextHandler(cm kai.ClusterManager) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "switch_context"))
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText("Required parameter 'name' is missing"), nil
 		}
@@ -155,7 +155,7 @@ func switchContextHandler(cm kai.ClusterManager) func(ctx context.Context, reque
 func loadKubeconfigHandler(cm kai.ClusterManager) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "load_kubeconfig"))
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText("Required parameter 'name' is missing"), nil
 		}
@@ -166,7 +166,7 @@ func loadKubeconfigHandler(cm kai.ClusterManager) func(ctx context.Context, requ
 		}
 
 		path := ""
-		if pathArg, ok := request.Params.Arguments["path"].(string); ok {
+		if pathArg, ok := request.GetArguments()["path"].(string); ok {
 			path = pathArg
 		}
 
@@ -187,7 +187,7 @@ func loadKubeconfigHandler(cm kai.ClusterManager) func(ctx context.Context, requ
 func deleteContextHandler(cm kai.ClusterManager) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "delete_context"))
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText("Required parameter 'name' is missing"), nil
 		}
@@ -209,7 +209,7 @@ func deleteContextHandler(cm kai.ClusterManager) func(ctx context.Context, reque
 func renameContextHandler(cm kai.ClusterManager) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "rename_context"))
-		oldNameArg, ok := request.Params.Arguments["old_name"]
+		oldNameArg, ok := request.GetArguments()["old_name"]
 		if !ok || oldNameArg == nil {
 			return mcp.NewToolResultText("Required parameter 'old_name' is missing"), nil
 		}
@@ -219,7 +219,7 @@ func renameContextHandler(cm kai.ClusterManager) func(ctx context.Context, reque
 			return mcp.NewToolResultText("Parameter 'old_name' must be a non-empty string"), nil
 		}
 
-		newNameArg, ok := request.Params.Arguments["new_name"]
+		newNameArg, ok := request.GetArguments()["new_name"]
 		if !ok || newNameArg == nil {
 			return mcp.NewToolResultText("Required parameter 'new_name' is missing"), nil
 		}
@@ -241,7 +241,7 @@ func renameContextHandler(cm kai.ClusterManager) func(ctx context.Context, reque
 func describeContextHandler(cm kai.ClusterManager) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "describe_context"))
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText("Required parameter 'name' is missing"), nil
 		}

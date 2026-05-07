@@ -157,7 +157,7 @@ func createJobHandler(cm kai.ClusterManager, factory JobFactory) func(ctx contex
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "create_job"))
 
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -167,7 +167,7 @@ func createJobHandler(cm kai.ClusterManager, factory JobFactory) func(ctx contex
 			return mcp.NewToolResultText(errEmptyName), nil
 		}
 
-		imageArg, ok := request.Params.Arguments["image"]
+		imageArg, ok := request.GetArguments()["image"]
 		if !ok || imageArg == nil {
 			return mcp.NewToolResultText(errMissingImage), nil
 		}
@@ -178,7 +178,7 @@ func createJobHandler(cm kai.ClusterManager, factory JobFactory) func(ctx contex
 		}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 
@@ -188,46 +188,46 @@ func createJobHandler(cm kai.ClusterManager, factory JobFactory) func(ctx contex
 			Image:     image,
 		}
 
-		if commandArg, ok := request.Params.Arguments["command"].([]interface{}); ok {
+		if commandArg, ok := request.GetArguments()["command"].([]interface{}); ok {
 			params.Command = commandArg
 		}
 
-		if argsArg, ok := request.Params.Arguments["args"].([]interface{}); ok {
+		if argsArg, ok := request.GetArguments()["args"].([]interface{}); ok {
 			params.Args = argsArg
 		}
 
-		if restartPolicyArg, ok := request.Params.Arguments["restart_policy"].(string); ok && restartPolicyArg != "" {
+		if restartPolicyArg, ok := request.GetArguments()["restart_policy"].(string); ok && restartPolicyArg != "" {
 			params.RestartPolicy = restartPolicyArg
 		}
 
-		if backoffLimitArg, ok := request.Params.Arguments["backoff_limit"].(float64); ok {
+		if backoffLimitArg, ok := request.GetArguments()["backoff_limit"].(float64); ok {
 			backoffLimit := int32(backoffLimitArg)
 			params.BackoffLimit = &backoffLimit
 		}
 
-		if completionsArg, ok := request.Params.Arguments["completions"].(float64); ok {
+		if completionsArg, ok := request.GetArguments()["completions"].(float64); ok {
 			completions := int32(completionsArg)
 			params.Completions = &completions
 		}
 
-		if parallelismArg, ok := request.Params.Arguments["parallelism"].(float64); ok {
+		if parallelismArg, ok := request.GetArguments()["parallelism"].(float64); ok {
 			parallelism := int32(parallelismArg)
 			params.Parallelism = &parallelism
 		}
 
-		if labelsArg, ok := request.Params.Arguments["labels"].(map[string]interface{}); ok {
+		if labelsArg, ok := request.GetArguments()["labels"].(map[string]interface{}); ok {
 			params.Labels = labelsArg
 		}
 
-		if envArg, ok := request.Params.Arguments["env"].(map[string]interface{}); ok {
+		if envArg, ok := request.GetArguments()["env"].(map[string]interface{}); ok {
 			params.Env = envArg
 		}
 
-		if imagePullPolicyArg, ok := request.Params.Arguments["image_pull_policy"].(string); ok && imagePullPolicyArg != "" {
+		if imagePullPolicyArg, ok := request.GetArguments()["image_pull_policy"].(string); ok && imagePullPolicyArg != "" {
 			params.ImagePullPolicy = imagePullPolicyArg
 		}
 
-		if imagePullSecretsArg, ok := request.Params.Arguments["image_pull_secrets"].([]interface{}); ok {
+		if imagePullSecretsArg, ok := request.GetArguments()["image_pull_secrets"].([]interface{}); ok {
 			params.ImagePullSecrets = imagePullSecretsArg
 		}
 
@@ -250,7 +250,7 @@ func getJobHandler(cm kai.ClusterManager, factory JobFactory) func(ctx context.C
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "get_job"))
 
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -261,7 +261,7 @@ func getJobHandler(cm kai.ClusterManager, factory JobFactory) func(ctx context.C
 		}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 
@@ -290,13 +290,13 @@ func listJobsHandler(cm kai.ClusterManager, factory JobFactory) func(ctx context
 		slog.Debug("tool invoked", slog.String("tool", "list_jobs"))
 
 		var allNamespaces bool
-		if allNamespacesArg, ok := request.Params.Arguments["all_namespaces"].(bool); ok {
+		if allNamespacesArg, ok := request.GetArguments()["all_namespaces"].(bool); ok {
 			allNamespaces = allNamespacesArg
 		}
 
 		var namespace string
 		if !allNamespaces {
-			if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+			if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 				namespace = namespaceArg
 			} else {
 				namespace = cm.GetCurrentNamespace()
@@ -304,7 +304,7 @@ func listJobsHandler(cm kai.ClusterManager, factory JobFactory) func(ctx context
 		}
 
 		var labelSelector string
-		if labelSelectorArg, ok := request.Params.Arguments["label_selector"].(string); ok {
+		if labelSelectorArg, ok := request.GetArguments()["label_selector"].(string); ok {
 			labelSelector = labelSelectorArg
 		}
 
@@ -332,7 +332,7 @@ func deleteJobHandler(cm kai.ClusterManager, factory JobFactory) func(ctx contex
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "delete_job"))
 
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -343,7 +343,7 @@ func deleteJobHandler(cm kai.ClusterManager, factory JobFactory) func(ctx contex
 		}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 
@@ -369,7 +369,7 @@ func deleteJobHandler(cm kai.ClusterManager, factory JobFactory) func(ctx contex
 
 func updateJobHandler(cm kai.ClusterManager, factory JobFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -380,7 +380,7 @@ func updateJobHandler(cm kai.ClusterManager, factory JobFactory) func(ctx contex
 		}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 
@@ -389,11 +389,11 @@ func updateJobHandler(cm kai.ClusterManager, factory JobFactory) func(ctx contex
 			Namespace: namespace,
 		}
 
-		if labelsArg, ok := request.Params.Arguments["labels"].(map[string]interface{}); ok {
+		if labelsArg, ok := request.GetArguments()["labels"].(map[string]interface{}); ok {
 			params.Labels = labelsArg
 		}
 
-		if parallelismArg, ok := request.Params.Arguments["parallelism"].(float64); ok {
+		if parallelismArg, ok := request.GetArguments()["parallelism"].(float64); ok {
 			parallelism := int32(parallelismArg)
 			params.Parallelism = &parallelism
 		}
