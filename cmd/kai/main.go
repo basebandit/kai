@@ -42,8 +42,8 @@ func main() {
 
 	flag.StringVar(&kubeconfig, "kubeconfig", defaultKubeconfig, "Path to kubeconfig file")
 	flag.StringVar(&contextName, "context", "local", "Name for the loaded context")
-	flag.StringVar(&transport, "transport", "stdio", "Transport mode: stdio (default) or sse")
-	flag.StringVar(&sseAddr, "sse-addr", ":8080", "Address for SSE server (only used with -transport=sse)")
+	flag.StringVar(&transport, "transport", "stdio", "Transport mode: stdio (default), streamable-http, or sse-legacy. \"sse\" is accepted as a deprecated alias of \"sse-legacy\".")
+	flag.StringVar(&sseAddr, "sse-addr", ":8080", "Address for the HTTP listener (used with streamable-http or sse-legacy). The flag name is kept for backwards compatibility.")
 	flag.StringVar(&logFormat, "log-format", "json", "Log format: json (default) or text")
 	flag.StringVar(&logLevel, "log-level", "info", "Log level: debug, info, warn, error")
 	flag.StringVar(&tlsCert, "tls-cert", "", "Path to TLS certificate file (enables HTTPS for SSE)")
@@ -105,17 +105,28 @@ func main() {
 
 	go func() {
 		switch transport {
-		case "sse":
+		case "streamable-http", "http":
 			logger.Info("starting server",
-				slog.String("transport", "sse"),
+				slog.String("transport", "streamable-http"),
+				slog.String("address", sseAddr),
+			)
+			errChan <- s.ServeStreamableHTTP(sseAddr)
+		case "sse":
+			logger.Warn("transport \"sse\" is deprecated; use \"sse-legacy\" or migrate to \"streamable-http\"")
+			fallthrough
+		case "sse-legacy":
+			logger.Info("starting server",
+				slog.String("transport", "sse-legacy"),
 				slog.String("address", sseAddr),
 			)
 			errChan <- s.ServeSSE(sseAddr)
-		default:
+		case "stdio", "":
 			logger.Info("starting server",
 				slog.String("transport", "stdio"),
 			)
 			errChan <- s.Serve()
+		default:
+			errChan <- fmt.Errorf("unknown transport %q (valid: stdio, streamable-http, sse-legacy)", transport)
 		}
 	}()
 
