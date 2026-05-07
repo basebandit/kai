@@ -52,6 +52,7 @@ func RegisterJobTools(s kai.ServerInterface, cm kai.ClusterManager) {
 func RegisterJobToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, factory JobFactory) {
 	createJobTool := mcp.NewTool("create_job",
 		mcp.WithDescription("Create a new Job in the specified namespace"),
+		creationAnnotation("Create job"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the Job"),
@@ -98,6 +99,7 @@ func RegisterJobToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, f
 
 	getJobTool := mcp.NewTool("get_job",
 		mcp.WithDescription("Get information about a specific Job"),
+		readOnlyAnnotation("Get job"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the Job"),
@@ -110,6 +112,7 @@ func RegisterJobToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, f
 
 	listJobsTool := mcp.NewTool("list_jobs",
 		mcp.WithDescription("List Jobs in the current namespace or across all namespaces"),
+		readOnlyAnnotation("List jobs"),
 		mcp.WithBoolean("all_namespaces",
 			mcp.Description("Whether to list Jobs across all namespaces"),
 		),
@@ -124,6 +127,7 @@ func RegisterJobToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, f
 
 	deleteJobTool := mcp.NewTool("delete_job",
 		mcp.WithDescription("Delete a Job from the specified namespace"),
+		destructiveAnnotation("Delete job"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the Job to delete"),
@@ -136,6 +140,7 @@ func RegisterJobToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, f
 
 	updateJobTool := mcp.NewTool("update_job",
 		mcp.WithDescription("Update an existing Job (limited to mutable fields like labels and parallelism)"),
+		idempotentMutationAnnotation("Update job"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the Job to update"),

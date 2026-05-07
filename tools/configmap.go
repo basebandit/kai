@@ -45,6 +45,7 @@ func RegisterConfigMapTools(s kai.ServerInterface, cm kai.ClusterManager) {
 func RegisterConfigMapToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, factory ConfigMapFactory) {
 	createConfigMapTool := mcp.NewTool("create_configmap",
 		mcp.WithDescription("Create a new ConfigMap in the specified namespace"),
+		creationAnnotation("Create configmap"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the ConfigMap"),
@@ -69,6 +70,7 @@ func RegisterConfigMapToolsWithFactory(s kai.ServerInterface, cm kai.ClusterMana
 
 	getConfigMapTool := mcp.NewTool("get_configmap",
 		mcp.WithDescription("Get detailed information about a specific ConfigMap"),
+		readOnlyAnnotation("Get configmap"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the ConfigMap"),
@@ -81,6 +83,7 @@ func RegisterConfigMapToolsWithFactory(s kai.ServerInterface, cm kai.ClusterMana
 
 	listConfigMapsTool := mcp.NewTool("list_configmaps",
 		mcp.WithDescription("List ConfigMaps in the current namespace or across all namespaces"),
+		readOnlyAnnotation("List configmaps"),
 		mcp.WithBoolean("all_namespaces",
 			mcp.Description("Whether to list ConfigMaps across all namespaces"),
 		),
@@ -95,6 +98,7 @@ func RegisterConfigMapToolsWithFactory(s kai.ServerInterface, cm kai.ClusterMana
 
 	deleteConfigMapTool := mcp.NewTool("delete_configmap",
 		mcp.WithDescription("Delete a ConfigMap from the specified namespace"),
+		destructiveAnnotation("Delete configmap"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the ConfigMap to delete"),
@@ -107,6 +111,7 @@ func RegisterConfigMapToolsWithFactory(s kai.ServerInterface, cm kai.ClusterMana
 
 	updateConfigMapTool := mcp.NewTool("update_configmap",
 		mcp.WithDescription("Update an existing ConfigMap"),
+		idempotentMutationAnnotation("Update configmap"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the ConfigMap to update"),

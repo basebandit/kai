@@ -61,6 +61,7 @@ func RegisterServiceTools(s kai.ServerInterface, cm kai.ClusterManager) {
 func RegisterServiceToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, factory ServiceFactory) {
 	listServiceTool := mcp.NewTool("list_services",
 		mcp.WithDescription("List services in the current namespace or across all namespaces"),
+		readOnlyAnnotation("List services"),
 		mcp.WithBoolean("all_namespaces",
 			mcp.Description("Whether to list services across all namespaces"),
 		),
@@ -76,6 +77,7 @@ func RegisterServiceToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 
 	getServiceTool := mcp.NewTool("get_service",
 		mcp.WithDescription("Get detailed information about a specific service"),
+		readOnlyAnnotation("Get service"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the service"),
@@ -89,6 +91,7 @@ func RegisterServiceToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 
 	createServiceTool := mcp.NewTool("create_service",
 		mcp.WithDescription("Create a new service in the current namespace"),
+		creationAnnotation("Create service"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the service"),
@@ -127,6 +130,7 @@ func RegisterServiceToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 
 	deleteServiceTool := mcp.NewTool("delete_service",
 		mcp.WithDescription("Delete a service or multiple services matching criteria from the current namespace"),
+		destructiveAnnotation("Delete service"),
 		mcp.WithString("name",
 			mcp.Description("Name of the specific service to delete (either name or labels must be provided)"),
 		),
@@ -142,6 +146,7 @@ func RegisterServiceToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 
 	updateServiceTool := mcp.NewTool("update_service",
 		mcp.WithDescription("Update an existing service"),
+		idempotentMutationAnnotation("Update service"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the service to update"),
@@ -179,6 +184,7 @@ func RegisterServiceToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 
 	patchServiceTool := mcp.NewTool("patch_service",
 		mcp.WithDescription("Apply a partial update to an existing service"),
+		idempotentMutationAnnotation("Patch service"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the service to patch"),

@@ -26,6 +26,7 @@ func RegisterOperationsTools(s kai.ServerInterface, cm kai.ClusterManager) {
 func registerPortForwardTools(s kai.ServerInterface, manager *cluster.Manager) {
 	startPortForwardTool := mcp.NewTool("start_port_forward",
 		mcp.WithDescription("Start port forwarding to a pod or service. Similar to 'kubectl port-forward'"),
+		creationAnnotation("Start port forward"),
 		mcp.WithString("target",
 			mcp.Required(),
 			mcp.Description("Target to forward to. Use 'pod/name' or 'service/name' or 'svc/name' format"),
@@ -43,6 +44,7 @@ func registerPortForwardTools(s kai.ServerInterface, manager *cluster.Manager) {
 
 	stopPortForwardTool := mcp.NewTool("stop_port_forward",
 		mcp.WithDescription("Stop an active port forwarding session"),
+		idempotentMutationAnnotation("Stop port forward"),
 		mcp.WithString("session_id",
 			mcp.Required(),
 			mcp.Description("ID of the port forward session to stop (e.g., 'pf-1')"),
@@ -53,6 +55,7 @@ func registerPortForwardTools(s kai.ServerInterface, manager *cluster.Manager) {
 
 	listPortForwardsTool := mcp.NewTool("list_port_forwards",
 		mcp.WithDescription("List all active port forwarding sessions"),
+		readOnlyAnnotation("List port forwards"),
 	)
 
 	s.AddTool(listPortForwardsTool, listPortForwardsHandler(manager))

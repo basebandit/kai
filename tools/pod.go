@@ -44,6 +44,7 @@ func RegisterPodTools(s kai.ServerInterface, cm kai.ClusterManager) {
 func RegisterPodToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, factory PodFactory) {
 	createPodTool := mcp.NewTool("create_pod",
 		mcp.WithDescription("Create a new pod in the current namespace"),
+		creationAnnotation("Create pod"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the pod"),
@@ -94,6 +95,7 @@ func RegisterPodToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, f
 
 	listPodTools := mcp.NewTool("list_pods",
 		mcp.WithDescription("List pods in the current namespace or across all namespaces"),
+		readOnlyAnnotation("List pods"),
 		mcp.WithBoolean("all_namespaces",
 			mcp.Description("Whether to list pods across all namespaces"),
 		),
@@ -115,6 +117,7 @@ func RegisterPodToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, f
 
 	getPodTool := mcp.NewTool("get_pod",
 		mcp.WithDescription("Get detailed information about a specific pod"),
+		readOnlyAnnotation("Get pod"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the pod"),
@@ -128,6 +131,7 @@ func RegisterPodToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, f
 
 	deletePodTool := mcp.NewTool("delete_pod",
 		mcp.WithDescription("Delete a pod by name"),
+		destructiveAnnotation("Delete pod"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the pod to delete"),
@@ -142,6 +146,7 @@ func RegisterPodToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, f
 
 	streamLogsTool := mcp.NewTool("stream_logs",
 		mcp.WithDescription("Stream logs from a container in a pod"),
+		readOnlyAnnotation("Stream pod logs"),
 		mcp.WithString("pod",
 			mcp.Required(),
 			mcp.Description("Name of the pod"),

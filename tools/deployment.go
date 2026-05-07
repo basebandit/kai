@@ -47,6 +47,7 @@ func RegisterDeploymentTools(s kai.ServerInterface, cm kai.ClusterManager) {
 func RegisterDeploymentToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, factory DeploymentFactory) {
 	listDeploymentTool := mcp.NewTool("list_deployments",
 		mcp.WithDescription("List deployments in the current namespace or across all namespaces"),
+		readOnlyAnnotation("List deployments"),
 		mcp.WithBoolean("all_namespaces",
 			mcp.Description("Whether to list deployments across all namespaces"),
 		),
@@ -62,6 +63,7 @@ func RegisterDeploymentToolsWithFactory(s kai.ServerInterface, cm kai.ClusterMan
 
 	describeDeploymentTool := mcp.NewTool("describe_deployment",
 		mcp.WithDescription("Get detailed information about a specific deployment"),
+		readOnlyAnnotation("Describe deployment"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the deployment"),
@@ -75,6 +77,7 @@ func RegisterDeploymentToolsWithFactory(s kai.ServerInterface, cm kai.ClusterMan
 
 	createDeploymentTool := mcp.NewTool("create_deployment",
 		mcp.WithDescription("Create a new deployment in the current namespace"),
+		creationAnnotation("Create deployment"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the deployment"),
@@ -110,6 +113,7 @@ func RegisterDeploymentToolsWithFactory(s kai.ServerInterface, cm kai.ClusterMan
 
 	getDeploymentTool := mcp.NewTool("get_deployment",
 		mcp.WithDescription("Get basic information about a specific deployment"),
+		readOnlyAnnotation("Get deployment"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the deployment"),
@@ -123,6 +127,7 @@ func RegisterDeploymentToolsWithFactory(s kai.ServerInterface, cm kai.ClusterMan
 
 	updateDeploymentTool := mcp.NewTool("update_deployment",
 		mcp.WithDescription("Update an existing deployment"),
+		idempotentMutationAnnotation("Update deployment"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the deployment to update"),
@@ -157,6 +162,7 @@ func RegisterDeploymentToolsWithFactory(s kai.ServerInterface, cm kai.ClusterMan
 
 	deleteDeploymentTool := mcp.NewTool("delete_deployment",
 		mcp.WithDescription("Delete a deployment from the cluster"),
+		destructiveAnnotation("Delete deployment"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the deployment to delete"),
@@ -170,6 +176,7 @@ func RegisterDeploymentToolsWithFactory(s kai.ServerInterface, cm kai.ClusterMan
 
 	scaleDeploymentTool := mcp.NewTool("scale_deployment",
 		mcp.WithDescription("Scale a deployment to a specified number of replicas"),
+		idempotentMutationAnnotation("Scale deployment"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the deployment to scale"),
@@ -187,6 +194,7 @@ func RegisterDeploymentToolsWithFactory(s kai.ServerInterface, cm kai.ClusterMan
 
 	rolloutStatusTool := mcp.NewTool("rollout_status_deployment",
 		mcp.WithDescription("Check the rollout status of a deployment"),
+		readOnlyAnnotation("Get rollout status"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the deployment"),
@@ -200,6 +208,7 @@ func RegisterDeploymentToolsWithFactory(s kai.ServerInterface, cm kai.ClusterMan
 
 	rolloutHistoryTool := mcp.NewTool("rollout_history_deployment",
 		mcp.WithDescription("View the rollout history of a deployment"),
+		readOnlyAnnotation("Get rollout history"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the deployment"),
@@ -213,6 +222,7 @@ func RegisterDeploymentToolsWithFactory(s kai.ServerInterface, cm kai.ClusterMan
 
 	rolloutUndoTool := mcp.NewTool("rollout_undo_deployment",
 		mcp.WithDescription("Roll back a deployment to a previous revision"),
+		destructiveAnnotation("Undo rollout"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the deployment"),
@@ -229,6 +239,7 @@ func RegisterDeploymentToolsWithFactory(s kai.ServerInterface, cm kai.ClusterMan
 
 	rolloutRestartTool := mcp.NewTool("rollout_restart_deployment",
 		mcp.WithDescription("Restart a deployment by recreating its pods"),
+		creationAnnotation("Restart rollout"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the deployment"),
@@ -242,6 +253,7 @@ func RegisterDeploymentToolsWithFactory(s kai.ServerInterface, cm kai.ClusterMan
 
 	rolloutPauseTool := mcp.NewTool("rollout_pause_deployment",
 		mcp.WithDescription("Pause a deployment rollout"),
+		idempotentMutationAnnotation("Pause rollout"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the deployment"),
@@ -255,6 +267,7 @@ func RegisterDeploymentToolsWithFactory(s kai.ServerInterface, cm kai.ClusterMan
 
 	rolloutResumeTool := mcp.NewTool("rollout_resume_deployment",
 		mcp.WithDescription("Resume a paused deployment rollout"),
+		idempotentMutationAnnotation("Resume rollout"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the deployment"),

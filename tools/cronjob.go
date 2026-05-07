@@ -56,6 +56,7 @@ func RegisterCronJobTools(s kai.ServerInterface, cm kai.ClusterManager) {
 func RegisterCronJobToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, factory CronJobFactory) {
 	createCronJobTool := mcp.NewTool("create_cronjob",
 		mcp.WithDescription("Create a new CronJob in the specified namespace"),
+		creationAnnotation("Create cronjob"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the CronJob"),
@@ -115,6 +116,7 @@ func RegisterCronJobToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 
 	getCronJobTool := mcp.NewTool("get_cronjob",
 		mcp.WithDescription("Get information about a specific CronJob"),
+		readOnlyAnnotation("Get cronjob"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the CronJob"),
@@ -127,6 +129,7 @@ func RegisterCronJobToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 
 	listCronJobsTool := mcp.NewTool("list_cronjobs",
 		mcp.WithDescription("List CronJobs in the current namespace or across all namespaces"),
+		readOnlyAnnotation("List cronjobs"),
 		mcp.WithBoolean("all_namespaces",
 			mcp.Description("Whether to list CronJobs across all namespaces"),
 		),
@@ -141,6 +144,7 @@ func RegisterCronJobToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 
 	deleteCronJobTool := mcp.NewTool("delete_cronjob",
 		mcp.WithDescription("Delete a CronJob from the specified namespace"),
+		destructiveAnnotation("Delete cronjob"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the CronJob to delete"),
@@ -153,6 +157,7 @@ func RegisterCronJobToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 
 	updateCronJobTool := mcp.NewTool("update_cronjob",
 		mcp.WithDescription("Update an existing CronJob"),
+		idempotentMutationAnnotation("Update cronjob"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the CronJob to update"),
@@ -180,6 +185,7 @@ func RegisterCronJobToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 
 	suspendCronJobTool := mcp.NewTool("suspend_cronjob",
 		mcp.WithDescription("Suspend a CronJob to prevent it from creating new jobs"),
+		idempotentMutationAnnotation("Suspend cronjob"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the CronJob to suspend"),
@@ -192,6 +198,7 @@ func RegisterCronJobToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 
 	resumeCronJobTool := mcp.NewTool("resume_cronjob",
 		mcp.WithDescription("Resume a suspended CronJob"),
+		idempotentMutationAnnotation("Resume cronjob"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the CronJob to resume"),

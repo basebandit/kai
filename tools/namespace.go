@@ -13,6 +13,7 @@ import (
 func RegisterNamespaceTools(s kai.ServerInterface, cm kai.ClusterManager) {
 	createNamespaceTool := mcp.NewTool("create_namespace",
 		mcp.WithDescription("Create a new Kubernetes namespace"),
+		creationAnnotation("Create namespace"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the namespace to create"),
@@ -28,6 +29,7 @@ func RegisterNamespaceTools(s kai.ServerInterface, cm kai.ClusterManager) {
 
 	getNamespaceTool := mcp.NewTool("get_namespace",
 		mcp.WithDescription("Get detailed information about a specific namespace"),
+		readOnlyAnnotation("Get namespace"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the namespace to get"),
@@ -37,6 +39,7 @@ func RegisterNamespaceTools(s kai.ServerInterface, cm kai.ClusterManager) {
 
 	listNamespacesTool := mcp.NewTool("list_namespaces",
 		mcp.WithDescription("List all namespaces in the cluster"),
+		readOnlyAnnotation("List namespaces"),
 		mcp.WithString("label_selector",
 			mcp.Description("Label selector to filter namespaces (e.g., 'env=prod,tier=backend')"),
 		),
@@ -45,6 +48,7 @@ func RegisterNamespaceTools(s kai.ServerInterface, cm kai.ClusterManager) {
 
 	deleteNamespaceTool := mcp.NewTool("delete_namespace",
 		mcp.WithDescription("Delete a namespace or namespaces matching label selector"),
+		destructiveAnnotation("Delete namespace"),
 		mcp.WithString("name",
 			mcp.Description("Name of the namespace to delete"),
 		),
@@ -56,6 +60,7 @@ func RegisterNamespaceTools(s kai.ServerInterface, cm kai.ClusterManager) {
 
 	updateNamespaceTool := mcp.NewTool("update_namespace",
 		mcp.WithDescription("Update an existing namespace"),
+		idempotentMutationAnnotation("Update namespace"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the namespace to update"),

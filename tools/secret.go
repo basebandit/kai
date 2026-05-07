@@ -46,6 +46,7 @@ func RegisterSecretTools(s kai.ServerInterface, cm kai.ClusterManager) {
 func RegisterSecretToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, factory SecretFactory) {
 	createSecretTool := mcp.NewTool("create_secret",
 		mcp.WithDescription("Create a new Secret in the specified namespace"),
+		creationAnnotation("Create secret"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the Secret"),
@@ -73,6 +74,7 @@ func RegisterSecretToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager
 
 	getSecretTool := mcp.NewTool("get_secret",
 		mcp.WithDescription("Get information about a specific Secret (values are masked for security)"),
+		readOnlyAnnotation("Get secret"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the Secret"),
@@ -85,6 +87,7 @@ func RegisterSecretToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager
 
 	listSecretsTool := mcp.NewTool("list_secrets",
 		mcp.WithDescription("List Secrets in the current namespace or across all namespaces"),
+		readOnlyAnnotation("List secrets"),
 		mcp.WithBoolean("all_namespaces",
 			mcp.Description("Whether to list Secrets across all namespaces"),
 		),
@@ -99,6 +102,7 @@ func RegisterSecretToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager
 
 	deleteSecretTool := mcp.NewTool("delete_secret",
 		mcp.WithDescription("Delete a Secret from the specified namespace"),
+		destructiveAnnotation("Delete secret"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the Secret to delete"),
@@ -111,6 +115,7 @@ func RegisterSecretToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager
 
 	updateSecretTool := mcp.NewTool("update_secret",
 		mcp.WithDescription("Update an existing Secret"),
+		idempotentMutationAnnotation("Update secret"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the Secret to update"),

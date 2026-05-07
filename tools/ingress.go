@@ -47,6 +47,7 @@ func RegisterIngressTools(s kai.ServerInterface, cm kai.ClusterManager) {
 func RegisterIngressToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, factory IngressFactory) {
 	createIngressTool := mcp.NewTool("create_ingress",
 		mcp.WithDescription("Create a new Ingress in the specified namespace for HTTP/HTTPS routing"),
+		creationAnnotation("Create ingress"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the Ingress"),
@@ -77,6 +78,7 @@ func RegisterIngressToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 
 	getIngressTool := mcp.NewTool("get_ingress",
 		mcp.WithDescription("Get information about a specific Ingress"),
+		readOnlyAnnotation("Get ingress"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the Ingress"),
@@ -89,6 +91,7 @@ func RegisterIngressToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 
 	listIngressesTool := mcp.NewTool("list_ingresses",
 		mcp.WithDescription("List Ingresses in the current namespace or across all namespaces"),
+		readOnlyAnnotation("List ingresses"),
 		mcp.WithBoolean("all_namespaces",
 			mcp.Description("Whether to list Ingresses across all namespaces"),
 		),
@@ -103,6 +106,7 @@ func RegisterIngressToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 
 	updateIngressTool := mcp.NewTool("update_ingress",
 		mcp.WithDescription("Update an existing Ingress"),
+		idempotentMutationAnnotation("Update ingress"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the Ingress to update"),
@@ -133,6 +137,7 @@ func RegisterIngressToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 
 	deleteIngressTool := mcp.NewTool("delete_ingress",
 		mcp.WithDescription("Delete an Ingress from the specified namespace"),
+		destructiveAnnotation("Delete ingress"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the Ingress to delete"),

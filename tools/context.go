@@ -14,16 +14,19 @@ import (
 func RegisterContextTools(s kai.ServerInterface, cm kai.ClusterManager) {
 	listContextsTool := mcp.NewTool("list_contexts",
 		mcp.WithDescription("List all available Kubernetes contexts"),
+		readOnlyAnnotation("List contexts"),
 	)
 	s.AddTool(listContextsTool, listContextsHandler(cm))
 
 	getCurrentContextTool := mcp.NewTool("get_current_context",
 		mcp.WithDescription("Get the currently active Kubernetes context"),
+		readOnlyAnnotation("Get current context"),
 	)
 	s.AddTool(getCurrentContextTool, getCurrentContextHandler(cm))
 
 	switchContextTool := mcp.NewTool("switch_context",
 		mcp.WithDescription("Switch to a different Kubernetes context"),
+		idempotentMutationAnnotation("Switch context"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the context to switch to"),
@@ -33,6 +36,7 @@ func RegisterContextTools(s kai.ServerInterface, cm kai.ClusterManager) {
 
 	loadKubeconfigTool := mcp.NewTool("load_kubeconfig",
 		mcp.WithDescription("Load a kubeconfig file and register it as a new context"),
+		creationAnnotation("Load kubeconfig"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name to assign to this context"),
@@ -45,6 +49,7 @@ func RegisterContextTools(s kai.ServerInterface, cm kai.ClusterManager) {
 
 	deleteContextTool := mcp.NewTool("delete_context",
 		mcp.WithDescription("Remove a context from the manager"),
+		destructiveAnnotation("Delete context"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the context to delete"),
@@ -54,6 +59,7 @@ func RegisterContextTools(s kai.ServerInterface, cm kai.ClusterManager) {
 
 	renameContextTool := mcp.NewTool("rename_context",
 		mcp.WithDescription("Rename an existing context"),
+		creationAnnotation("Rename context"),
 		mcp.WithString("old_name",
 			mcp.Required(),
 			mcp.Description("Current name of the context"),
@@ -67,6 +73,7 @@ func RegisterContextTools(s kai.ServerInterface, cm kai.ClusterManager) {
 
 	describeContextTool := mcp.NewTool("describe_context",
 		mcp.WithDescription("Get detailed information about a specific context"),
+		readOnlyAnnotation("Describe context"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the context to describe"),
