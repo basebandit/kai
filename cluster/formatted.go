@@ -393,27 +393,27 @@ func formatServiceList(services *corev1.ServiceList, includeNamespace bool) stri
 
 		// Format the output
 		if includeNamespace {
-			result.WriteString(fmt.Sprintf("• %s/%s: Type=%s, ClusterIP=%s, ExternalIP=%s, Ports=%s, Age=%s\n",
+			fmt.Fprintf(&result, "• %s/%s: Type=%s, ClusterIP=%s, ExternalIP=%s, Ports=%s, Age=%s\n",
 				svc.Namespace,
 				svc.Name,
 				serviceType,
 				clusterIP,
 				externalIP,
 				portsStr,
-				formatDuration(age)))
+				formatDuration(age))
 		} else {
-			result.WriteString(fmt.Sprintf("• %s: Type=%s, ClusterIP=%s, ExternalIP=%s, Ports=%s, Age=%s\n",
+			fmt.Fprintf(&result, "• %s: Type=%s, ClusterIP=%s, ExternalIP=%s, Ports=%s, Age=%s\n",
 				svc.Name,
 				serviceType,
 				clusterIP,
 				externalIP,
 				portsStr,
-				formatDuration(age)))
+				formatDuration(age))
 		}
 	}
 
 	// Add total count
-	result.WriteString(fmt.Sprintf("\nTotal: %d service(s)", len(services.Items)))
+	fmt.Fprintf(&result, "\nTotal: %d service(s)", len(services.Items))
 
 	return result.String()
 }
@@ -612,7 +612,7 @@ func formatNamespaceList(namespaces *corev1.NamespaceList, labelSelector string)
 	var result strings.Builder
 
 	if labelSelector != "" {
-		result.WriteString(fmt.Sprintf("Namespaces matching label selector '%s':\n", labelSelector))
+		fmt.Fprintf(&result, "Namespaces matching label selector '%s':\n", labelSelector)
 	} else {
 		result.WriteString("Namespaces:\n")
 	}
@@ -624,18 +624,18 @@ func formatNamespaceList(namespaces *corev1.NamespaceList, labelSelector string)
 			status = "Active"
 		}
 
-		result.WriteString(fmt.Sprintf("• %s: Status=%s, Age=%s",
-			ns.Name, status, formatDuration(age)))
+		fmt.Fprintf(&result, "• %s: Status=%s, Age=%s",
+			ns.Name, status, formatDuration(age))
 
 		if len(ns.Labels) > 0 {
 			labelCount := len(ns.Labels)
-			result.WriteString(fmt.Sprintf(" - Labels: %d", labelCount))
+			fmt.Fprintf(&result, " - Labels: %d", labelCount)
 		}
 
 		result.WriteString("\n")
 	}
 
-	result.WriteString(fmt.Sprintf("\nTotal: %d namespace(s)", len(namespaces.Items)))
+	fmt.Fprintf(&result, "\nTotal: %d namespace(s)", len(namespaces.Items))
 
 	return result.String()
 }
@@ -688,21 +688,21 @@ func formatConfigMapList(configMaps *corev1.ConfigMapList, includeNamespace bool
 		dataCount := len(cm.Data) + len(cm.BinaryData)
 
 		if includeNamespace {
-			result.WriteString(fmt.Sprintf("• %s/%s: Data=%d, Age=%s",
-				cm.Namespace, cm.Name, dataCount, formatDuration(age)))
+			fmt.Fprintf(&result, "• %s/%s: Data=%d, Age=%s",
+				cm.Namespace, cm.Name, dataCount, formatDuration(age))
 		} else {
-			result.WriteString(fmt.Sprintf("• %s: Data=%d, Age=%s",
-				cm.Name, dataCount, formatDuration(age)))
+			fmt.Fprintf(&result, "• %s: Data=%d, Age=%s",
+				cm.Name, dataCount, formatDuration(age))
 		}
 
 		if len(cm.Labels) > 0 {
-			result.WriteString(fmt.Sprintf(" - Labels: %d", len(cm.Labels)))
+			fmt.Fprintf(&result, " - Labels: %d", len(cm.Labels))
 		}
 
 		result.WriteString("\n")
 	}
 
-	result.WriteString(fmt.Sprintf("\nTotal: %d ConfigMap(s)", len(configMaps.Items)))
+	fmt.Fprintf(&result, "\nTotal: %d ConfigMap(s)", len(configMaps.Items))
 
 	return result.String()
 }
@@ -745,21 +745,21 @@ func formatSecretList(secrets *corev1.SecretList, includeNamespace bool) string 
 		dataCount := len(secret.Data)
 
 		if includeNamespace {
-			result.WriteString(fmt.Sprintf("• %s/%s: Type=%s, Data=%d, Age=%s",
-				secret.Namespace, secret.Name, secret.Type, dataCount, formatDuration(age)))
+			fmt.Fprintf(&result, "• %s/%s: Type=%s, Data=%d, Age=%s",
+				secret.Namespace, secret.Name, secret.Type, dataCount, formatDuration(age))
 		} else {
-			result.WriteString(fmt.Sprintf("• %s: Type=%s, Data=%d, Age=%s",
-				secret.Name, secret.Type, dataCount, formatDuration(age)))
+			fmt.Fprintf(&result, "• %s: Type=%s, Data=%d, Age=%s",
+				secret.Name, secret.Type, dataCount, formatDuration(age))
 		}
 
 		if len(secret.Labels) > 0 {
-			result.WriteString(fmt.Sprintf(" - Labels: %d", len(secret.Labels)))
+			fmt.Fprintf(&result, " - Labels: %d", len(secret.Labels))
 		}
 
 		result.WriteString("\n")
 	}
 
-	result.WriteString(fmt.Sprintf("\nTotal: %d Secret(s)", len(secrets.Items)))
+	fmt.Fprintf(&result, "\nTotal: %d Secret(s)", len(secrets.Items))
 
 	return result.String()
 }
@@ -812,7 +812,7 @@ func formatJobList(jobs *batchv1.JobList, includeNamespace bool) string {
 	if includeNamespace {
 		result.WriteString("Jobs across all namespaces:\n")
 	} else {
-		result.WriteString(fmt.Sprintf("Jobs in namespace %q:\n", jobs.Items[0].Namespace))
+		fmt.Fprintf(&result, "Jobs in namespace %q:\n", jobs.Items[0].Namespace)
 	}
 
 	for _, job := range jobs.Items {
@@ -832,21 +832,21 @@ func formatJobList(jobs *batchv1.JobList, includeNamespace bool) string {
 		}
 
 		if includeNamespace {
-			result.WriteString(fmt.Sprintf("• %s/%s: %s - Age: %s",
-				job.Namespace, job.Name, status, formatDuration(age)))
+			fmt.Fprintf(&result, "• %s/%s: %s - Age: %s",
+				job.Namespace, job.Name, status, formatDuration(age))
 		} else {
-			result.WriteString(fmt.Sprintf("• %s: %s - Age: %s",
-				job.Name, status, formatDuration(age)))
+			fmt.Fprintf(&result, "• %s: %s - Age: %s",
+				job.Name, status, formatDuration(age))
 		}
 
 		if len(job.Labels) > 0 {
-			result.WriteString(fmt.Sprintf(" - Labels: %d", len(job.Labels)))
+			fmt.Fprintf(&result, " - Labels: %d", len(job.Labels))
 		}
 
 		result.WriteString("\n")
 	}
 
-	result.WriteString(fmt.Sprintf("\nTotal: %d Job(s)", len(jobs.Items)))
+	fmt.Fprintf(&result, "\nTotal: %d Job(s)", len(jobs.Items))
 
 	return result.String()
 }
@@ -946,7 +946,7 @@ func formatCronJobList(cronJobs *batchv1.CronJobList, includeNamespace bool) str
 		result.WriteString("CronJobs across all namespaces:\n")
 	} else {
 		if len(cronJobs.Items) > 0 {
-			result.WriteString(fmt.Sprintf("CronJobs in namespace %q:\n", cronJobs.Items[0].Namespace))
+			fmt.Fprintf(&result, "CronJobs in namespace %q:\n", cronJobs.Items[0].Namespace)
 		} else {
 			result.WriteString("CronJobs in namespace:\n")
 		}
@@ -966,21 +966,21 @@ func formatCronJobList(cronJobs *batchv1.CronJobList, includeNamespace bool) str
 		}
 
 		if includeNamespace {
-			result.WriteString(fmt.Sprintf("• %s/%s: Schedule=%s, %s, LastSchedule=%s, Active=%d, Age=%s",
-				cronJob.Namespace, cronJob.Name, cronJob.Spec.Schedule, suspended, lastSchedule, len(cronJob.Status.Active), formatDuration(age)))
+			fmt.Fprintf(&result, "• %s/%s: Schedule=%s, %s, LastSchedule=%s, Active=%d, Age=%s",
+				cronJob.Namespace, cronJob.Name, cronJob.Spec.Schedule, suspended, lastSchedule, len(cronJob.Status.Active), formatDuration(age))
 		} else {
-			result.WriteString(fmt.Sprintf("• %s: Schedule=%s, %s, LastSchedule=%s, Active=%d, Age=%s",
-				cronJob.Name, cronJob.Spec.Schedule, suspended, lastSchedule, len(cronJob.Status.Active), formatDuration(age)))
+			fmt.Fprintf(&result, "• %s: Schedule=%s, %s, LastSchedule=%s, Active=%d, Age=%s",
+				cronJob.Name, cronJob.Spec.Schedule, suspended, lastSchedule, len(cronJob.Status.Active), formatDuration(age))
 		}
 
 		if len(cronJob.Labels) > 0 {
-			result.WriteString(fmt.Sprintf(" - Labels: %d", len(cronJob.Labels)))
+			fmt.Fprintf(&result, " - Labels: %d", len(cronJob.Labels))
 		}
 
 		result.WriteString("\n")
 	}
 
-	result.WriteString(fmt.Sprintf("\nTotal: %d CronJob(s)", len(cronJobs.Items)))
+	fmt.Fprintf(&result, "\nTotal: %d CronJob(s)", len(cronJobs.Items))
 
 	return result.String()
 }
@@ -1095,7 +1095,7 @@ func formatIngressList(ingresses *networkingv1.IngressList, includeNamespace boo
 		result.WriteString("Ingresses across all namespaces:\n")
 	} else {
 		if len(ingresses.Items) > 0 {
-			result.WriteString(fmt.Sprintf("Ingresses in namespace %q:\n", ingresses.Items[0].Namespace))
+			fmt.Fprintf(&result, "Ingresses in namespace %q:\n", ingresses.Items[0].Namespace)
 		} else {
 			result.WriteString("Ingresses in namespace:\n")
 		}
@@ -1134,11 +1134,11 @@ func formatIngressList(ingresses *networkingv1.IngressList, includeNamespace boo
 		}
 
 		if includeNamespace {
-			result.WriteString(fmt.Sprintf("• %s/%s: Class=%s, Hosts=%s, Address=%s, Age=%s",
-				ingress.Namespace, ingress.Name, ingressClass, hostStr, address, formatDuration(age)))
+			fmt.Fprintf(&result, "• %s/%s: Class=%s, Hosts=%s, Address=%s, Age=%s",
+				ingress.Namespace, ingress.Name, ingressClass, hostStr, address, formatDuration(age))
 		} else {
-			result.WriteString(fmt.Sprintf("• %s: Class=%s, Hosts=%s, Address=%s, Age=%s",
-				ingress.Name, ingressClass, hostStr, address, formatDuration(age)))
+			fmt.Fprintf(&result, "• %s: Class=%s, Hosts=%s, Address=%s, Age=%s",
+				ingress.Name, ingressClass, hostStr, address, formatDuration(age))
 		}
 
 		// TLS indicator
@@ -1147,13 +1147,13 @@ func formatIngressList(ingresses *networkingv1.IngressList, includeNamespace boo
 		}
 
 		if len(ingress.Labels) > 0 {
-			result.WriteString(fmt.Sprintf(" - Labels: %d", len(ingress.Labels)))
+			fmt.Fprintf(&result, " - Labels: %d", len(ingress.Labels))
 		}
 
 		result.WriteString("\n")
 	}
 
-	result.WriteString(fmt.Sprintf("\nTotal: %d Ingress(es)", len(ingresses.Items)))
+	fmt.Fprintf(&result, "\nTotal: %d Ingress(es)", len(ingresses.Items))
 
 	return result.String()
 }

@@ -200,15 +200,15 @@ func formatPortForwardSession(session *cluster.PortForwardSession) string {
 	var sb strings.Builder
 	sb.WriteString("Port forward started successfully\n")
 	sb.WriteString(strings.Repeat("-", 40) + "\n")
-	sb.WriteString(fmt.Sprintf("Session ID: %s\n", session.ID))
-	sb.WriteString(fmt.Sprintf("Namespace:  %s\n", session.Namespace))
-	sb.WriteString(fmt.Sprintf("Target:     %s/%s\n", session.TargetType, session.Target))
+	fmt.Fprintf(&sb, "Session ID: %s\n", session.ID)
+	fmt.Fprintf(&sb, "Namespace:  %s\n", session.Namespace)
+	fmt.Fprintf(&sb, "Target:     %s/%s\n", session.TargetType, session.Target)
 	if session.TargetType == "service" {
-		sb.WriteString(fmt.Sprintf("Pod:        %s\n", session.PodName))
+		fmt.Fprintf(&sb, "Pod:        %s\n", session.PodName)
 	}
-	sb.WriteString(fmt.Sprintf("Forwarding: localhost:%d -> %d\n", session.LocalPort, session.RemotePort))
+	fmt.Fprintf(&sb, "Forwarding: localhost:%d -> %d\n", session.LocalPort, session.RemotePort)
 	sb.WriteString(strings.Repeat("-", 40) + "\n")
-	sb.WriteString(fmt.Sprintf("Access via: http://localhost:%d\n", session.LocalPort))
+	fmt.Fprintf(&sb, "Access via: http://localhost:%d\n", session.LocalPort)
 	return sb.String()
 }
 
@@ -221,8 +221,8 @@ func formatPortForwardList(sessions []*cluster.PortForwardSession) string {
 	var sb strings.Builder
 	sb.WriteString("Active Port Forwards:\n")
 	sb.WriteString(strings.Repeat("-", 80) + "\n")
-	sb.WriteString(fmt.Sprintf("%-10s %-15s %-25s %-15s %s\n",
-		"ID", "NAMESPACE", "TARGET", "POD", "PORTS"))
+	fmt.Fprintf(&sb, "%-10s %-15s %-25s %-15s %s\n",
+		"ID", "NAMESPACE", "TARGET", "POD", "PORTS")
 	sb.WriteString(strings.Repeat("-", 80) + "\n")
 
 	for _, session := range sessions {
@@ -234,14 +234,13 @@ func formatPortForwardList(sessions []*cluster.PortForwardSession) string {
 		if len(targetDisplay) > 25 {
 			targetDisplay = targetDisplay[:22] + "..."
 		}
-		sb.WriteString(fmt.Sprintf("%-10s %-15s %-25s %-15s %d:%d\n",
+		fmt.Fprintf(&sb, "%-10s %-15s %-25s %-15s %d:%d\n",
 			session.ID,
 			session.Namespace,
 			targetDisplay,
 			podDisplay,
 			session.LocalPort,
-			session.RemotePort,
-		))
+			session.RemotePort)
 	}
 
 	return sb.String()
