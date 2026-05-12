@@ -216,11 +216,7 @@ func TestCreateDeploymentHandler(t *testing.T) {
 			handler := createDeploymentHandler(mockCM, mockFactory)
 
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tc.args,
 				},
 			}
@@ -336,11 +332,7 @@ func TestDescribeDeploymentHandler(t *testing.T) {
 			handler := describeDeploymentHandler(mockCM, mockFactory)
 
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tc.args,
 				},
 			}
@@ -519,11 +511,7 @@ func TestUpdateDeploymentHandler(t *testing.T) {
 			handler := updateDeploymentHandler(mockCM, mockFactory)
 
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tc.args,
 				},
 			}
@@ -659,11 +647,7 @@ func TestListDeploymentsHandler(t *testing.T) {
 			handler := listDeploymentsHandler(mockCM, mockFactory)
 
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tc.args,
 				},
 			}
@@ -780,11 +764,7 @@ func TestGetDeploymentHandler(t *testing.T) {
 			handler := getDeploymentHandler(mockCM, mockFactory)
 
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tc.args,
 				},
 			}
@@ -1394,11 +1374,7 @@ func runDeploymentTests(t *testing.T, testCases []deploymentTestCase, handlerFn 
 			handler := handlerFn(mockCM, mockFactory)
 
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tc.args,
 				},
 			}

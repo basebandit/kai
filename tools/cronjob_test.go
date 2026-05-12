@@ -165,11 +165,7 @@ func TestCreateCronJobHandler(t *testing.T) {
 
 			handler := createCronJobHandler(mockCM, mockFactory)
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tt.args,
 				},
 			}
@@ -240,11 +236,7 @@ func TestGetCronJobHandler(t *testing.T) {
 
 			handler := getCronJobHandler(mockCM, mockFactory)
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tt.args,
 				},
 			}
@@ -337,11 +329,7 @@ func TestListCronJobsHandler(t *testing.T) {
 
 			handler := listCronJobsHandler(mockCM, mockFactory)
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tt.args,
 				},
 			}
@@ -412,11 +400,7 @@ func TestDeleteCronJobHandler(t *testing.T) {
 
 			handler := deleteCronJobHandler(mockCM, mockFactory)
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tt.args,
 				},
 			}
@@ -504,11 +488,7 @@ func TestCreateCronJobHandlerError(t *testing.T) {
 
 	handler := createCronJobHandler(mockCM, mockFactory)
 	request := mcp.CallToolRequest{
-		Params: struct {
-			Name      string         `json:"name"`
-			Arguments map[string]any `json:"arguments,omitempty"`
-			Meta      *mcp.Meta      `json:"_meta,omitempty"`
-		}{
+		Params: mcp.CallToolParams{
 			Arguments: map[string]any{
 				"name":     "test-cronjob",
 				"schedule": "*/5 * * * *",
@@ -537,11 +517,7 @@ func TestGetCronJobHandlerError(t *testing.T) {
 
 	handler := getCronJobHandler(mockCM, mockFactory)
 	request := mcp.CallToolRequest{
-		Params: struct {
-			Name      string         `json:"name"`
-			Arguments map[string]any `json:"arguments,omitempty"`
-			Meta      *mcp.Meta      `json:"_meta,omitempty"`
-		}{
+		Params: mcp.CallToolParams{
 			Arguments: map[string]any{
 				"name": "test-cronjob",
 			},
@@ -568,11 +544,7 @@ func TestListCronJobsHandlerError(t *testing.T) {
 
 	handler := listCronJobsHandler(mockCM, mockFactory)
 	request := mcp.CallToolRequest{
-		Params: struct {
-			Name      string         `json:"name"`
-			Arguments map[string]any `json:"arguments,omitempty"`
-			Meta      *mcp.Meta      `json:"_meta,omitempty"`
-		}{
+		Params: mcp.CallToolParams{
 			Arguments: map[string]any{},
 		},
 	}
@@ -597,11 +569,7 @@ func TestDeleteCronJobHandlerError(t *testing.T) {
 
 	handler := deleteCronJobHandler(mockCM, mockFactory)
 	request := mcp.CallToolRequest{
-		Params: struct {
-			Name      string         `json:"name"`
-			Arguments map[string]any `json:"arguments,omitempty"`
-			Meta      *mcp.Meta      `json:"_meta,omitempty"`
-		}{
+		Params: mcp.CallToolParams{
 			Arguments: map[string]any{
 				"name": "test-cronjob",
 			},
@@ -633,11 +601,7 @@ func TestCreateCronJobHandlerDefaultNamespace(t *testing.T) {
 
 	handler := createCronJobHandler(mockCM, mockFactory)
 	request := mcp.CallToolRequest{
-		Params: struct {
-			Name      string         `json:"name"`
-			Arguments map[string]any `json:"arguments,omitempty"`
-			Meta      *mcp.Meta      `json:"_meta,omitempty"`
-		}{
+		Params: mcp.CallToolParams{
 			Arguments: map[string]any{
 				"name":     "test-cronjob",
 				"schedule": "*/5 * * * *",
@@ -669,11 +633,7 @@ func TestGetCronJobHandlerDefaultNamespace(t *testing.T) {
 
 	handler := getCronJobHandler(mockCM, mockFactory)
 	request := mcp.CallToolRequest{
-		Params: struct {
-			Name      string         `json:"name"`
-			Arguments map[string]any `json:"arguments,omitempty"`
-			Meta      *mcp.Meta      `json:"_meta,omitempty"`
-		}{
+		Params: mcp.CallToolParams{
 			Arguments: map[string]any{
 				"name": "test-cronjob",
 				// No namespace provided - should use default
@@ -703,11 +663,7 @@ func TestDeleteCronJobHandlerDefaultNamespace(t *testing.T) {
 
 	handler := deleteCronJobHandler(mockCM, mockFactory)
 	request := mcp.CallToolRequest{
-		Params: struct {
-			Name      string         `json:"name"`
-			Arguments map[string]any `json:"arguments,omitempty"`
-			Meta      *mcp.Meta      `json:"_meta,omitempty"`
-		}{
+		Params: mcp.CallToolParams{
 			Arguments: map[string]any{
 				"name": "test-cronjob",
 				// No namespace provided - should use default
@@ -814,11 +770,7 @@ func TestUpdateCronJobHandler(t *testing.T) {
 
 			handler := updateCronJobHandler(mockCM, mockFactory)
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tt.args,
 				},
 			}
@@ -909,11 +861,7 @@ func TestSuspendCronJobHandler(t *testing.T) {
 
 			handler := suspendCronJobHandler(mockCM, mockFactory)
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tt.args,
 				},
 			}
@@ -1004,11 +952,7 @@ func TestResumeCronJobHandler(t *testing.T) {
 
 			handler := resumeCronJobHandler(mockCM, mockFactory)
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tt.args,
 				},
 			}

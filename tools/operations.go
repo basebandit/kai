@@ -26,6 +26,7 @@ func RegisterOperationsTools(s kai.ServerInterface, cm kai.ClusterManager) {
 func registerPortForwardTools(s kai.ServerInterface, manager *cluster.Manager) {
 	startPortForwardTool := mcp.NewTool("start_port_forward",
 		mcp.WithDescription("Start port forwarding to a pod or service. Similar to 'kubectl port-forward'"),
+		creationAnnotation("Start port forward"),
 		mcp.WithString("target",
 			mcp.Required(),
 			mcp.Description("Target to forward to. Use 'pod/name' or 'service/name' or 'svc/name' format"),
@@ -43,6 +44,7 @@ func registerPortForwardTools(s kai.ServerInterface, manager *cluster.Manager) {
 
 	stopPortForwardTool := mcp.NewTool("stop_port_forward",
 		mcp.WithDescription("Stop an active port forwarding session"),
+		idempotentMutationAnnotation("Stop port forward"),
 		mcp.WithString("session_id",
 			mcp.Required(),
 			mcp.Description("ID of the port forward session to stop (e.g., 'pf-1')"),
@@ -53,6 +55,7 @@ func registerPortForwardTools(s kai.ServerInterface, manager *cluster.Manager) {
 
 	listPortForwardsTool := mcp.NewTool("list_port_forwards",
 		mcp.WithDescription("List all active port forwarding sessions"),
+		readOnlyAnnotation("List port forwards"),
 	)
 
 	s.AddTool(listPortForwardsTool, listPortForwardsHandler(manager))
@@ -63,18 +66,18 @@ func startPortForwardHandler(manager *cluster.Manager) func(ctx context.Context,
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "start_port_forward"))
 
-		target, ok := request.Params.Arguments["target"].(string)
+		target, ok := request.GetArguments()["target"].(string)
 		if !ok || target == "" {
 			return mcp.NewToolResultError("target is required"), nil
 		}
 
-		portsStr, ok := request.Params.Arguments["ports"].(string)
+		portsStr, ok := request.GetArguments()["ports"].(string)
 		if !ok || portsStr == "" {
 			return mcp.NewToolResultError("ports is required"), nil
 		}
 
 		namespace := ""
-		if ns, ok := request.Params.Arguments["namespace"].(string); ok {
+		if ns, ok := request.GetArguments()["namespace"].(string); ok {
 			namespace = ns
 		}
 
@@ -109,7 +112,7 @@ func stopPortForwardHandler(manager *cluster.Manager) func(ctx context.Context, 
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "stop_port_forward"))
 
-		sessionID, ok := request.Params.Arguments["session_id"].(string)
+		sessionID, ok := request.GetArguments()["session_id"].(string)
 		if !ok || sessionID == "" {
 			return mcp.NewToolResultError("session_id is required"), nil
 		}
@@ -197,15 +200,15 @@ func formatPortForwardSession(session *cluster.PortForwardSession) string {
 	var sb strings.Builder
 	sb.WriteString("Port forward started successfully\n")
 	sb.WriteString(strings.Repeat("-", 40) + "\n")
-	sb.WriteString(fmt.Sprintf("Session ID: %s\n", session.ID))
-	sb.WriteString(fmt.Sprintf("Namespace:  %s\n", session.Namespace))
-	sb.WriteString(fmt.Sprintf("Target:     %s/%s\n", session.TargetType, session.Target))
+	fmt.Fprintf(&sb, "Session ID: %s\n", session.ID)
+	fmt.Fprintf(&sb, "Namespace:  %s\n", session.Namespace)
+	fmt.Fprintf(&sb, "Target:     %s/%s\n", session.TargetType, session.Target)
 	if session.TargetType == "service" {
-		sb.WriteString(fmt.Sprintf("Pod:        %s\n", session.PodName))
+		fmt.Fprintf(&sb, "Pod:        %s\n", session.PodName)
 	}
-	sb.WriteString(fmt.Sprintf("Forwarding: localhost:%d -> %d\n", session.LocalPort, session.RemotePort))
+	fmt.Fprintf(&sb, "Forwarding: localhost:%d -> %d\n", session.LocalPort, session.RemotePort)
 	sb.WriteString(strings.Repeat("-", 40) + "\n")
-	sb.WriteString(fmt.Sprintf("Access via: http://localhost:%d\n", session.LocalPort))
+	fmt.Fprintf(&sb, "Access via: http://localhost:%d\n", session.LocalPort)
 	return sb.String()
 }
 
@@ -218,8 +221,8 @@ func formatPortForwardList(sessions []*cluster.PortForwardSession) string {
 	var sb strings.Builder
 	sb.WriteString("Active Port Forwards:\n")
 	sb.WriteString(strings.Repeat("-", 80) + "\n")
-	sb.WriteString(fmt.Sprintf("%-10s %-15s %-25s %-15s %s\n",
-		"ID", "NAMESPACE", "TARGET", "POD", "PORTS"))
+	fmt.Fprintf(&sb, "%-10s %-15s %-25s %-15s %s\n",
+		"ID", "NAMESPACE", "TARGET", "POD", "PORTS")
 	sb.WriteString(strings.Repeat("-", 80) + "\n")
 
 	for _, session := range sessions {
@@ -231,14 +234,13 @@ func formatPortForwardList(sessions []*cluster.PortForwardSession) string {
 		if len(targetDisplay) > 25 {
 			targetDisplay = targetDisplay[:22] + "..."
 		}
-		sb.WriteString(fmt.Sprintf("%-10s %-15s %-25s %-15s %d:%d\n",
+		fmt.Fprintf(&sb, "%-10s %-15s %-25s %-15s %d:%d\n",
 			session.ID,
 			session.Namespace,
 			targetDisplay,
 			podDisplay,
 			session.LocalPort,
-			session.RemotePort,
-		))
+			session.RemotePort)
 	}
 
 	return sb.String()

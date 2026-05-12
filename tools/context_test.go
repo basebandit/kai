@@ -192,11 +192,7 @@ func testSwitchContextHandler(t *testing.T) {
 
 			handler := switchContextHandler(mockCM)
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tt.args,
 				},
 			}
@@ -262,11 +258,7 @@ func testLoadKubeconfigHandler(t *testing.T) {
 
 			handler := loadKubeconfigHandler(mockCM)
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tt.args,
 				},
 			}
@@ -324,11 +316,7 @@ func testDeleteContextHandler(t *testing.T) {
 
 			handler := deleteContextHandler(mockCM)
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tt.args,
 				},
 			}
@@ -398,11 +386,7 @@ func testRenameContextHandler(t *testing.T) {
 
 			handler := renameContextHandler(mockCM)
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tt.args,
 				},
 			}
@@ -486,11 +470,7 @@ func testDescribeContextHandler(t *testing.T) {
 
 			handler := describeContextHandler(mockCM)
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tt.args,
 				},
 			}

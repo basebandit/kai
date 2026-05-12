@@ -44,6 +44,7 @@ func RegisterPodTools(s kai.ServerInterface, cm kai.ClusterManager) {
 func RegisterPodToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, factory PodFactory) {
 	createPodTool := mcp.NewTool("create_pod",
 		mcp.WithDescription("Create a new pod in the current namespace"),
+		creationAnnotation("Create pod"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the pod"),
@@ -94,6 +95,7 @@ func RegisterPodToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, f
 
 	listPodTools := mcp.NewTool("list_pods",
 		mcp.WithDescription("List pods in the current namespace or across all namespaces"),
+		readOnlyAnnotation("List pods"),
 		mcp.WithBoolean("all_namespaces",
 			mcp.Description("Whether to list pods across all namespaces"),
 		),
@@ -115,6 +117,7 @@ func RegisterPodToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, f
 
 	getPodTool := mcp.NewTool("get_pod",
 		mcp.WithDescription("Get detailed information about a specific pod"),
+		readOnlyAnnotation("Get pod"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the pod"),
@@ -128,6 +131,7 @@ func RegisterPodToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, f
 
 	deletePodTool := mcp.NewTool("delete_pod",
 		mcp.WithDescription("Delete a pod by name"),
+		destructiveAnnotation("Delete pod"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the pod to delete"),
@@ -142,6 +146,7 @@ func RegisterPodToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, f
 
 	streamLogsTool := mcp.NewTool("stream_logs",
 		mcp.WithDescription("Stream logs from a container in a pod"),
+		readOnlyAnnotation("Stream pod logs"),
 		mcp.WithString("pod",
 			mcp.Required(),
 			mcp.Description("Name of the pod"),
@@ -175,7 +180,7 @@ func createPodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx contex
 			RestartPolicy: "Always", // Default restart policy
 		}
 
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -185,7 +190,7 @@ func createPodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx contex
 			return mcp.NewToolResultText(errEmptyName), nil
 		}
 
-		imageArg, ok := request.Params.Arguments["image"]
+		imageArg, ok := request.GetArguments()["image"]
 		if !ok || imageArg == nil {
 			return mcp.NewToolResultText("Required parameter 'image' is missing"), nil
 		}
@@ -196,7 +201,7 @@ func createPodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx contex
 		}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 
@@ -204,7 +209,7 @@ func createPodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx contex
 		params.Image = image
 		params.Namespace = namespace
 
-		if commandArg, ok := request.Params.Arguments["command"].([]interface{}); ok && len(commandArg) > 0 {
+		if commandArg, ok := request.GetArguments()["command"].([]interface{}); ok && len(commandArg) > 0 {
 			params.Command = make([]interface{}, len(commandArg))
 			for i, cmd := range commandArg {
 				if cmdStr, ok := cmd.(string); ok {
@@ -213,7 +218,7 @@ func createPodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx contex
 			}
 		}
 
-		if argsArg, ok := request.Params.Arguments["args"].([]interface{}); ok && len(argsArg) > 0 {
+		if argsArg, ok := request.GetArguments()["args"].([]interface{}); ok && len(argsArg) > 0 {
 			params.Args = make([]interface{}, len(argsArg))
 			for i, arg := range argsArg {
 				if argStr, ok := arg.(string); ok {
@@ -222,17 +227,17 @@ func createPodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx contex
 			}
 		}
 
-		if labelsArg, ok := request.Params.Arguments["labels"].(map[string]interface{}); ok {
+		if labelsArg, ok := request.GetArguments()["labels"].(map[string]interface{}); ok {
 			params.Labels = labelsArg
 		}
 
-		if containerNameArg, ok := request.Params.Arguments["container_name"].(string); ok && containerNameArg != "" {
+		if containerNameArg, ok := request.GetArguments()["container_name"].(string); ok && containerNameArg != "" {
 			params.ContainerName = containerNameArg
 		} else {
 			params.ContainerName = name
 		}
 
-		if containerPortArg, ok := request.Params.Arguments["container_port"].(string); ok && containerPortArg != "" {
+		if containerPortArg, ok := request.GetArguments()["container_port"].(string); ok && containerPortArg != "" {
 			errMsg := validateContainerPort(containerPortArg)
 			if errMsg != nil {
 				return mcp.NewToolResultText(errMsg.Error()), nil
@@ -240,11 +245,11 @@ func createPodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx contex
 			params.ContainerPort = containerPortArg
 		}
 
-		if envArg, ok := request.Params.Arguments["env"].(map[string]interface{}); ok {
+		if envArg, ok := request.GetArguments()["env"].(map[string]interface{}); ok {
 			params.Env = envArg
 		}
 
-		if imagePullPolicyArg, ok := request.Params.Arguments["image_pull_policy"].(string); ok {
+		if imagePullPolicyArg, ok := request.GetArguments()["image_pull_policy"].(string); ok {
 			errMsg := validateImagePullPolicy(imagePullPolicyArg)
 			if errMsg != nil {
 				return mcp.NewToolResultText(errMsg.Error()), nil
@@ -252,11 +257,11 @@ func createPodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx contex
 			params.ImagePullPolicy = imagePullPolicyArg
 		}
 
-		if imagePullSecretsArg, ok := request.Params.Arguments["image_pull_secrets"].([]interface{}); ok {
+		if imagePullSecretsArg, ok := request.GetArguments()["image_pull_secrets"].([]interface{}); ok {
 			params.ImagePullSecrets = imagePullSecretsArg
 		}
 
-		if restartPolicyArg, ok := request.Params.Arguments["restart_policy"].(string); ok {
+		if restartPolicyArg, ok := request.GetArguments()["restart_policy"].(string); ok {
 			errMsg := validateRestartPolicy(restartPolicyArg)
 			if errMsg != nil {
 				return mcp.NewToolResultText(errMsg.Error()), nil
@@ -264,11 +269,11 @@ func createPodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx contex
 			params.RestartPolicy = restartPolicyArg
 		}
 
-		if nodeSelectorArg, ok := request.Params.Arguments["node_selector"].(map[string]interface{}); ok {
+		if nodeSelectorArg, ok := request.GetArguments()["node_selector"].(map[string]interface{}); ok {
 			params.NodeSelector = nodeSelectorArg
 		}
 
-		if serviceAccountArg, ok := request.Params.Arguments["service_account"].(string); ok && serviceAccountArg != "" {
+		if serviceAccountArg, ok := request.GetArguments()["service_account"].(string); ok && serviceAccountArg != "" {
 			params.ServiceAccountName = serviceAccountArg
 		}
 
@@ -294,13 +299,13 @@ func listPodsHandler(cm kai.ClusterManager, factory PodFactory) func(ctx context
 
 		var allNamespaces bool
 
-		if allNamespacesArg, ok := request.Params.Arguments["all_namespaces"].(bool); ok {
+		if allNamespacesArg, ok := request.GetArguments()["all_namespaces"].(bool); ok {
 			allNamespaces = allNamespacesArg
 		}
 
 		var namespace string
 		if !allNamespaces {
-			if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok {
+			if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok {
 				namespace = namespaceArg
 			} else {
 				namespace = cm.GetCurrentNamespace()
@@ -308,17 +313,17 @@ func listPodsHandler(cm kai.ClusterManager, factory PodFactory) func(ctx context
 		}
 
 		var labelSelector string
-		if LabelSelectorArg, ok := request.Params.Arguments["label_selector"].(string); ok {
+		if LabelSelectorArg, ok := request.GetArguments()["label_selector"].(string); ok {
 			labelSelector = LabelSelectorArg
 		}
 
 		var fieldSelector string
-		if fieldSelectorArg, ok := request.Params.Arguments["field_selector"].(string); ok {
+		if fieldSelectorArg, ok := request.GetArguments()["field_selector"].(string); ok {
 			fieldSelector = fieldSelectorArg
 		}
 
 		limit := int64(0) // default to unlimited
-		if limitArg, ok := request.Params.Arguments["limit"].(float64); ok && limitArg > 0 {
+		if limitArg, ok := request.GetArguments()["limit"].(float64); ok && limitArg > 0 {
 			limit = int64(limitArg)
 		}
 
@@ -347,7 +352,7 @@ func getPodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx context.C
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "get_pod"))
 
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -358,7 +363,7 @@ func getPodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx context.C
 		}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 
@@ -387,7 +392,7 @@ func deletePodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx contex
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "delete_pod"))
 
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -398,12 +403,12 @@ func deletePodHandler(cm kai.ClusterManager, factory PodFactory) func(ctx contex
 		}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 
 		var force bool
-		if forceArg, ok := request.Params.Arguments["force"].(bool); ok {
+		if forceArg, ok := request.GetArguments()["force"].(bool); ok {
 			force = forceArg
 		}
 
@@ -433,7 +438,7 @@ func streamLogsHandler(cm kai.ClusterManager, factory PodFactory) func(ctx conte
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "stream_pod_logs"))
 
-		podArg, ok := request.Params.Arguments["pod"]
+		podArg, ok := request.GetArguments()["pod"]
 		if !ok || podArg == nil {
 			return mcp.NewToolResultText(errMissingPod), nil
 		}
@@ -444,27 +449,27 @@ func streamLogsHandler(cm kai.ClusterManager, factory PodFactory) func(ctx conte
 		}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 
 		var containerName string
-		if containerArg, ok := request.Params.Arguments["container"].(string); ok {
+		if containerArg, ok := request.GetArguments()["container"].(string); ok {
 			containerName = containerArg
 		}
 
 		var tailLines int64 // Default to all lines
-		if tailArg, ok := request.Params.Arguments["tail"].(float64); ok {
+		if tailArg, ok := request.GetArguments()["tail"].(float64); ok {
 			tailLines = int64(tailArg)
 		}
 
 		var previous bool
-		if previousArg, ok := request.Params.Arguments["previous"].(bool); ok {
+		if previousArg, ok := request.GetArguments()["previous"].(bool); ok {
 			previous = previousArg
 		}
 
 		var sinceDuration *time.Duration
-		if sinceArg, ok := request.Params.Arguments["since"].(string); ok && sinceArg != "" {
+		if sinceArg, ok := request.GetArguments()["since"].(string); ok && sinceArg != "" {
 			duration, err := time.ParseDuration(sinceArg)
 			if err != nil {
 				return mcp.NewToolResultText(fmt.Sprintf("Failed to parse 'since' parameter: %v", err)), nil

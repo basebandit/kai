@@ -152,11 +152,7 @@ func TestListServicesHandler(t *testing.T) {
 			handler := listServicesHandler(mockCM, mockFactory)
 
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tc.args,
 				},
 			}
@@ -251,11 +247,7 @@ func TestGetServiceHandler(t *testing.T) {
 			handler := getServiceHandler(mockCM, mockFactory)
 
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tc.args,
 				},
 			}
@@ -585,11 +577,7 @@ func TestCreateServiceHandler(t *testing.T) {
 			handler := createServiceHandler(mockCM, mockFactory)
 
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tc.args,
 				},
 			}
@@ -824,11 +812,7 @@ func TestDeleteServiceHandler(t *testing.T) {
 			handler := deleteServiceHandler(mockCM, mockFactory)
 
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tc.args,
 				},
 			}
@@ -1018,11 +1002,7 @@ func TestUpdateServiceHandler(t *testing.T) {
 			handler := updateServiceHandler(mockCM, mockFactory)
 
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tc.args,
 				},
 			}
@@ -1198,11 +1178,7 @@ func TestPatchServiceHandler(t *testing.T) {
 			handler := patchServiceHandler(mockCM, mockFactory)
 
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tc.args,
 				},
 			}

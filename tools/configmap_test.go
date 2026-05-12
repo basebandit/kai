@@ -159,11 +159,7 @@ func TestListConfigMapsHandler(t *testing.T) {
 			handler := listConfigMapsHandler(mockCM, mockFactory)
 
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tc.args,
 				},
 			}
@@ -256,11 +252,7 @@ func TestGetConfigMapHandler(t *testing.T) {
 			handler := getConfigMapHandler(mockCM, mockFactory)
 
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tc.args,
 				},
 			}
@@ -386,11 +378,7 @@ func TestCreateConfigMapHandler(t *testing.T) {
 			handler := createConfigMapHandler(mockCM, mockFactory)
 
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tc.args,
 				},
 			}
@@ -474,11 +462,7 @@ func TestDeleteConfigMapHandler(t *testing.T) {
 			handler := deleteConfigMapHandler(mockCM, mockFactory)
 
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tc.args,
 				},
 			}
@@ -574,11 +558,7 @@ func TestUpdateConfigMapHandler(t *testing.T) {
 			handler := updateConfigMapHandler(mockCM, mockFactory)
 
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tc.args,
 				},
 			}

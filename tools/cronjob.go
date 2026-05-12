@@ -56,6 +56,7 @@ func RegisterCronJobTools(s kai.ServerInterface, cm kai.ClusterManager) {
 func RegisterCronJobToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, factory CronJobFactory) {
 	createCronJobTool := mcp.NewTool("create_cronjob",
 		mcp.WithDescription("Create a new CronJob in the specified namespace"),
+		creationAnnotation("Create cronjob"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the CronJob"),
@@ -115,6 +116,7 @@ func RegisterCronJobToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 
 	getCronJobTool := mcp.NewTool("get_cronjob",
 		mcp.WithDescription("Get information about a specific CronJob"),
+		readOnlyAnnotation("Get cronjob"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the CronJob"),
@@ -127,6 +129,7 @@ func RegisterCronJobToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 
 	listCronJobsTool := mcp.NewTool("list_cronjobs",
 		mcp.WithDescription("List CronJobs in the current namespace or across all namespaces"),
+		readOnlyAnnotation("List cronjobs"),
 		mcp.WithBoolean("all_namespaces",
 			mcp.Description("Whether to list CronJobs across all namespaces"),
 		),
@@ -141,6 +144,7 @@ func RegisterCronJobToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 
 	deleteCronJobTool := mcp.NewTool("delete_cronjob",
 		mcp.WithDescription("Delete a CronJob from the specified namespace"),
+		destructiveAnnotation("Delete cronjob"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the CronJob to delete"),
@@ -153,6 +157,7 @@ func RegisterCronJobToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 
 	updateCronJobTool := mcp.NewTool("update_cronjob",
 		mcp.WithDescription("Update an existing CronJob"),
+		idempotentMutationAnnotation("Update cronjob"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the CronJob to update"),
@@ -180,6 +185,7 @@ func RegisterCronJobToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 
 	suspendCronJobTool := mcp.NewTool("suspend_cronjob",
 		mcp.WithDescription("Suspend a CronJob to prevent it from creating new jobs"),
+		idempotentMutationAnnotation("Suspend cronjob"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the CronJob to suspend"),
@@ -192,6 +198,7 @@ func RegisterCronJobToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 
 	resumeCronJobTool := mcp.NewTool("resume_cronjob",
 		mcp.WithDescription("Resume a suspended CronJob"),
+		idempotentMutationAnnotation("Resume cronjob"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the CronJob to resume"),
@@ -207,7 +214,7 @@ func createCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(ct
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "create_cronjob"))
 
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -217,7 +224,7 @@ func createCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(ct
 			return mcp.NewToolResultText(errEmptyName), nil
 		}
 
-		scheduleArg, ok := request.Params.Arguments["schedule"]
+		scheduleArg, ok := request.GetArguments()["schedule"]
 		if !ok || scheduleArg == nil {
 			return mcp.NewToolResultText("schedule is required"), nil
 		}
@@ -227,7 +234,7 @@ func createCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(ct
 			return mcp.NewToolResultText("schedule cannot be empty"), nil
 		}
 
-		imageArg, ok := request.Params.Arguments["image"]
+		imageArg, ok := request.GetArguments()["image"]
 		if !ok || imageArg == nil {
 			return mcp.NewToolResultText(errMissingImage), nil
 		}
@@ -238,7 +245,7 @@ func createCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(ct
 		}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 
@@ -249,59 +256,59 @@ func createCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(ct
 			Image:     image,
 		}
 
-		if commandArg, ok := request.Params.Arguments["command"].([]interface{}); ok {
+		if commandArg, ok := request.GetArguments()["command"].([]interface{}); ok {
 			params.Command = commandArg
 		}
 
-		if argsArg, ok := request.Params.Arguments["args"].([]interface{}); ok {
+		if argsArg, ok := request.GetArguments()["args"].([]interface{}); ok {
 			params.Args = argsArg
 		}
 
-		if restartPolicyArg, ok := request.Params.Arguments["restart_policy"].(string); ok && restartPolicyArg != "" {
+		if restartPolicyArg, ok := request.GetArguments()["restart_policy"].(string); ok && restartPolicyArg != "" {
 			params.RestartPolicy = restartPolicyArg
 		}
 
-		if concurrencyPolicyArg, ok := request.Params.Arguments["concurrency_policy"].(string); ok && concurrencyPolicyArg != "" {
+		if concurrencyPolicyArg, ok := request.GetArguments()["concurrency_policy"].(string); ok && concurrencyPolicyArg != "" {
 			params.ConcurrencyPolicy = concurrencyPolicyArg
 		}
 
-		if suspendArg, ok := request.Params.Arguments["suspend"].(bool); ok {
+		if suspendArg, ok := request.GetArguments()["suspend"].(bool); ok {
 			params.Suspend = &suspendArg
 		}
 
-		if successfulJobsHistoryLimitArg, ok := request.Params.Arguments["successful_jobs_history_limit"].(float64); ok {
+		if successfulJobsHistoryLimitArg, ok := request.GetArguments()["successful_jobs_history_limit"].(float64); ok {
 			limit := int32(successfulJobsHistoryLimitArg)
 			params.SuccessfulJobsHistoryLimit = &limit
 		}
 
-		if failedJobsHistoryLimitArg, ok := request.Params.Arguments["failed_jobs_history_limit"].(float64); ok {
+		if failedJobsHistoryLimitArg, ok := request.GetArguments()["failed_jobs_history_limit"].(float64); ok {
 			limit := int32(failedJobsHistoryLimitArg)
 			params.FailedJobsHistoryLimit = &limit
 		}
 
-		if startingDeadlineSecondsArg, ok := request.Params.Arguments["starting_deadline_seconds"].(float64); ok {
+		if startingDeadlineSecondsArg, ok := request.GetArguments()["starting_deadline_seconds"].(float64); ok {
 			deadline := int64(startingDeadlineSecondsArg)
 			params.StartingDeadlineSeconds = &deadline
 		}
 
-		if backoffLimitArg, ok := request.Params.Arguments["backoff_limit"].(float64); ok {
+		if backoffLimitArg, ok := request.GetArguments()["backoff_limit"].(float64); ok {
 			backoffLimit := int32(backoffLimitArg)
 			params.BackoffLimit = &backoffLimit
 		}
 
-		if labelsArg, ok := request.Params.Arguments["labels"].(map[string]interface{}); ok {
+		if labelsArg, ok := request.GetArguments()["labels"].(map[string]interface{}); ok {
 			params.Labels = labelsArg
 		}
 
-		if envArg, ok := request.Params.Arguments["env"].(map[string]interface{}); ok {
+		if envArg, ok := request.GetArguments()["env"].(map[string]interface{}); ok {
 			params.Env = envArg
 		}
 
-		if imagePullPolicyArg, ok := request.Params.Arguments["image_pull_policy"].(string); ok && imagePullPolicyArg != "" {
+		if imagePullPolicyArg, ok := request.GetArguments()["image_pull_policy"].(string); ok && imagePullPolicyArg != "" {
 			params.ImagePullPolicy = imagePullPolicyArg
 		}
 
-		if imagePullSecretsArg, ok := request.Params.Arguments["image_pull_secrets"].([]interface{}); ok {
+		if imagePullSecretsArg, ok := request.GetArguments()["image_pull_secrets"].([]interface{}); ok {
 			params.ImagePullSecrets = imagePullSecretsArg
 		}
 
@@ -324,7 +331,7 @@ func getCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(ctx c
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "get_cronjob"))
 
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -335,7 +342,7 @@ func getCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(ctx c
 		}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 
@@ -364,13 +371,13 @@ func listCronJobsHandler(cm kai.ClusterManager, factory CronJobFactory) func(ctx
 		slog.Debug("tool invoked", slog.String("tool", "list_cronjobs"))
 
 		var allNamespaces bool
-		if allNamespacesArg, ok := request.Params.Arguments["all_namespaces"].(bool); ok {
+		if allNamespacesArg, ok := request.GetArguments()["all_namespaces"].(bool); ok {
 			allNamespaces = allNamespacesArg
 		}
 
 		var namespace string
 		if !allNamespaces {
-			if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+			if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 				namespace = namespaceArg
 			} else {
 				namespace = cm.GetCurrentNamespace()
@@ -378,7 +385,7 @@ func listCronJobsHandler(cm kai.ClusterManager, factory CronJobFactory) func(ctx
 		}
 
 		var labelSelector string
-		if labelSelectorArg, ok := request.Params.Arguments["label_selector"].(string); ok {
+		if labelSelectorArg, ok := request.GetArguments()["label_selector"].(string); ok {
 			labelSelector = labelSelectorArg
 		}
 
@@ -406,7 +413,7 @@ func deleteCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(ct
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "delete_cronjob"))
 
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -417,7 +424,7 @@ func deleteCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(ct
 		}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 
@@ -443,7 +450,7 @@ func deleteCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(ct
 
 func updateCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -454,7 +461,7 @@ func updateCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(ct
 		}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 
@@ -463,24 +470,24 @@ func updateCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(ct
 			Namespace: namespace,
 		}
 
-		if scheduleArg, ok := request.Params.Arguments["schedule"].(string); ok && scheduleArg != "" {
+		if scheduleArg, ok := request.GetArguments()["schedule"].(string); ok && scheduleArg != "" {
 			params.Schedule = scheduleArg
 		}
 
-		if labelsArg, ok := request.Params.Arguments["labels"].(map[string]interface{}); ok {
+		if labelsArg, ok := request.GetArguments()["labels"].(map[string]interface{}); ok {
 			params.Labels = labelsArg
 		}
 
-		if concurrencyPolicyArg, ok := request.Params.Arguments["concurrency_policy"].(string); ok && concurrencyPolicyArg != "" {
+		if concurrencyPolicyArg, ok := request.GetArguments()["concurrency_policy"].(string); ok && concurrencyPolicyArg != "" {
 			params.ConcurrencyPolicy = concurrencyPolicyArg
 		}
 
-		if successfulJobsHistoryLimitArg, ok := request.Params.Arguments["successful_jobs_history_limit"].(float64); ok {
+		if successfulJobsHistoryLimitArg, ok := request.GetArguments()["successful_jobs_history_limit"].(float64); ok {
 			limit := int32(successfulJobsHistoryLimitArg)
 			params.SuccessfulJobsHistoryLimit = &limit
 		}
 
-		if failedJobsHistoryLimitArg, ok := request.Params.Arguments["failed_jobs_history_limit"].(float64); ok {
+		if failedJobsHistoryLimitArg, ok := request.GetArguments()["failed_jobs_history_limit"].(float64); ok {
 			limit := int32(failedJobsHistoryLimitArg)
 			params.FailedJobsHistoryLimit = &limit
 		}
@@ -497,7 +504,7 @@ func updateCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(ct
 
 func suspendCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -508,7 +515,7 @@ func suspendCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(c
 		}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 
@@ -529,7 +536,7 @@ func suspendCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(c
 
 func resumeCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -540,7 +547,7 @@ func resumeCronJobHandler(cm kai.ClusterManager, factory CronJobFactory) func(ct
 		}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 

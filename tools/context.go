@@ -14,16 +14,19 @@ import (
 func RegisterContextTools(s kai.ServerInterface, cm kai.ClusterManager) {
 	listContextsTool := mcp.NewTool("list_contexts",
 		mcp.WithDescription("List all available Kubernetes contexts"),
+		readOnlyAnnotation("List contexts"),
 	)
 	s.AddTool(listContextsTool, listContextsHandler(cm))
 
 	getCurrentContextTool := mcp.NewTool("get_current_context",
 		mcp.WithDescription("Get the currently active Kubernetes context"),
+		readOnlyAnnotation("Get current context"),
 	)
 	s.AddTool(getCurrentContextTool, getCurrentContextHandler(cm))
 
 	switchContextTool := mcp.NewTool("switch_context",
 		mcp.WithDescription("Switch to a different Kubernetes context"),
+		idempotentMutationAnnotation("Switch context"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the context to switch to"),
@@ -33,6 +36,7 @@ func RegisterContextTools(s kai.ServerInterface, cm kai.ClusterManager) {
 
 	loadKubeconfigTool := mcp.NewTool("load_kubeconfig",
 		mcp.WithDescription("Load a kubeconfig file and register it as a new context"),
+		creationAnnotation("Load kubeconfig"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name to assign to this context"),
@@ -45,6 +49,7 @@ func RegisterContextTools(s kai.ServerInterface, cm kai.ClusterManager) {
 
 	deleteContextTool := mcp.NewTool("delete_context",
 		mcp.WithDescription("Remove a context from the manager"),
+		destructiveAnnotation("Delete context"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the context to delete"),
@@ -54,6 +59,7 @@ func RegisterContextTools(s kai.ServerInterface, cm kai.ClusterManager) {
 
 	renameContextTool := mcp.NewTool("rename_context",
 		mcp.WithDescription("Rename an existing context"),
+		creationAnnotation("Rename context"),
 		mcp.WithString("old_name",
 			mcp.Required(),
 			mcp.Description("Current name of the context"),
@@ -67,6 +73,7 @@ func RegisterContextTools(s kai.ServerInterface, cm kai.ClusterManager) {
 
 	describeContextTool := mcp.NewTool("describe_context",
 		mcp.WithDescription("Get detailed information about a specific context"),
+		readOnlyAnnotation("Describe context"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the context to describe"),
@@ -93,14 +100,14 @@ func listContextsHandler(cm kai.ClusterManager) func(ctx context.Context, reques
 				marker = "*"
 			}
 
-			result.WriteString(fmt.Sprintf("%s %s\n", marker, contextInfo.Name))
-			result.WriteString(fmt.Sprintf("  Cluster: %s\n", contextInfo.Cluster))
-			result.WriteString(fmt.Sprintf("  User: %s\n", contextInfo.User))
-			result.WriteString(fmt.Sprintf("  Namespace: %s\n", contextInfo.Namespace))
+			fmt.Fprintf(&result, "%s %s\n", marker, contextInfo.Name)
+			fmt.Fprintf(&result, "  Cluster: %s\n", contextInfo.Cluster)
+			fmt.Fprintf(&result, "  User: %s\n", contextInfo.User)
+			fmt.Fprintf(&result, "  Namespace: %s\n", contextInfo.Namespace)
 			result.WriteString("\n")
 		}
 
-		result.WriteString(fmt.Sprintf("Total: %d context(s)", len(contexts)))
+		fmt.Fprintf(&result, "Total: %d context(s)", len(contexts))
 
 		return mcp.NewToolResultText(result.String()), nil
 	}
@@ -133,7 +140,7 @@ func getCurrentContextHandler(cm kai.ClusterManager) func(ctx context.Context, r
 func switchContextHandler(cm kai.ClusterManager) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "switch_context"))
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText("Required parameter 'name' is missing"), nil
 		}
@@ -155,7 +162,7 @@ func switchContextHandler(cm kai.ClusterManager) func(ctx context.Context, reque
 func loadKubeconfigHandler(cm kai.ClusterManager) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "load_kubeconfig"))
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText("Required parameter 'name' is missing"), nil
 		}
@@ -166,7 +173,7 @@ func loadKubeconfigHandler(cm kai.ClusterManager) func(ctx context.Context, requ
 		}
 
 		path := ""
-		if pathArg, ok := request.Params.Arguments["path"].(string); ok {
+		if pathArg, ok := request.GetArguments()["path"].(string); ok {
 			path = pathArg
 		}
 
@@ -187,7 +194,7 @@ func loadKubeconfigHandler(cm kai.ClusterManager) func(ctx context.Context, requ
 func deleteContextHandler(cm kai.ClusterManager) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "delete_context"))
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText("Required parameter 'name' is missing"), nil
 		}
@@ -209,7 +216,7 @@ func deleteContextHandler(cm kai.ClusterManager) func(ctx context.Context, reque
 func renameContextHandler(cm kai.ClusterManager) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "rename_context"))
-		oldNameArg, ok := request.Params.Arguments["old_name"]
+		oldNameArg, ok := request.GetArguments()["old_name"]
 		if !ok || oldNameArg == nil {
 			return mcp.NewToolResultText("Required parameter 'old_name' is missing"), nil
 		}
@@ -219,7 +226,7 @@ func renameContextHandler(cm kai.ClusterManager) func(ctx context.Context, reque
 			return mcp.NewToolResultText("Parameter 'old_name' must be a non-empty string"), nil
 		}
 
-		newNameArg, ok := request.Params.Arguments["new_name"]
+		newNameArg, ok := request.GetArguments()["new_name"]
 		if !ok || newNameArg == nil {
 			return mcp.NewToolResultText("Required parameter 'new_name' is missing"), nil
 		}
@@ -241,7 +248,7 @@ func renameContextHandler(cm kai.ClusterManager) func(ctx context.Context, reque
 func describeContextHandler(cm kai.ClusterManager) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "describe_context"))
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText("Required parameter 'name' is missing"), nil
 		}
@@ -258,18 +265,18 @@ func describeContextHandler(cm kai.ClusterManager) func(ctx context.Context, req
 		}
 
 		var result strings.Builder
-		result.WriteString(fmt.Sprintf("Context: %s\n", contextInfo.Name))
-		result.WriteString(fmt.Sprintf("Cluster: %s\n", contextInfo.Cluster))
-		result.WriteString(fmt.Sprintf("User: %s\n", contextInfo.User))
-		result.WriteString(fmt.Sprintf("Namespace: %s\n", contextInfo.Namespace))
-		result.WriteString(fmt.Sprintf("Server: %s\n", contextInfo.ServerURL))
-		result.WriteString(fmt.Sprintf("Config Path: %s\n", contextInfo.ConfigPath))
+		fmt.Fprintf(&result, "Context: %s\n", contextInfo.Name)
+		fmt.Fprintf(&result, "Cluster: %s\n", contextInfo.Cluster)
+		fmt.Fprintf(&result, "User: %s\n", contextInfo.User)
+		fmt.Fprintf(&result, "Namespace: %s\n", contextInfo.Namespace)
+		fmt.Fprintf(&result, "Server: %s\n", contextInfo.ServerURL)
+		fmt.Fprintf(&result, "Config Path: %s\n", contextInfo.ConfigPath)
 
 		status := "inactive"
 		if contextInfo.IsActive {
 			status = "active"
 		}
-		result.WriteString(fmt.Sprintf("Status: %s", status))
+		fmt.Fprintf(&result, "Status: %s", status)
 
 		return mcp.NewToolResultText(result.String()), nil
 	}

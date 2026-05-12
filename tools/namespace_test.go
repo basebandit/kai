@@ -85,11 +85,7 @@ func testCreateNamespaceHandler(t *testing.T) {
 
 			handler := createNamespaceHandlerWithFactory(mockCM, mockFactory)
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tt.args,
 				},
 			}
@@ -154,11 +150,7 @@ func testGetNamespaceHandler(t *testing.T) {
 
 			handler := getNamespaceHandlerWithFactory(mockCM, mockFactory)
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tt.args,
 				},
 			}
@@ -216,11 +208,7 @@ func testListNamespacesHandler(t *testing.T) {
 
 			handler := listNamespacesHandlerWithFactory(mockCM, mockFactory)
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tt.args,
 				},
 			}
@@ -291,11 +279,7 @@ func testDeleteNamespaceHandler(t *testing.T) {
 
 			handler := deleteNamespaceHandlerWithFactory(mockCM, mockFactory)
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tt.args,
 				},
 			}
@@ -323,7 +307,7 @@ func TestRegisterNamespaceTools(t *testing.T) {
 // Helper functions for testing with factory pattern
 func createNamespaceHandlerWithFactory(cm kai.ClusterManager, factory testmocks.NamespaceFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -337,11 +321,11 @@ func createNamespaceHandlerWithFactory(cm kai.ClusterManager, factory testmocks.
 			Name: name,
 		}
 
-		if labelsArg, ok := request.Params.Arguments["labels"].(map[string]interface{}); ok {
+		if labelsArg, ok := request.GetArguments()["labels"].(map[string]interface{}); ok {
 			params.Labels = labelsArg
 		}
 
-		if annotationsArg, ok := request.Params.Arguments["annotations"].(map[string]interface{}); ok {
+		if annotationsArg, ok := request.GetArguments()["annotations"].(map[string]interface{}); ok {
 			params.Annotations = annotationsArg
 		}
 
@@ -358,7 +342,7 @@ func createNamespaceHandlerWithFactory(cm kai.ClusterManager, factory testmocks.
 
 func getNamespaceHandlerWithFactory(cm kai.ClusterManager, factory testmocks.NamespaceFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -386,7 +370,7 @@ func getNamespaceHandlerWithFactory(cm kai.ClusterManager, factory testmocks.Nam
 func listNamespacesHandlerWithFactory(cm kai.ClusterManager, factory testmocks.NamespaceFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		labelSelector := ""
-		if selectorArg, ok := request.Params.Arguments["label_selector"].(string); ok {
+		if selectorArg, ok := request.GetArguments()["label_selector"].(string); ok {
 			labelSelector = selectorArg
 		}
 
@@ -406,11 +390,11 @@ func deleteNamespaceHandlerWithFactory(cm kai.ClusterManager, factory testmocks.
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		params := kai.NamespaceParams{}
 
-		if nameArg, ok := request.Params.Arguments["name"].(string); ok && nameArg != "" {
+		if nameArg, ok := request.GetArguments()["name"].(string); ok && nameArg != "" {
 			params.Name = nameArg
 		}
 
-		if labelsArg, ok := request.Params.Arguments["labels"].(map[string]interface{}); ok {
+		if labelsArg, ok := request.GetArguments()["labels"].(map[string]interface{}); ok {
 			params.Labels = labelsArg
 		}
 
@@ -431,7 +415,7 @@ func deleteNamespaceHandlerWithFactory(cm kai.ClusterManager, factory testmocks.
 
 func updateNamespaceHandlerWithFactory(cm kai.ClusterManager, factory testmocks.NamespaceFactory) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -445,11 +429,11 @@ func updateNamespaceHandlerWithFactory(cm kai.ClusterManager, factory testmocks.
 			Name: name,
 		}
 
-		if labelsArg, ok := request.Params.Arguments["labels"].(map[string]interface{}); ok {
+		if labelsArg, ok := request.GetArguments()["labels"].(map[string]interface{}); ok {
 			params.Labels = labelsArg
 		}
 
-		if annotationsArg, ok := request.Params.Arguments["annotations"].(map[string]interface{}); ok {
+		if annotationsArg, ok := request.GetArguments()["annotations"].(map[string]interface{}); ok {
 			params.Annotations = annotationsArg
 		}
 
@@ -549,11 +533,7 @@ func testUpdateNamespaceHandler(t *testing.T) {
 
 			handler := updateNamespaceHandlerWithFactory(mockCM, mockFactory)
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tt.args,
 				},
 			}
