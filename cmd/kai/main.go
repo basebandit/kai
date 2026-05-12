@@ -16,6 +16,8 @@ import (
 	"github.com/basebandit/kai/tools"
 )
 
+const startingServerMsg = "starting server"
+
 var (
 	version = "dev"
 	commit  = "none"
@@ -106,7 +108,7 @@ func main() {
 	go func() {
 		switch transport {
 		case "streamable-http", "http":
-			logger.Info("starting server",
+			logger.Info(startingServerMsg,
 				slog.String("transport", "streamable-http"),
 				slog.String("address", sseAddr),
 			)
@@ -115,13 +117,13 @@ func main() {
 			logger.Warn("transport \"sse\" is deprecated; use \"sse-legacy\" or migrate to \"streamable-http\"")
 			fallthrough
 		case "sse-legacy":
-			logger.Info("starting server",
+			logger.Info(startingServerMsg,
 				slog.String("transport", "sse-legacy"),
 				slog.String("address", sseAddr),
 			)
 			errChan <- s.ServeSSE(sseAddr)
 		case "stdio", "":
-			logger.Info("starting server",
+			logger.Info(startingServerMsg,
 				slog.String("transport", "stdio"),
 			)
 			errChan <- s.Serve()
