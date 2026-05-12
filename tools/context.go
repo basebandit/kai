@@ -100,14 +100,14 @@ func listContextsHandler(cm kai.ClusterManager) func(ctx context.Context, reques
 				marker = "*"
 			}
 
-			result.WriteString(fmt.Sprintf("%s %s\n", marker, contextInfo.Name))
-			result.WriteString(fmt.Sprintf("  Cluster: %s\n", contextInfo.Cluster))
-			result.WriteString(fmt.Sprintf("  User: %s\n", contextInfo.User))
-			result.WriteString(fmt.Sprintf("  Namespace: %s\n", contextInfo.Namespace))
+			fmt.Fprintf(&result, "%s %s\n", marker, contextInfo.Name)
+			fmt.Fprintf(&result, "  Cluster: %s\n", contextInfo.Cluster)
+			fmt.Fprintf(&result, "  User: %s\n", contextInfo.User)
+			fmt.Fprintf(&result, "  Namespace: %s\n", contextInfo.Namespace)
 			result.WriteString("\n")
 		}
 
-		result.WriteString(fmt.Sprintf("Total: %d context(s)", len(contexts)))
+		fmt.Fprintf(&result, "Total: %d context(s)", len(contexts))
 
 		return mcp.NewToolResultText(result.String()), nil
 	}
@@ -265,18 +265,18 @@ func describeContextHandler(cm kai.ClusterManager) func(ctx context.Context, req
 		}
 
 		var result strings.Builder
-		result.WriteString(fmt.Sprintf("Context: %s\n", contextInfo.Name))
-		result.WriteString(fmt.Sprintf("Cluster: %s\n", contextInfo.Cluster))
-		result.WriteString(fmt.Sprintf("User: %s\n", contextInfo.User))
-		result.WriteString(fmt.Sprintf("Namespace: %s\n", contextInfo.Namespace))
-		result.WriteString(fmt.Sprintf("Server: %s\n", contextInfo.ServerURL))
-		result.WriteString(fmt.Sprintf("Config Path: %s\n", contextInfo.ConfigPath))
+		fmt.Fprintf(&result, "Context: %s\n", contextInfo.Name)
+		fmt.Fprintf(&result, "Cluster: %s\n", contextInfo.Cluster)
+		fmt.Fprintf(&result, "User: %s\n", contextInfo.User)
+		fmt.Fprintf(&result, "Namespace: %s\n", contextInfo.Namespace)
+		fmt.Fprintf(&result, "Server: %s\n", contextInfo.ServerURL)
+		fmt.Fprintf(&result, "Config Path: %s\n", contextInfo.ConfigPath)
 
 		status := "inactive"
 		if contextInfo.IsActive {
 			status = "active"
 		}
-		result.WriteString(fmt.Sprintf("Status: %s", status))
+		fmt.Fprintf(&result, "Status: %s", status)
 
 		return mcp.NewToolResultText(result.String()), nil
 	}

@@ -63,7 +63,7 @@ func main() {
 	}
 
 	// Initialize cluster manager
-	cm := cluster.New()
+	cm := cluster.New(cluster.WithRequestTimeout(requestTimeout))
 
 	if err := cm.LoadKubeConfig(contextName, kubeconfig); err != nil {
 		logger.Error("failed to load kubeconfig",

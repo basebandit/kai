@@ -32,17 +32,43 @@ type Manager struct {
 	contexts         map[string]*kai.ContextInfo
 	currentContext   string
 	currentNamespace string
+	requestTimeout   time.Duration
 }
 
-// New creates a new cluster Manager
-func New() *Manager {
-	return &Manager{
+// Option configures a Manager.
+type Option func(*Manager)
+
+// WithRequestTimeout sets the per-request timeout applied to every Kubernetes
+// API client created by the Manager. Zero or negative values are ignored and
+// the 30 s default is kept.
+func WithRequestTimeout(d time.Duration) Option {
+	return func(cm *Manager) {
+		if d > 0 {
+			cm.requestTimeout = d
+		}
+	}
+}
+
+// New creates a new cluster Manager. Without options the default request
+// timeout is 30 seconds.
+func New(opts ...Option) *Manager {
+	cm := &Manager{
 		kubeconfigs:      make(map[string]string),
 		clients:          make(map[string]kubernetes.Interface),
 		dynamicClients:   make(map[string]dynamic.Interface),
 		contexts:         make(map[string]*kai.ContextInfo),
 		currentNamespace: "default",
+		requestTimeout:   30 * time.Second,
 	}
+	for _, opt := range opts {
+		opt(cm)
+	}
+	return cm
+}
+
+// RequestTimeout returns the per-request timeout configured on this Manager.
+func (cm *Manager) RequestTimeout() time.Duration {
+	return cm.requestTimeout
 }
 
 // LoadKubeConfig loads a kubeconfig file into the manager
@@ -69,7 +95,7 @@ func (cm *Manager) LoadKubeConfig(name, path string) error {
 		return err
 	}
 
-	clientset, dynamicClient, err := createClients(resolvedPath)
+	clientset, dynamicClient, err := cm.createClients(resolvedPath)
 	if err != nil {
 		return err
 	}
@@ -406,14 +432,16 @@ func (cm *Manager) updateKubeconfigCurrentContext(contextName, configPath string
 	return nil
 }
 
-// createClients creates Kubernetes clients from the kubeconfig file
-func createClients(path string) (kubernetes.Interface, dynamic.Interface, error) {
+// createClients builds Kubernetes typed and dynamic clients from a kubeconfig
+// path. The per-request timeout is taken from the Manager so the user-facing
+// --request-timeout flag is honored end-to-end.
+func (cm *Manager) createClients(path string) (kubernetes.Interface, dynamic.Interface, error) {
 	config, err := clientcmd.BuildConfigFromFlags("", path)
 	if err != nil {
 		return nil, nil, fmt.Errorf("error building config from flags: %w", err)
 	}
 
-	config.Timeout = 30 * time.Second
+	config.Timeout = cm.requestTimeout
 
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
