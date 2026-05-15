@@ -29,8 +29,8 @@ Kai provides a bridge between large language models (LLMs) and your Kubernetes c
 
 ### Cluster Operations
 - [x] **Context Management** - Switch contexts, list contexts, rename, delete
-- [ ] **Nodes** - Node monitoring, cordoning, and draining
-- [ ] **Cluster Health** - Cluster status and resource metrics
+- [x] **Nodes** - Node monitoring, cordoning, and draining (list, get, cordon, uncordon, drain)
+- [x] **Cluster Health** - Cluster status and resource metrics (cluster health, node/pod metrics)
 
 ### Storage
 - [ ] **Persistent Volumes** - PV and PVC management
@@ -44,7 +44,7 @@ Kai provides a bridge between large language models (LLMs) and your Kubernetes c
 
 ### Advanced
 - [ ] **Custom Resources** - CRD and custom resource operations
-- [ ] **Events** - Event streaming and filtering
+- [x] **Events** - Event listing and filtering (by namespace, type, involved object)
 - [ ] **API Discovery** - API resource exploration
 
 ## Requirements

@@ -206,4 +206,7 @@ func registerAllTools(s *kai.Server, cm *cluster.Manager) {
 	tools.RegisterCronJobTools(s, cm)
 	tools.RegisterIngressTools(s, cm)
 	tools.RegisterOperationsTools(s, cm)
+	tools.RegisterEventTools(s, cm)
+	tools.RegisterNodeTools(s, cm)
+	tools.RegisterHealthTools(s, cm)
 }
