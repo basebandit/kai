@@ -48,6 +48,44 @@ func TestExtendedClusterManager(t *testing.T) {
 	t.Run("UpdateKubeconfigCurrentContext", testUpdateKubeconfigCurrentContext)
 }
 
+func TestInClusterConfig(t *testing.T) {
+	t.Run("LoadInClusterConfig", testLoadInClusterConfig)
+}
+
+func testLoadInClusterConfig(t *testing.T) {
+	t.Run("NotInCluster", func(t *testing.T) {
+		// When not running in a cluster, LoadInClusterConfig should fail
+		cm := New()
+		err := cm.LoadInClusterConfig("test-context")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to load in-cluster config")
+	})
+
+	t.Run("DefaultContextName", func(t *testing.T) {
+		// When empty name is provided, should use "in-cluster" as default
+		cm := New()
+		err := cm.LoadInClusterConfig("")
+		// Will fail because we're not in a cluster, but the error shouldn't be about empty name
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to load in-cluster config")
+		assert.NotContains(t, err.Error(), "empty")
+	})
+
+	t.Run("DuplicateContextName", func(t *testing.T) {
+		cm := New()
+
+		// Pre-populate with an existing context
+		fakeClient := fake.NewSimpleClientset()
+		contextInfo := &kai.ContextInfo{Name: "existing-context"}
+		cm.clients["existing-context"] = fakeClient
+		cm.contexts["existing-context"] = contextInfo
+
+		err := cm.LoadInClusterConfig("existing-context")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "context existing-context already exists")
+	})
+}
+
 func testNewClusterManager(t *testing.T) {
 	cm := New()
 	assert.NotNil(t, cm)
