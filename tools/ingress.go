@@ -47,6 +47,7 @@ func RegisterIngressTools(s kai.ServerInterface, cm kai.ClusterManager) {
 func RegisterIngressToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManager, factory IngressFactory) {
 	createIngressTool := mcp.NewTool("create_ingress",
 		mcp.WithDescription("Create a new Ingress in the specified namespace for HTTP/HTTPS routing"),
+		creationAnnotation("Create ingress"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the Ingress"),
@@ -77,6 +78,7 @@ func RegisterIngressToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 
 	getIngressTool := mcp.NewTool("get_ingress",
 		mcp.WithDescription("Get information about a specific Ingress"),
+		readOnlyAnnotation("Get ingress"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the Ingress"),
@@ -89,6 +91,7 @@ func RegisterIngressToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 
 	listIngressesTool := mcp.NewTool("list_ingresses",
 		mcp.WithDescription("List Ingresses in the current namespace or across all namespaces"),
+		readOnlyAnnotation("List ingresses"),
 		mcp.WithBoolean("all_namespaces",
 			mcp.Description("Whether to list Ingresses across all namespaces"),
 		),
@@ -103,6 +106,7 @@ func RegisterIngressToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 
 	updateIngressTool := mcp.NewTool("update_ingress",
 		mcp.WithDescription("Update an existing Ingress"),
+		idempotentMutationAnnotation("Update ingress"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the Ingress to update"),
@@ -133,6 +137,7 @@ func RegisterIngressToolsWithFactory(s kai.ServerInterface, cm kai.ClusterManage
 
 	deleteIngressTool := mcp.NewTool("delete_ingress",
 		mcp.WithDescription("Delete an Ingress from the specified namespace"),
+		destructiveAnnotation("Delete ingress"),
 		mcp.WithString("name",
 			mcp.Required(),
 			mcp.Description("Name of the Ingress to delete"),
@@ -148,7 +153,7 @@ func createIngressHandler(cm kai.ClusterManager, factory IngressFactory) func(ct
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "create_ingress"))
 
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -158,8 +163,8 @@ func createIngressHandler(cm kai.ClusterManager, factory IngressFactory) func(ct
 			return mcp.NewToolResultText(errEmptyName), nil
 		}
 
-		rulesArg, hasRules := request.Params.Arguments["rules"]
-		defaultBackendArg, hasDefaultBackend := request.Params.Arguments["default_backend"]
+		rulesArg, hasRules := request.GetArguments()["rules"]
+		defaultBackendArg, hasDefaultBackend := request.GetArguments()["default_backend"]
 		if !hasRules && !hasDefaultBackend {
 			return mcp.NewToolResultText("Required parameter 'rules' or 'default_backend' is missing"), nil
 		}
@@ -177,7 +182,7 @@ func createIngressHandler(cm kai.ClusterManager, factory IngressFactory) func(ct
 		}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 
@@ -186,15 +191,15 @@ func createIngressHandler(cm kai.ClusterManager, factory IngressFactory) func(ct
 			Namespace: namespace,
 		}
 
-		if ingressClassArg, ok := request.Params.Arguments["ingress_class"].(string); ok && ingressClassArg != "" {
+		if ingressClassArg, ok := request.GetArguments()["ingress_class"].(string); ok && ingressClassArg != "" {
 			params.IngressClassName = ingressClassArg
 		}
 
-		if labelsArg, ok := request.Params.Arguments["labels"].(map[string]interface{}); ok {
+		if labelsArg, ok := request.GetArguments()["labels"].(map[string]interface{}); ok {
 			params.Labels = labelsArg
 		}
 
-		if annotationsArg, ok := request.Params.Arguments["annotations"].(map[string]interface{}); ok {
+		if annotationsArg, ok := request.GetArguments()["annotations"].(map[string]interface{}); ok {
 			params.Annotations = annotationsArg
 		}
 
@@ -217,7 +222,7 @@ func createIngressHandler(cm kai.ClusterManager, factory IngressFactory) func(ct
 		}
 
 		// Parse TLS
-		if tlsArg, ok := request.Params.Arguments["tls"].([]interface{}); ok {
+		if tlsArg, ok := request.GetArguments()["tls"].([]interface{}); ok {
 			tls, err := parseIngressTLS(tlsArg)
 			if err != nil {
 				return mcp.NewToolResultText(fmt.Sprintf("Invalid TLS configuration: %s", err.Error())), nil
@@ -244,7 +249,7 @@ func getIngressHandler(cm kai.ClusterManager, factory IngressFactory) func(ctx c
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "get_ingress"))
 
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -255,7 +260,7 @@ func getIngressHandler(cm kai.ClusterManager, factory IngressFactory) func(ctx c
 		}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 
@@ -284,13 +289,13 @@ func listIngressesHandler(cm kai.ClusterManager, factory IngressFactory) func(ct
 		slog.Debug("tool invoked", slog.String("tool", "list_ingresses"))
 
 		var allNamespaces bool
-		if allNamespacesArg, ok := request.Params.Arguments["all_namespaces"].(bool); ok {
+		if allNamespacesArg, ok := request.GetArguments()["all_namespaces"].(bool); ok {
 			allNamespaces = allNamespacesArg
 		}
 
 		var namespace string
 		if !allNamespaces {
-			if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+			if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 				namespace = namespaceArg
 			} else {
 				namespace = cm.GetCurrentNamespace()
@@ -298,7 +303,7 @@ func listIngressesHandler(cm kai.ClusterManager, factory IngressFactory) func(ct
 		}
 
 		var labelSelector string
-		if labelSelectorArg, ok := request.Params.Arguments["label_selector"].(string); ok {
+		if labelSelectorArg, ok := request.GetArguments()["label_selector"].(string); ok {
 			labelSelector = labelSelectorArg
 		}
 
@@ -326,7 +331,7 @@ func updateIngressHandler(cm kai.ClusterManager, factory IngressFactory) func(ct
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "update_ingress"))
 
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -337,7 +342,7 @@ func updateIngressHandler(cm kai.ClusterManager, factory IngressFactory) func(ct
 		}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 
@@ -346,20 +351,20 @@ func updateIngressHandler(cm kai.ClusterManager, factory IngressFactory) func(ct
 			Namespace: namespace,
 		}
 
-		if ingressClassArg, ok := request.Params.Arguments["ingress_class"].(string); ok && ingressClassArg != "" {
+		if ingressClassArg, ok := request.GetArguments()["ingress_class"].(string); ok && ingressClassArg != "" {
 			params.IngressClassName = ingressClassArg
 		}
 
-		if labelsArg, ok := request.Params.Arguments["labels"].(map[string]interface{}); ok {
+		if labelsArg, ok := request.GetArguments()["labels"].(map[string]interface{}); ok {
 			params.Labels = labelsArg
 		}
 
-		if annotationsArg, ok := request.Params.Arguments["annotations"].(map[string]interface{}); ok {
+		if annotationsArg, ok := request.GetArguments()["annotations"].(map[string]interface{}); ok {
 			params.Annotations = annotationsArg
 		}
 
 		// Parse rules if provided
-		if rulesArg, ok := request.Params.Arguments["rules"].([]interface{}); ok && len(rulesArg) > 0 {
+		if rulesArg, ok := request.GetArguments()["rules"].([]interface{}); ok && len(rulesArg) > 0 {
 			rules, err := parseIngressRules(rulesArg)
 			if err != nil {
 				return mcp.NewToolResultText(fmt.Sprintf("Invalid rules: %s", err.Error())), nil
@@ -368,7 +373,7 @@ func updateIngressHandler(cm kai.ClusterManager, factory IngressFactory) func(ct
 		}
 
 		// Parse default backend if provided
-		if defaultBackendArg, ok := request.Params.Arguments["default_backend"]; ok {
+		if defaultBackendArg, ok := request.GetArguments()["default_backend"]; ok {
 			backend, err := parseIngressBackend(defaultBackendArg)
 			if err != nil {
 				return mcp.NewToolResultText(fmt.Sprintf("Invalid default backend: %s", err.Error())), nil
@@ -377,7 +382,7 @@ func updateIngressHandler(cm kai.ClusterManager, factory IngressFactory) func(ct
 		}
 
 		// Parse TLS if provided
-		if tlsArg, ok := request.Params.Arguments["tls"].([]interface{}); ok {
+		if tlsArg, ok := request.GetArguments()["tls"].([]interface{}); ok {
 			tls, err := parseIngressTLS(tlsArg)
 			if err != nil {
 				return mcp.NewToolResultText(fmt.Sprintf("Invalid TLS configuration: %s", err.Error())), nil
@@ -404,7 +409,7 @@ func deleteIngressHandler(cm kai.ClusterManager, factory IngressFactory) func(ct
 	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
 		slog.Debug("tool invoked", slog.String("tool", "delete_ingress"))
 
-		nameArg, ok := request.Params.Arguments["name"]
+		nameArg, ok := request.GetArguments()["name"]
 		if !ok || nameArg == nil {
 			return mcp.NewToolResultText(errMissingName), nil
 		}
@@ -415,7 +420,7 @@ func deleteIngressHandler(cm kai.ClusterManager, factory IngressFactory) func(ct
 		}
 
 		namespace := cm.GetCurrentNamespace()
-		if namespaceArg, ok := request.Params.Arguments["namespace"].(string); ok && namespaceArg != "" {
+		if namespaceArg, ok := request.GetArguments()["namespace"].(string); ok && namespaceArg != "" {
 			namespace = namespaceArg
 		}
 

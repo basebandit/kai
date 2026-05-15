@@ -282,11 +282,7 @@ func TestCreateSecretHandler(t *testing.T) {
 
 			handler := createSecretHandler(mockCM, mockFactory)
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tc.args,
 				},
 			}
@@ -394,11 +390,7 @@ func TestGetSecretHandler(t *testing.T) {
 
 			handler := getSecretHandler(mockCM, mockFactory)
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tc.args,
 				},
 			}
@@ -500,11 +492,7 @@ func TestListSecretsHandler(t *testing.T) {
 
 			handler := listSecretsHandler(mockCM, mockFactory)
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tc.args,
 				},
 			}
@@ -612,11 +600,7 @@ func TestDeleteSecretHandler(t *testing.T) {
 
 			handler := deleteSecretHandler(mockCM, mockFactory)
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tc.args,
 				},
 			}
@@ -817,11 +801,7 @@ func TestUpdateSecretHandler(t *testing.T) {
 
 			handler := updateSecretHandler(mockCM, mockFactory)
 			request := mcp.CallToolRequest{
-				Params: struct {
-					Name      string         `json:"name"`
-					Arguments map[string]any `json:"arguments,omitempty"`
-					Meta      *mcp.Meta      `json:"_meta,omitempty"`
-				}{
+				Params: mcp.CallToolParams{
 					Arguments: tc.args,
 				},
 			}

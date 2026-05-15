@@ -168,47 +168,81 @@ func (s *Server) Serve() error {
 	return server.ServeStdio(s.mcpServer)
 }
 
-// ServeSSE starts the server using SSE transport (for web clients)
+// ServeStreamableHTTP starts the server using the Streamable HTTP transport
+// (MCP spec 2025-03-26). The MCP endpoint is exposed at /mcp; health, ready,
+// and metrics endpoints are served from the same listener.
+func (s *Server) ServeStreamableHTTP(addr string) error {
+	streamSrv := server.NewStreamableHTTPServer(s.mcpServer)
+
+	mux := http.NewServeMux()
+	s.registerOpsEndpoints(mux)
+
+	mux.Handle("/mcp", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		activeConnections.Inc()
+		defer activeConnections.Dec()
+		streamSrv.ServeHTTP(w, r)
+	}))
+
+	slog.Info("streamable-http server endpoints",
+		slog.String("mcp", fmt.Sprintf("http://%s/mcp", addr)),
+		slog.String("health", fmt.Sprintf("http://%s/healthz", addr)),
+		slog.String("ready", fmt.Sprintf("http://%s/readyz", addr)),
+		slog.String("metrics", fmt.Sprintf("http://%s/metrics", addr)),
+	)
+
+	return s.runHTTP(addr, mux)
+}
+
+// ServeSSE starts the server using the legacy HTTP+SSE transport (MCP spec
+// 2024-11-05). Kept for compatibility with older clients; new deployments
+// should use ServeStreamableHTTP.
 func (s *Server) ServeSSE(addr string) error {
 	sseServer := server.NewSSEServer(s.mcpServer)
 
 	mux := http.NewServeMux()
+	s.registerOpsEndpoints(mux)
 
-	// Health check endpoints
-	mux.HandleFunc("/healthz", s.healthzHandler)
-	mux.HandleFunc("/readyz", s.readyzHandler)
-
-	// Metrics endpoint
-	if s.cfg.metricsEnabled {
-		mux.Handle("/metrics", promhttp.Handler())
-	}
-
-	// SSE endpoint
 	mux.Handle("/sse", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		activeConnections.Inc()
 		defer activeConnections.Dec()
 		sseServer.ServeHTTP(w, r)
 	}))
-
-	// Message endpoint for SSE
 	mux.Handle("/message", sseServer)
 
-	s.httpServer = &http.Server{
-		Addr:         addr,
-		Handler:      mux,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 0, // SSE requires no write timeout
-		IdleTimeout:  60 * time.Second,
-	}
-
-	s.SetReady(true)
-
-	slog.Info("SSE server endpoints",
+	slog.Info("sse-legacy server endpoints",
 		slog.String("sse", fmt.Sprintf("http://%s/sse", addr)),
 		slog.String("health", fmt.Sprintf("http://%s/healthz", addr)),
 		slog.String("ready", fmt.Sprintf("http://%s/readyz", addr)),
 		slog.String("metrics", fmt.Sprintf("http://%s/metrics", addr)),
 	)
+
+	return s.runHTTP(addr, mux)
+}
+
+// registerOpsEndpoints wires the health, readiness, and metrics endpoints
+// shared by every HTTP-based transport.
+func (s *Server) registerOpsEndpoints(mux *http.ServeMux) {
+	mux.HandleFunc("/healthz", s.healthzHandler)
+	mux.HandleFunc("/readyz", s.readyzHandler)
+	if s.cfg.metricsEnabled {
+		mux.Handle("/metrics", promhttp.Handler())
+	}
+}
+
+// runHTTP builds the http.Server, marks the server ready, and starts
+// listening. WriteTimeout is intentionally zero because both Streamable HTTP
+// (chunked SSE responses) and the legacy SSE transport keep connections
+// open indefinitely.
+func (s *Server) runHTTP(addr string, handler http.Handler) error {
+	s.httpServer = &http.Server{
+		Addr:         addr,
+		Handler:      handler,
+		ReadTimeout:  15 * time.Second,
+		WriteTimeout: 0,
+		IdleTimeout:  60 * time.Second,
+	}
+
+	s.SetReady(true)
 
 	if s.cfg.tlsCertFile != "" && s.cfg.tlsKeyFile != "" {
 		slog.Info("TLS enabled",
