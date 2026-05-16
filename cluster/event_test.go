@@ -69,4 +69,28 @@ func TestEventList(t *testing.T) {
 		assert.NoError(t, err)
 		assert.Contains(t, result, "Failed")
 	})
+
+	t.Run("AllNamespacesFormatting", func(t *testing.T) {
+		e1 := newEvent("e1", defaultNamespace, "Warning", "BackOff", "pod-a")
+		e1.Count = 5
+		// Event with only EventTime set (no LastTimestamp) exercises eventTime fallback.
+		e2 := newEvent("e2", otherNamespace, "Normal", "Pulled", "pod-b")
+		e2.LastTimestamp = metav1.Time{}
+		e2.EventTime = metav1.NowMicro()
+		// Event with only FirstTimestamp set.
+		e3 := newEvent("e3", otherNamespace, "Normal", "Created", "pod-c")
+		e3.LastTimestamp = metav1.Time{}
+		e3.FirstTimestamp = metav1.Now()
+
+		fakeClient := fake.NewSimpleClientset(e1, e2, e3)
+		mockCM := testmocks.NewMockClusterManager()
+		mockCM.On("GetCurrentClient").Return(fakeClient, nil)
+
+		event := &Event{AllNamespaces: true}
+		result, err := event.List(ctx, mockCM)
+
+		assert.NoError(t, err)
+		assert.Contains(t, result, "ns: "+otherNamespace)
+		assert.Contains(t, result, "count: 5")
+	})
 }
