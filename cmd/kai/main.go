@@ -29,6 +29,7 @@ func main() {
 	var (
 		kubeconfig     string
 		contextName    string
+		inCluster      bool
 		transport      string
 		sseAddr        string
 		logFormat      string
@@ -44,6 +45,7 @@ func main() {
 
 	flag.StringVar(&kubeconfig, "kubeconfig", defaultKubeconfig, "Path to kubeconfig file")
 	flag.StringVar(&contextName, "context", "local", "Name for the loaded context")
+	flag.BoolVar(&inCluster, "in-cluster", false, "Use in-cluster Kubernetes configuration (for running inside a pod)")
 	flag.StringVar(&transport, "transport", "stdio", "Transport mode: stdio (default), streamable-http, or sse-legacy. \"sse\" is accepted as a deprecated alias of \"sse-legacy\".")
 	flag.StringVar(&sseAddr, "sse-addr", ":8080", "Address for the HTTP listener (used with streamable-http or sse-legacy). The flag name is kept for backwards compatibility.")
 	flag.StringVar(&logFormat, "log-format", "json", "Log format: json (default) or text")
@@ -67,18 +69,29 @@ func main() {
 	// Initialize cluster manager
 	cm := cluster.New(cluster.WithRequestTimeout(requestTimeout))
 
-	if err := cm.LoadKubeConfig(contextName, kubeconfig); err != nil {
-		logger.Error("failed to load kubeconfig",
-			slog.String("path", kubeconfig),
-			slog.String("error", err.Error()),
+	if inCluster {
+		if err := cm.LoadInClusterConfig(contextName); err != nil {
+			logger.Error("failed to load in-cluster config",
+				slog.String("error", err.Error()),
+			)
+			os.Exit(1)
+		}
+		logger.Info("in-cluster config loaded",
+			slog.String("context", contextName),
 		)
-		os.Exit(1)
+	} else {
+		if err := cm.LoadKubeConfig(contextName, kubeconfig); err != nil {
+			logger.Error("failed to load kubeconfig",
+				slog.String("path", kubeconfig),
+				slog.String("error", err.Error()),
+			)
+			os.Exit(1)
+		}
+		logger.Info("kubeconfig loaded",
+			slog.String("path", kubeconfig),
+			slog.String("context", contextName),
+		)
 	}
-
-	logger.Info("kubeconfig loaded",
-		slog.String("path", kubeconfig),
-		slog.String("context", contextName),
-	)
 
 	// Create and configure server
 	serverOpts := []kai.ServerOption{
@@ -193,4 +206,7 @@ func registerAllTools(s *kai.Server, cm *cluster.Manager) {
 	tools.RegisterCronJobTools(s, cm)
 	tools.RegisterIngressTools(s, cm)
 	tools.RegisterOperationsTools(s, cm)
+	tools.RegisterEventTools(s, cm)
+	tools.RegisterNodeTools(s, cm)
+	tools.RegisterHealthTools(s, cm)
 }
