@@ -209,4 +209,7 @@ func registerAllTools(s *kai.Server, cm *cluster.Manager) {
 	tools.RegisterEventTools(s, cm)
 	tools.RegisterNodeTools(s, cm)
 	tools.RegisterHealthTools(s, cm)
+	tools.RegisterStorageTools(s, cm)
+	tools.RegisterRBACTools(s, cm)
+	tools.RegisterCustomResourceTools(s, cm)
 }

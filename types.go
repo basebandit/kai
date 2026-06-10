@@ -170,3 +170,15 @@ type IngressBackend struct {
 	ServiceName string
 	ServicePort interface{} // Can be int32 or string
 }
+
+// PVCParams holds all possible PersistentVolumeClaim configuration parameters
+type PVCParams struct {
+	Name             string
+	Namespace        string
+	StorageClassName string
+	AccessModes      []string
+	Storage          string // requested storage, e.g. "1Gi"
+	VolumeMode       string // Filesystem or Block
+	Labels           map[string]interface{}
+	Annotations      map[string]interface{}
+}

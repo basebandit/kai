@@ -33,19 +33,19 @@ Kai provides a bridge between large language models (LLMs) and your Kubernetes c
 - [x] **Cluster Health** - Cluster status and resource metrics (cluster health, node/pod metrics)
 
 ### Storage
-- [ ] **Persistent Volumes** - PV and PVC management
-- [ ] **Storage Classes** - Storage class operations
+- [x] **Persistent Volumes** - PV management (list, get, delete) and PVC management (create, list, get, delete)
+- [x] **Storage Classes** - Storage class operations (list, get)
 
 ### Security
-- [ ] **RBAC** - Roles, RoleBindings, and ServiceAccounts
+- [x] **RBAC** - Roles, RoleBindings, ClusterRoles, ClusterRoleBindings, and ServiceAccounts (list, get)
 
 ### Utilities
 - [x] **Port Forwarding** - Forward ports to pods and services (start, stop, list sessions)
 
 ### Advanced
-- [ ] **Custom Resources** - CRD and custom resource operations
+- [x] **Custom Resources** - CRD and custom resource operations (list/get CRDs, list/get custom resources)
 - [x] **Events** - Event listing and filtering (by namespace, type, involved object)
-- [ ] **API Discovery** - API resource exploration
+- [x] **API Discovery** - API resource exploration (list_api_resources)
 
 ## Requirements
 
