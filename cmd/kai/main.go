@@ -221,4 +221,5 @@ func registerAllTools(s *kai.Server, cm *cluster.Manager) {
 	tools.RegisterRBACTools(s, cm)
 	tools.RegisterCustomResourceTools(s, cm)
 	tools.RegisterApplyTools(s, cm)
+	tools.RegisterDeleteTools(s, cm)
 }

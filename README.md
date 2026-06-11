@@ -43,8 +43,8 @@ Kai provides a bridge between large language models (LLMs) and your Kubernetes c
 - [x] **Port Forwarding** - Forward ports to pods and services (start, stop, list sessions)
 
 ### Advanced
-- [x] **Apply Manifests** - Apply raw YAML/JSON, multi-document and any kind including CRDs (apply_yaml)
-- [x] **Custom Resources** - CRD and custom resource operations (list/get CRDs, list/get custom resources)
+- [x] **Apply/Delete Manifests** - Apply or delete raw YAML/JSON, multi-document and any kind including CRDs (apply_yaml, delete_yaml)
+- [x] **Custom Resources** - CRD and custom resource operations (list/get CRDs, list/get/delete custom resources)
 - [x] **Events** - Event listing and filtering (by namespace, type, involved object)
 - [x] **API Discovery** - API resource exploration (list_api_resources)
 
