@@ -43,6 +43,7 @@ Kai provides a bridge between large language models (LLMs) and your Kubernetes c
 - [x] **Port Forwarding** - Forward ports to pods and services (start, stop, list sessions)
 
 ### Advanced
+- [x] **Apply Manifests** - Apply raw YAML/JSON, multi-document and any kind including CRDs (apply_yaml)
 - [x] **Custom Resources** - CRD and custom resource operations (list/get CRDs, list/get custom resources)
 - [x] **Events** - Event listing and filtering (by namespace, type, involved object)
 - [x] **API Discovery** - API resource exploration (list_api_resources)
@@ -217,6 +218,7 @@ Once configured, you can interact with your cluster using natural language:
 - "Create a cronjob that runs every 5 minutes"
 - "Create an ingress for my-app with TLS enabled"
 - "Port forward service nginx on port 8080:80"
+- "Apply this manifest: <paste YAML>"
 
 ## Contributing
 
