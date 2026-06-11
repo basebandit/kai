@@ -5,7 +5,12 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 
-COPY . .
+# Copy only the source needed to build the binary (no recursive context copy).
+COPY interfaces.go server.go types.go ./
+COPY cluster/ cluster/
+COPY tools/ tools/
+COPY cmd/ cmd/
+
 ARG VERSION=dev
 ARG COMMIT=none
 ARG DATE=unknown
