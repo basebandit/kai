@@ -216,6 +216,8 @@ spec:
 
 kmcp creates the Deployment and Service for you. The service account needs RBAC for the resources Kai manages — broad `get`/`list`/`watch`, plus `create`/`update`/`delete` where you use mutating tools. See the [kmcp deploy guide](https://kagent.dev/docs/kmcp/deploy/server).
 
+Runnable example: [`deploy/kagent/kai.example.yaml`](./deploy/kagent/kai.example.yaml) (test-only — grants `cluster-admin`; scope down for real use).
+
 ## Usage Examples
 
 Once configured, you can interact with your cluster using natural language:
