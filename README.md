@@ -4,11 +4,11 @@
 
 # Kai - Kubernetes MCP Server
 
-A Model Context Protocol (MCP) server for managing Kubernetes clusters through LLM clients like Claude and Ollama.
+A Model Context Protocol (MCP) server for managing Kubernetes clusters from MCP-compatible clients like Claude Desktop, Cursor, and Continue.
 
 ## Overview
 
-Kai provides a bridge between large language models (LLMs) and your Kubernetes clusters, enabling natural language interaction with Kubernetes resources. The server exposes a comprehensive set of tools for managing clusters, namespaces, pods, deployments, services, and other Kubernetes resources.
+Kai exposes Kubernetes operations as MCP tools, letting an LLM client manage your cluster through natural language — workloads, networking, config, storage, RBAC, custom resources, and raw manifests.
 
 ## Features
 
@@ -73,14 +73,18 @@ docker run --rm cyclon/kai:v1.0.0 -version
 kai [options]
 
 Options:
-  -kubeconfig string   Path to kubeconfig file (default "~/.kube/config")
-  -context string      Name for the loaded context (default "local")
-  -in-cluster          Use in-cluster Kubernetes configuration (for running inside a pod)
-  -transport string    Transport mode: stdio (default) or sse
-  -sse-addr string     Address for SSE server (default ":8080")
-  -log-format string   Log format: json (default) or text
-  -log-level string    Log level: debug, info, warn, error (default "info")
-  -version             Show version information
+  -kubeconfig string        Path to kubeconfig file (default "~/.kube/config")
+  -context string           Name for the loaded context (default "local")
+  -in-cluster               Use in-cluster config (when running inside a pod)
+  -transport string         stdio (default), streamable-http, or sse-legacy
+  -sse-addr string          HTTP listen address for streamable-http/sse-legacy (default ":8080")
+  -tls-cert string          Path to TLS certificate (enables HTTPS)
+  -tls-key string           Path to TLS private key (enables HTTPS)
+  -request-timeout duration Timeout for Kubernetes API requests (default 30s)
+  -metrics                  Expose Prometheus metrics at /metrics (default true)
+  -log-format string        json (default) or text
+  -log-level string         debug, info, warn, error (default "info")
+  -version                  Show version information
 ```
 
 Logs are written to stderr in structured JSON format by default, making them easy to parse:
@@ -162,15 +166,17 @@ Add to your Continue configuration (`~/.continue/config.json`):
 }
 ```
 
-### SSE Mode (Web Clients)
+### HTTP Mode (web clients, remote use)
 
-For web-based clients or custom integrations, run in SSE mode:
+For non-stdio clients, run the streamable HTTP transport:
 
 ```sh
-kai -transport=sse -sse-addr=:8080
+kai -transport=streamable-http -sse-addr=:8080
 ```
 
-Then connect to `http://localhost:8080/sse`.
+The MCP endpoint is `http://localhost:8080/mcp`. Health probes are at `/healthz`
+and `/readyz`, and Prometheus metrics at `/metrics`. The legacy SSE transport
+(`-transport=sse-legacy`, endpoint `/sse`) still works but is deprecated.
 
 ### Custom Kubeconfig
 
@@ -185,36 +191,32 @@ kai -kubeconfig=/path/to/custom/kubeconfig -context=my-cluster
 When deploying Kai inside a Kubernetes cluster, use the `-in-cluster` flag to automatically use the pod's service account credentials:
 
 ```sh
-kai -in-cluster -transport=sse -sse-addr=:8080
+kai -in-cluster -transport=streamable-http -sse-addr=:8080
 ```
 
-Example Kubernetes deployment:
+The recommended way to run Kai in-cluster is with [kmcp](https://kagent.dev/docs/kmcp/quickstart) (from [kagent](https://kagent.dev)), which manages MCP servers as `MCPServer` resources:
 
 ```yaml
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: kagent.dev/v1alpha1
+kind: MCPServer
 metadata:
   name: kai
 spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: kai
-  template:
-    metadata:
-      labels:
-        app: kai
-    spec:
-      serviceAccountName: kai
-      containers:
-        - name: kai
-          image: cyclon/kai:v1.0.0
-          args: ["-in-cluster", "-transport=sse", "-sse-addr=:8080"]
-          ports:
-            - containerPort: 8080
+  transportType: http
+  httpTransport:
+    targetPort: 8080
+    path: /mcp
+  deployment:
+    image: cyclon/kai:v1.0.0
+    port: 8080
+    cmd: /kai
+    args: ["-in-cluster", "-transport=streamable-http", "-sse-addr=:8080"]
+    serviceAccountName: kai
 ```
 
-Make sure the service account has appropriate RBAC permissions for the Kubernetes resources you want to manage.
+kmcp creates the Deployment and Service for you. The service account needs RBAC for the resources Kai manages — broad `get`/`list`/`watch`, plus `create`/`update`/`delete` where you use mutating tools. See the [kmcp deploy guide](https://kagent.dev/docs/kmcp/deploy/server).
+
+Runnable example: [`deploy/kagent/kai.example.yaml`](./deploy/kagent/kai.example.yaml) (test-only — grants `cluster-admin`; scope down for real use).
 
 ## Usage Examples
 

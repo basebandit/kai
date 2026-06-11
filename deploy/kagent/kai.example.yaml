@@ -1,0 +1,58 @@
+# TEST ONLY.
+#
+# This binds Kai's ServiceAccount to cluster-admin. Combined with the currently
+# unauthenticated /mcp endpoint, anyone who can reach the Service has full
+# cluster control. Use it only on a throwaway/local cluster, do not expose the
+# Service, and tear it down afterwards.
+#
+# For real deployments, replace the cluster-admin binding with a ClusterRole
+# scoped to the verbs and resources you actually use.
+#
+# Requires the kmcp controller (kagent) installed and the `kagent` namespace.
+# Apply with: kubectl apply -f deploy/kagent/kai.example.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kai
+  namespace: kagent
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: kai-cluster-admin
+subjects:
+  - kind: ServiceAccount
+    name: kai
+    namespace: kagent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: cluster-admin
+---
+apiVersion: kagent.dev/v1alpha1
+kind: MCPServer
+metadata:
+  name: kai
+  namespace: kagent
+spec:
+  transportType: http
+  httpTransport:
+    targetPort: 8080
+    path: /mcp
+  deployment:
+    image: cyclon/kai:v1.0.0
+    port: 8080
+    cmd: /kai
+    args:
+      - "-transport=streamable-http"
+      - "-sse-addr=:8080"
+      - "-in-cluster"
+    serviceAccountName: kai
+    resources:
+      requests:
+        cpu: "50m"
+        memory: "64Mi"
+      limits:
+        cpu: "500m"
+        memory: "256Mi"
+  timeout: 30s
