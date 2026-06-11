@@ -71,23 +71,27 @@ func main() {
 
 	if inCluster {
 		if err := cm.LoadInClusterConfig(contextName); err != nil {
-			logger.Error("failed to load in-cluster config",
+			logger.Error(
+				"failed to load in-cluster config",
 				slog.String("error", err.Error()),
 			)
 			os.Exit(1)
 		}
-		logger.Info("in-cluster config loaded",
+		logger.Info(
+			"in-cluster config loaded",
 			slog.String("context", contextName),
 		)
 	} else {
 		if err := cm.LoadKubeConfig(contextName, kubeconfig); err != nil {
-			logger.Error("failed to load kubeconfig",
+			logger.Error(
+				"failed to load kubeconfig",
 				slog.String("path", kubeconfig),
 				slog.String("error", err.Error()),
 			)
 			os.Exit(1)
 		}
-		logger.Info("kubeconfig loaded",
+		logger.Info(
+			"kubeconfig loaded",
 			slog.String("path", kubeconfig),
 			slog.String("context", contextName),
 		)
@@ -102,7 +106,8 @@ func main() {
 
 	if tlsCert != "" && tlsKey != "" {
 		serverOpts = append(serverOpts, kai.WithTLS(tlsCert, tlsKey))
-		logger.Info("TLS enabled",
+		logger.Info(
+			"TLS enabled",
 			slog.String("cert", tlsCert),
 			slog.String("key", tlsKey),
 		)
@@ -121,7 +126,8 @@ func main() {
 	go func() {
 		switch transport {
 		case "streamable-http", "http":
-			logger.Info(startingServerMsg,
+			logger.Info(
+				startingServerMsg,
 				slog.String("transport", "streamable-http"),
 				slog.String("address", sseAddr),
 			)
@@ -130,13 +136,15 @@ func main() {
 			logger.Warn("transport \"sse\" is deprecated; use \"sse-legacy\" or migrate to \"streamable-http\"")
 			fallthrough
 		case "sse-legacy":
-			logger.Info(startingServerMsg,
+			logger.Info(
+				startingServerMsg,
 				slog.String("transport", "sse-legacy"),
 				slog.String("address", sseAddr),
 			)
 			errChan <- s.ServeSSE(sseAddr)
 		case "stdio", "":
-			logger.Info(startingServerMsg,
+			logger.Info(
+				startingServerMsg,
 				slog.String("transport", "stdio"),
 			)
 			errChan <- s.Serve()
@@ -212,4 +220,5 @@ func registerAllTools(s *kai.Server, cm *cluster.Manager) {
 	tools.RegisterStorageTools(s, cm)
 	tools.RegisterRBACTools(s, cm)
 	tools.RegisterCustomResourceTools(s, cm)
+	tools.RegisterApplyTools(s, cm)
 }
