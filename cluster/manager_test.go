@@ -12,6 +12,7 @@ import (
 
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -46,6 +47,102 @@ func TestExtendedClusterManager(t *testing.T) {
 	t.Run("LoadKubeConfigDuplicateName", testLoadKubeConfigDuplicateName)
 	t.Run("SetCurrentContextUpdatesActiveStatus", testSetCurrentContextUpdatesActiveStatus)
 	t.Run("UpdateKubeconfigCurrentContext", testUpdateKubeconfigCurrentContext)
+}
+
+func TestInClusterConfig(t *testing.T) {
+	t.Run("LoadInClusterConfig", testLoadInClusterConfig)
+	t.Run("DetectInClusterNamespace", testDetectInClusterNamespace)
+}
+
+func testLoadInClusterConfig(t *testing.T) {
+	t.Run("NotInCluster", func(t *testing.T) {
+		// When not running in a cluster, LoadInClusterConfig should fail
+		cm := New()
+		err := cm.LoadInClusterConfig("test-context")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to load in-cluster config")
+	})
+
+	t.Run("DefaultContextName", func(t *testing.T) {
+		// When empty name is provided, should use "in-cluster" as default
+		cm := New()
+		err := cm.LoadInClusterConfig("")
+		// Will fail because we're not in a cluster, but the error shouldn't be about empty name
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "failed to load in-cluster config")
+		assert.NotContains(t, err.Error(), "empty")
+	})
+
+	t.Run("DuplicateContextName", func(t *testing.T) {
+		cm := New()
+
+		// Pre-populate with an existing context
+		fakeClient := fake.NewSimpleClientset()
+		contextInfo := &kai.ContextInfo{Name: "existing-context"}
+		cm.clients["existing-context"] = fakeClient
+		cm.contexts["existing-context"] = contextInfo
+
+		err := cm.LoadInClusterConfig("existing-context")
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "context existing-context already exists")
+	})
+}
+
+func testDetectInClusterNamespace(t *testing.T) {
+	t.Run("NamespaceFileDoesNotExist", func(t *testing.T) {
+		// When the namespace file doesn't exist, should return "default"
+		namespace := detectInClusterNamespace("/nonexistent/path/namespace")
+		assert.Equal(t, "default", namespace)
+	})
+
+	t.Run("NamespaceFileExists", func(t *testing.T) {
+		// Create a temporary directory and file to simulate the service account namespace file
+		tmpDir := t.TempDir()
+		namespaceFile := filepath.Join(tmpDir, "namespace")
+
+		// Write a test namespace to the file
+		testNs := "my-custom-namespace"
+		err := os.WriteFile(namespaceFile, []byte(testNs), 0600)
+		require.NoError(t, err)
+
+		// Test the actual function
+		namespace := detectInClusterNamespace(namespaceFile)
+		assert.Equal(t, testNs, namespace)
+	})
+
+	t.Run("NamespaceFileIsEmpty", func(t *testing.T) {
+		// Create a temporary empty file
+		tmpDir := t.TempDir()
+		namespaceFile := filepath.Join(tmpDir, "namespace")
+
+		err := os.WriteFile(namespaceFile, []byte(""), 0600)
+		require.NoError(t, err)
+
+		// Test that empty file returns "default"
+		namespace := detectInClusterNamespace(namespaceFile)
+		assert.Equal(t, "default", namespace)
+	})
+
+	t.Run("NamespaceFileWithWhitespace", func(t *testing.T) {
+		// Create a temporary file with whitespace
+		tmpDir := t.TempDir()
+		namespaceFile := filepath.Join(tmpDir, "namespace")
+
+		testNs := "my-namespace"
+		err := os.WriteFile(namespaceFile, []byte("  "+testNs+"  \n"), 0600)
+		require.NoError(t, err)
+
+		// Test that whitespace is trimmed
+		namespace := detectInClusterNamespace(namespaceFile)
+		assert.Equal(t, testNs, namespace)
+	})
+
+	t.Run("DefaultPath", func(t *testing.T) {
+		// When no custom path is provided, should use default path
+		// Since the default path won't exist in test environment, it should return "default"
+		namespace := detectInClusterNamespace("")
+		assert.Equal(t, "default", namespace)
+	})
 }
 
 func testNewClusterManager(t *testing.T) {
@@ -777,8 +874,8 @@ func testStartPortForwardErrors(t *testing.T) {
 	portForwardSessions = make(map[string]*PortForwardSession)
 	pfMutex.Unlock()
 
-	t.Run("NoKubeconfigPath", func(t *testing.T) {
-		// Manager without kubeconfig path should fail
+	t.Run("NoConfig", func(t *testing.T) {
+		// Manager without rest config should fail
 		_, err := cm.StartPortForward(
 			t.Context(),
 			"default",
@@ -788,14 +885,35 @@ func testStartPortForwardErrors(t *testing.T) {
 			80,
 		)
 		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "kubeconfig path not found")
+		assert.Contains(t, err.Error(), "config not found")
 	})
 
-	t.Run("InvalidKubeconfigPath", func(t *testing.T) {
-		// Set invalid kubeconfig path
-		cm.kubeconfigs["test-context"] = "/nonexistent/path/config"
-		cm.currentContext = "test-context"
+	t.Run("InClusterConfigPortForward", func(t *testing.T) {
+		// Simulate an in-cluster context with a stored rest.Config
+		// This tests that port forwarding works with in-cluster config
+		// where kubeconfig path is empty but rest.Config is stored
+		cm := New()
 
+		fakeClient := fake.NewSimpleClientset()
+		contextInfo := &kai.ContextInfo{
+			Name:       "in-cluster",
+			Cluster:    "in-cluster",
+			User:       "service-account",
+			Namespace:  "default",
+			ConfigPath: "", // Empty for in-cluster
+			IsActive:   true,
+		}
+
+		// Simulate what LoadInClusterConfig does
+		cm.kubeconfigs["in-cluster"] = "" // Empty path for in-cluster
+		cm.restConfigs["in-cluster"] = &rest.Config{
+			Host: "https://kubernetes.default.svc",
+		}
+		cm.clients["in-cluster"] = fakeClient
+		cm.contexts["in-cluster"] = contextInfo
+		cm.currentContext = "in-cluster"
+
+		// Now try port forwarding - it should find the config from restConfigs
 		_, err := cm.StartPortForward(
 			t.Context(),
 			"default",
@@ -804,9 +922,12 @@ func testStartPortForwardErrors(t *testing.T) {
 			8080,
 			80,
 		)
+		// Will fail because we don't have a real cluster, but should NOT fail
+		// with "config not found" error - it should fail later in the process
 		assert.Error(t, err)
-		// Should fail when building config
-		assert.Contains(t, err.Error(), "failed to build config")
+		assert.NotContains(t, err.Error(), "config not found")
+		// Should fail when trying to get the client or pod
+		assert.Contains(t, err.Error(), "not found")
 	})
 
 	// Cleanup

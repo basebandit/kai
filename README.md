@@ -29,8 +29,8 @@ Kai provides a bridge between large language models (LLMs) and your Kubernetes c
 
 ### Cluster Operations
 - [x] **Context Management** - Switch contexts, list contexts, rename, delete
-- [ ] **Nodes** - Node monitoring, cordoning, and draining
-- [ ] **Cluster Health** - Cluster status and resource metrics
+- [x] **Nodes** - Node monitoring, cordoning, and draining (list, get, cordon, uncordon, drain)
+- [x] **Cluster Health** - Cluster status and resource metrics (cluster health, node/pod metrics)
 
 ### Storage
 - [ ] **Persistent Volumes** - PV and PVC management
@@ -44,7 +44,7 @@ Kai provides a bridge between large language models (LLMs) and your Kubernetes c
 
 ### Advanced
 - [ ] **Custom Resources** - CRD and custom resource operations
-- [ ] **Events** - Event streaming and filtering
+- [x] **Events** - Event listing and filtering (by namespace, type, involved object)
 - [ ] **API Discovery** - API resource exploration
 
 ## Requirements
@@ -65,6 +65,7 @@ kai [options]
 Options:
   -kubeconfig string   Path to kubeconfig file (default "~/.kube/config")
   -context string      Name for the loaded context (default "local")
+  -in-cluster          Use in-cluster Kubernetes configuration (for running inside a pod)
   -transport string    Transport mode: stdio (default) or sse
   -sse-addr string     Address for SSE server (default ":8080")
   -log-format string   Log format: json (default) or text
@@ -168,6 +169,42 @@ By default, Kai uses `~/.kube/config`. You can specify a different kubeconfig:
 ```sh
 kai -kubeconfig=/path/to/custom/kubeconfig -context=my-cluster
 ```
+
+### Running Inside a Kubernetes Cluster
+
+When deploying Kai inside a Kubernetes cluster, use the `-in-cluster` flag to automatically use the pod's service account credentials:
+
+```sh
+kai -in-cluster -transport=sse -sse-addr=:8080
+```
+
+Example Kubernetes deployment:
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kai
+  template:
+    metadata:
+      labels:
+        app: kai
+    spec:
+      serviceAccountName: kai
+      containers:
+        - name: kai
+          image: ghcr.io/basebandit/kai:latest
+          args: ["-in-cluster", "-transport=sse", "-sse-addr=:8080"]
+          ports:
+            - containerPort: 8080
+```
+
+Make sure the service account has appropriate RBAC permissions for the Kubernetes resources you want to manage.
 
 ## Usage Examples
 
