@@ -27,7 +27,7 @@ var (
 func TestRegisterCustomResourceTools(t *testing.T) {
 	mockServer := &testmocks.MockServer{}
 	mockCM := testmocks.NewMockClusterManager()
-	mockServer.On("AddTool", mock.AnythingOfType("mcp.Tool"), mock.AnythingOfType("server.ToolHandlerFunc")).Return().Times(5)
+	mockServer.On("AddTool", mock.AnythingOfType("mcp.Tool"), mock.AnythingOfType("server.ToolHandlerFunc")).Return().Times(6)
 	RegisterCustomResourceTools(mockServer, mockCM)
 	mockServer.AssertExpectations(t)
 }
@@ -79,6 +79,12 @@ func TestCustomResourceHandlers(t *testing.T) {
 	}))
 	assert.NoError(t, err)
 	assert.Contains(t, resultText(t, r), "Widget: w1")
+
+	r, err = deleteCustomResourceHandler(mockCM)(ctx, toolRequest(map[string]interface{}{
+		"group": "example.com", "version": "v1", "resource": "widgets", "name": "w1",
+	}))
+	assert.NoError(t, err)
+	assert.Contains(t, resultText(t, r), "deleted successfully")
 
 	// Missing required version.
 	r, err = listCustomResourcesHandler(mockCM)(ctx, toolRequest(map[string]interface{}{"resource": "widgets"}))

@@ -200,6 +200,37 @@ func (c *CustomResource) Get(ctx context.Context, cm kai.ClusterManager) (string
 	return strings.TrimRight(sb.String(), "\n"), nil
 }
 
+// Delete removes a single custom resource instance identified by
+// group/version/resource/name. It tries the namespaced scope first, then falls
+// back to cluster scope, mirroring Get.
+func (c *CustomResource) Delete(ctx context.Context, cm kai.ClusterManager) (string, error) {
+	if c.Version == "" || c.Resource == "" || c.Name == "" {
+		return "", fmt.Errorf("version, resource and name are required")
+	}
+	dyn, err := cm.GetCurrentDynamicClient()
+	if err != nil {
+		return "", fmt.Errorf("error getting dynamic client: %w", err)
+	}
+
+	gvr := schema.GroupVersionResource{Group: c.Group, Version: c.Version, Resource: c.Resource}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, defaultTimeout)
+	defer cancel()
+
+	ns := c.Namespace
+	if ns == "" {
+		ns = cm.GetCurrentNamespace()
+	}
+	delErr := dyn.Resource(gvr).Namespace(ns).Delete(timeoutCtx, c.Name, metav1.DeleteOptions{})
+	if delErr != nil {
+		// Retry cluster-scoped if the namespaced delete failed.
+		if err = dyn.Resource(gvr).Delete(timeoutCtx, c.Name, metav1.DeleteOptions{}); err != nil {
+			return "", fmt.Errorf("failed to delete custom resource %q: %w", c.Name, delErr)
+		}
+	}
+	return fmt.Sprintf("Custom resource %q deleted successfully", c.Name), nil
+}
+
 // ListAPIResources lists the server's preferred API resources (discovery).
 func (c *CustomResource) ListAPIResources(ctx context.Context, cm kai.ClusterManager) (string, error) {
 	client, err := cm.GetCurrentClient()
