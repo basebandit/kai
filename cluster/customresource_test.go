@@ -106,9 +106,17 @@ func TestCustomResourceInstances(t *testing.T) {
 	assert.Contains(t, get, "Widget: w1")
 	assert.Contains(t, get, "phase")
 
+	del, err := (&CustomResource{Group: "example.com", Version: "v1", Resource: "widgets", Name: "w1"}).Delete(ctx, mockCM)
+	assert.NoError(t, err)
+	assert.Contains(t, del, "deleted successfully")
+	_, err = dyn.Resource(widgetGVR).Namespace(defaultNamespace).Get(ctx, "w1", metav1.GetOptions{})
+	assert.Error(t, err)
+
 	_, err = (&CustomResource{Version: "v1"}).List(ctx, mockCM, false)
 	assert.Error(t, err)
 	_, err = (&CustomResource{Resource: "widgets"}).Get(ctx, mockCM)
+	assert.Error(t, err)
+	_, err = (&CustomResource{Resource: "widgets"}).Delete(ctx, mockCM)
 	assert.Error(t, err)
 }
 

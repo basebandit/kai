@@ -43,6 +43,16 @@ func RegisterCustomResourceTools(s kai.ServerInterface, cm kai.ClusterManager) {
 		mcp.WithString("namespace", mcp.Description("Namespace (defaults to current; ignored for cluster-scoped)")),
 	), getCustomResourceHandler(cm))
 
+	s.AddTool(mcp.NewTool("delete_custom_resource",
+		mcp.WithDescription("Delete a single custom resource instance by group/version/resource/name"),
+		destructiveAnnotation("Delete custom resource"),
+		mcp.WithString("group", mcp.Description("API group (e.g. 'example.com'; empty for core)")),
+		mcp.WithString("version", mcp.Required(), mcp.Description("API version (e.g. 'v1')")),
+		mcp.WithString("resource", mcp.Required(), mcp.Description("Plural resource name (e.g. 'widgets')")),
+		mcp.WithString("name", mcp.Required(), mcp.Description("Name of the resource instance")),
+		mcp.WithString("namespace", mcp.Description("Namespace (defaults to current; ignored for cluster-scoped)")),
+	), deleteCustomResourceHandler(cm))
+
 	s.AddTool(mcp.NewTool("list_api_resources",
 		mcp.WithDescription("List the server's preferred API resources (like 'kubectl api-resources')"),
 		readOnlyAnnotation("List API resources"),
@@ -131,6 +141,26 @@ func getCustomResourceHandler(cm kai.ClusterManager) func(ctx context.Context, r
 		result, err := cr.Get(ctx, cm)
 		if err != nil {
 			return mcp.NewToolResultText(fmt.Sprintf("Failed to get custom resource: %s", err.Error())), nil
+		}
+		return mcp.NewToolResultText(result), nil
+	}
+}
+
+func deleteCustomResourceHandler(cm kai.ClusterManager) func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+	return func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+		slog.Debug("tool invoked", slog.String("tool", "delete_custom_resource"))
+		cr, errResult := customResourceFromRequest(request)
+		if errResult != nil {
+			return errResult, nil
+		}
+		name, errResult := requireName(request)
+		if errResult != nil {
+			return errResult, nil
+		}
+		cr.Name = name
+		result, err := cr.Delete(ctx, cm)
+		if err != nil {
+			return mcp.NewToolResultText(fmt.Sprintf("Failed to delete custom resource: %s", err.Error())), nil
 		}
 		return mcp.NewToolResultText(result), nil
 	}
