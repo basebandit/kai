@@ -58,6 +58,15 @@ The server connects to your current kubectl context by default. Ensure you have 
 go install github.com/basebandit/kai/cmd/kai@latest
 ```
 
+### Container image
+
+A multi-arch image (linux/amd64, linux/arm64) is published on Docker Hub:
+
+```sh
+docker pull cyclon/kai:v1.0.0
+docker run --rm cyclon/kai:v1.0.0 -version
+```
+
 ## CLI Options
 
 ```
@@ -199,7 +208,7 @@ spec:
       serviceAccountName: kai
       containers:
         - name: kai
-          image: ghcr.io/basebandit/kai:latest
+          image: cyclon/kai:v1.0.0
           args: ["-in-cluster", "-transport=sse", "-sse-addr=:8080"]
           ports:
             - containerPort: 8080

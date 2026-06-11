@@ -1,0 +1,21 @@
+# VCS and CI
+.git
+.github
+
+# Local binaries and build output
+bin
+dist
+
+# Tests, mocks, and coverage artifacts
+**/*_test.go
+testmocks
+*.out
+*.html
+
+# Docs, assets, and editor/tooling config
+*.md
+*.png
+*.jpg
+.claude
+.vscode
+.idea
