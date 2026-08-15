@@ -1,3 +1,5 @@
+
+
 <p align="center">
   <img src="./kai.jpg" alt="Kai Logo">
 </p>
@@ -76,7 +78,7 @@ Options:
   -kubeconfig string        Path to kubeconfig file (default "~/.kube/config")
   -context string           Name for the loaded context (default "local")
   -in-cluster               Use in-cluster config (when running inside a pod)
-  -transport string         stdio (default), streamable-http, or sse-legacy
+  -transport string         stdio (default), streamable-http, or sse-legacy ("sse" is a deprecated alias)
   -sse-addr string          HTTP listen address for streamable-http/sse-legacy (default ":8080")
   -tls-cert string          Path to TLS certificate (enables HTTPS)
   -tls-key string           Path to TLS private key (enables HTTPS)
